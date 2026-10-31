@@ -1,0 +1,88 @@
+name: Version
+
+# Tags each push to main with a semantic version, writes it into every plugin
+# manifest (herdr-plugin.toml requires a version) and publishes a GitHub release
+# (no changelog).
+# - first run: v0.0.0
+# - a feat commit since the last tag: minor (0.X.0)
+# - any other commit: patch (0.0.X)
+# - major (X.0.0): only on demand, by running this workflow manually with "major".
+# The manifest update is committed to main as "build(release): vX.Y.Z" and the tag
+# points at that commit, so an installed plugin reports the version of its commit.
+# A push made with the workflow token does not start workflows again.
+# See CONTRIBUTING.md and docs/en/adr/0002-plugin-versions.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        type: choice
+        options: [auto, major]
+        default: auto
+
+permissions:
+  contents: write
+
+concurrency:
+  group: version
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump || 'auto' }}
+        run: |
+          last=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname --merged HEAD | head -n 1)
+          if [ -z "$last" ]; then
+            next=v0.0.0
+          else
+            IFS=. read -r major minor patch <<< "${last#v}"
+            subjects=$(git log --no-merges --format=%s "$last..HEAD")
+            if [ "$BUMP" = "major" ]; then
+              next="v$((major + 1)).0.0"
+            elif [ -z "$subjects" ]; then
+              echo "No commit since $last: nothing to release."
+              exit 0
+            elif printf '%s\n' "$subjects" | grep -Eq '^feat(\([^)]*\))?!?: '; then
+              next="v$major.$((minor + 1)).0"
+            else
+              next="v$major.$minor.$((patch + 1))"
+            fi
+          fi
+          echo "Last: ${last:-none}, next: $next"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Write the version into the manifests
+        if: steps.version.outputs.next != ''
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+        run: |
+          find . -name herdr-plugin.toml -not -path './.git/*' -print0 |
+            xargs -0 -r sed -i -E "s/^version = \"[^\"]*\"/version = \"${NEXT#v}\"/"
+          if git diff --quiet; then
+            echo "No manifest to update."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "build(release): $NEXT"
+            git push origin HEAD:main
+          fi
+
+      - name: Tag and release
+        if: steps.version.outputs.next != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.version.outputs.next }}
+        run: gh release create "$NEXT" --target "$(git rev-parse HEAD)" --title "$NEXT" --notes "Version $NEXT."

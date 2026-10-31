@@ -1,0 +1,12 @@
+# Normalized by default: LF in the repository
+* text=auto eol=lf
+
+# Shell scripts: always LF
+*.sh    text eol=lf
+
+# Binaries
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.ttf   binary
+*.zip   binary

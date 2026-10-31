@@ -1,0 +1,30 @@
+name: Plugins
+
+# Checks formatting, lints and runs the tests of every plugin of the Cargo
+# workspace, on Linux and Windows. See CONTRIBUTING.md.
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Formatting
+        run: cargo fmt --all --check
+
+      - name: Lints
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --locked
