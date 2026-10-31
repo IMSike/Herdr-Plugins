@@ -10,6 +10,7 @@ Des plugins [Herdr](https://herdr.dev) : ceux qu'[OS-Setup](https://github.com/I
 
 | Plugin | Contenu |
 |---|---|
+| [`menu`](docs/fr/plugins/menu.md) | Un menu en popup, ouvert par une touche, qui lance un outil (lazygit, gh-dash…) dans un grand popup au-dessus du workspace courant |
 
 ## Installation
 

@@ -6,6 +6,7 @@
 
 | Page | Contents |
 |---|---|
+| [menu](plugins/menu.md) | Popup menu that starts a tool (lazygit, gh-dash…) in a large popup; its entries, `menu.toml` |
 
 ## Contributing
 

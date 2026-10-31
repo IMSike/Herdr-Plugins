@@ -10,6 +10,7 @@
 
 | Plugin | Contents |
 |---|---|
+| [`menu`](docs/en/plugins/menu.md) | A popup menu, opened by one key, that starts a tool (lazygit, gh-dash…) in a large popup over the current workspace |
 
 ## Installation
 

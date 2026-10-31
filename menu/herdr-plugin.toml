@@ -1,0 +1,31 @@
+id = "imsike.menu"
+name = "Menu"
+version = "0.0.0"
+min_herdr_version = "0.9.5"
+description = "A popup menu that opens a tool (lazygit, gh-dash…) in a full-size popup, in the current workspace"
+platforms = ["linux", "macos", "windows"]
+
+[[build]]
+command = ["cargo", "build", "--release", "--locked", "--target-dir", "target"]
+
+[[actions]]
+id = "open"
+title = "Open the menu"
+contexts = ["workspace"]
+command = ["target/release/herdr-menu", "open"]
+
+[[panes]]
+id = "menu"
+title = "Menu"
+placement = "popup"
+width = 44
+height = 14
+command = ["target/release/herdr-menu", "menu"]
+
+[[panes]]
+id = "run"
+title = "Tool"
+placement = "popup"
+width = "95%"
+height = "95%"
+command = ["target/release/herdr-menu", "run"]
