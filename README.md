@@ -10,7 +10,7 @@
 
 | Plugin | Contents |
 |---|---|
-| [`menu`](docs/en/plugins/menu.md) | A popup menu, opened by one key, that starts a tool (lazygit, gh-dash…) in a large popup over the current workspace |
+| [`menu`](docs/en/plugins/menu.md) | Starts a tool (lazygit, gh-dash, VS Code…) from a `Tools` pane of icons above the file explorer, or from a popup menu; figures on the workspace folder |
 | [`sidebar`](docs/en/plugins/sidebar.md) | A workspace → agents tree in Herdr's Agents panel, with CPU, memory and shell counts; time and total of all panes in the tab bar |
 
 ## Installation
@@ -30,7 +30,7 @@ Updates are never automatic: `herdr plugin update` fetches the latest release of
 | | |
 |---|---|
 | [Plugins](docs/en/README.md) | What each plugin shows or does, implications, how to turn it off |
-| [Architecture decisions](docs/en/adr/) | Why Rust and one Cargo workspace, versions and updates |
+| [Architecture decisions](docs/en/adr/) | Why Rust and one Cargo workspace, versions and updates, the menu above the file explorer |
 
 ## Contributing
 

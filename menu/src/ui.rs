@@ -7,27 +7,35 @@ use crossterm::event::{
     MouseButton, MouseEventKind,
 };
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
-use crossterm::terminal::{self, Clear, ClearType};
+use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::{execute, queue};
 use std::io::{self, Write};
 
 /// First screen row of the entry list.
 const LIST_TOP: u16 = 2;
 
-/// Puts the terminal back as it was, even on an early return or a panic.
-struct Screen;
+/// Draws on the alternate screen, which keeps no scrollback: a redraw leaves
+/// nothing to scroll back to. Puts the terminal back as it was, even on an
+/// early return or a panic.
+pub struct Screen;
 
 impl Screen {
-    fn enter() -> io::Result<Self> {
+    pub fn enter() -> io::Result<Self> {
         terminal::enable_raw_mode()?;
-        execute!(io::stdout(), Hide, EnableMouseCapture)?;
+        execute!(io::stdout(), EnterAlternateScreen, Hide, EnableMouseCapture)?;
         Ok(Screen)
     }
 }
 
 impl Drop for Screen {
     fn drop(&mut self) {
-        let _ = execute!(io::stdout(), DisableMouseCapture, Show, ResetColor);
+        let _ = execute!(
+            io::stdout(),
+            DisableMouseCapture,
+            Show,
+            ResetColor,
+            LeaveAlternateScreen
+        );
         let _ = terminal::disable_raw_mode();
     }
 }

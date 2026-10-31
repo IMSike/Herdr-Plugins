@@ -10,7 +10,7 @@ Des plugins [Herdr](https://herdr.dev) : ceux qu'[OS-Setup](https://github.com/I
 
 | Plugin | Contenu |
 |---|---|
-| [`menu`](docs/fr/plugins/menu.md) | Un menu en popup, ouvert par une touche, qui lance un outil (lazygit, gh-dash…) dans un grand popup au-dessus du workspace courant |
+| [`menu`](docs/fr/plugins/menu.md) | Lance un outil (lazygit, gh-dash, VS Code…) depuis un pane `Tools` d'icônes au-dessus de l'explorateur de fichiers, ou depuis un menu en popup ; chiffres sur le dossier du workspace |
 | [`sidebar`](docs/fr/plugins/sidebar.md) | Un arbre workspace → agents dans le panneau Agents de Herdr, avec CPU, mémoire et nombre de shells ; heure et total de tous les panes dans la barre d'onglets |
 
 ## Installation
@@ -30,7 +30,7 @@ Les mises à jour ne sont jamais automatiques : `herdr plugin update` récupère
 | | |
 |---|---|
 | [Plugins](docs/fr/README.md) | Ce que chaque plugin affiche ou fait, implications, comment le désactiver |
-| [Décisions d'architecture](docs/fr/adr/) | Pourquoi Rust et un workspace Cargo, versions et mises à jour |
+| [Décisions d'architecture](docs/fr/adr/) | Pourquoi Rust et un workspace Cargo, versions et mises à jour, le menu au-dessus de l'explorateur de fichiers |
 
 ## Contribuer
 

@@ -188,6 +188,7 @@ dependencies = [
  "crossterm",
  "serde",
  "serde_json",
+ "sysinfo",
  "toml",
 ]
 

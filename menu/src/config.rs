@@ -27,6 +27,23 @@ pub struct Entry {
     pub command: Vec<String>,
     #[serde(default)]
     pub cwd: StartIn,
+    /// What the bar shows for the entry (a Nerd Font glyph); its key without one.
+    #[serde(default)]
+    pub icon: Option<String>,
+    /// `false` for a program that opens its own window: it starts on its own,
+    /// without the popup.
+    #[serde(default = "yes")]
+    pub popup: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+impl Entry {
+    pub fn icon(&self) -> String {
+        self.icon.clone().unwrap_or_else(|| self.key.to_string())
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -36,21 +53,24 @@ struct File {
     entries: Vec<Entry>,
 }
 
-/// Entries shown when the user has no `menu.toml`.
+/// Entries shown when the user has no `menu.toml`. The icons are Material
+/// Design glyphs of Nerd Fonts, drawn at the same size.
 pub fn defaults() -> Vec<Entry> {
+    let entry = |key, label: &str, command: &[&str], icon: &str, popup| Entry {
+        key,
+        label: label.into(),
+        command: command.iter().map(|s| s.to_string()).collect(),
+        cwd: StartIn::Workspace,
+        icon: Some(icon.into()),
+        popup,
+    };
     vec![
-        Entry {
-            key: 'l',
-            label: "lazygit".into(),
-            command: vec!["lazygit".into()],
-            cwd: StartIn::Workspace,
-        },
-        Entry {
-            key: 'g',
-            label: "gh-dash".into(),
-            command: vec!["gh".into(), "dash".into()],
-            cwd: StartIn::Workspace,
-        },
+        // nf-md-git
+        entry('l', "lazygit", &["lazygit"], "\u{F02A2}", true),
+        // nf-md-github
+        entry('g', "gh-dash", &["gh", "dash"], "\u{F02A4}", true),
+        // nf-md-microsoft_visual_studio_code
+        entry('c', "VS Code", &["code", "."], "\u{F0A1E}", false),
     ]
 }
 
@@ -102,12 +122,17 @@ mod tests {
             label = "btop"
             command = ["btop"]
             cwd = "pane"
+            icon = "X"
+            popup = false
             "#,
         )
         .unwrap();
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].cwd, StartIn::Workspace);
         assert_eq!(entries[1].cwd, StartIn::Pane);
+        assert_eq!(entries[0].icon(), "l");
+        assert_eq!(entries[1].icon(), "X");
+        assert!(entries[0].popup && !entries[1].popup);
     }
 
     #[test]

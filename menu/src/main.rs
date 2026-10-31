@@ -1,7 +1,10 @@
-//! Herdr plugin `imsike.menu`: a popup menu that opens a tool in a full-size popup.
+//! Herdr plugin `imsike.menu`: a menu that opens a tool in a full-size popup.
+//!
+//! In a tab that shows the file explorer of gcaudan/herdr-explorer, the menu
+//! is a bar of icons above it (see `bar`); elsewhere it is a popup.
 //!
 //! Herdr shows one popup at a time and refuses to open another while one is on
-//! screen, so the menu cannot open the tool itself. The action drives both:
+//! screen, so the popup menu cannot open the tool itself. The action drives both:
 //!
 //! 1. `open` (action) opens the `menu` popup and waits for its choice file.
 //! 2. `menu` (popup) writes the chosen entry and the folder to start in, then exits.
@@ -9,22 +12,25 @@
 //!    popup is being torn down.
 //! 4. `run` (popup) runs the entry's command in that folder.
 
+mod bar;
 mod config;
 mod herdr;
+mod launch;
+mod stats;
 mod ui;
 
 use config::Entry;
 use herdr::Context;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode};
+use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 /// Choice file the `menu` popup writes for the `open` action.
 const CHOICE_ENV: &str = "HERDR_MENU_CHOICE";
 /// Entry key and start folder the `open` action hands to the `run` popup.
-const ENTRY_ENV: &str = "HERDR_MENU_ENTRY";
-const CWD_ENV: &str = "HERDR_MENU_CWD";
+pub(crate) const ENTRY_ENV: &str = "HERDR_MENU_ENTRY";
+pub(crate) const CWD_ENV: &str = "HERDR_MENU_CWD";
 /// How long the action waits for a choice before giving up.
 const CHOICE_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 
@@ -33,7 +39,11 @@ fn main() -> ExitCode {
         Some("open") => open(),
         Some("menu") => menu(),
         Some("run") => run(),
-        _ => Err("usage : herdr-menu open|menu|run".into()),
+        Some("bar") => bar::run(&entries().0),
+        Some("startup") => bar::startup(),
+        Some("pane-created") => bar::on_pane_created(),
+        Some("pane-closed") => bar::on_pane_closed(),
+        _ => Err("usage : herdr-menu open|menu|run|bar|startup|pane-created|pane-closed".into()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -71,6 +81,13 @@ impl Choice {
 }
 
 fn open() -> Result<(), String> {
+    // The bar when the tab has the explorer; the popup when it does not, or
+    // when the bar cannot open.
+    match bar::toggle(&Context::from_env()) {
+        Ok(true) => return Ok(()),
+        Ok(false) => {}
+        Err(message) => eprintln!("herdr-menu : barre impossible, menu en popup : {message}"),
+    }
     let state = std::env::var_os("HERDR_PLUGIN_STATE_DIR")
         .map(PathBuf::from)
         .ok_or("HERDR_PLUGIN_STATE_DIR absent")?;
@@ -93,6 +110,11 @@ fn open() -> Result<(), String> {
     let Some(choice) = Choice::decode(&text) else {
         return Ok(());
     };
+    // A program with a window of its own starts without the popup.
+    let (entries, _) = entries();
+    if let Some(entry) = entries.iter().find(|e| e.key == choice.key && !e.popup) {
+        return launch::detach(entry, choice.cwd.as_deref().map(Path::new));
+    }
     let key = choice.key.to_string();
     let mut env = vec![(ENTRY_ENV, key.as_str())];
     if let Some(cwd) = &choice.cwd {
@@ -150,8 +172,7 @@ fn run_entry() -> Result<(), String> {
         .iter()
         .find(|e| key.chars().eq([e.key]))
         .ok_or_else(|| format!("aucune entrée pour la touche « {key} »"))?;
-    let mut command = Command::new(&entry.command[0]);
-    command.args(&entry.command[1..]);
+    let mut command = launch::command(&entry.command);
     if let Some(cwd) = std::env::var_os(CWD_ENV) {
         command.current_dir(cwd);
     }

@@ -1,6 +1,6 @@
 [package]
 name = "herdr-menu"
-description = "Herdr plugin: a popup menu that opens a tool (lazygit, gh-dash…) in a full-size popup"
+description = "Herdr plugin: a menu (a bar above the file explorer, or a popup) that opens a tool (lazygit, gh-dash…) in a full-size popup"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,3 +12,4 @@ crossterm = "0.29"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "1"
+sysinfo = { version = "0.40.1", default-features = false, features = ["disk"] }

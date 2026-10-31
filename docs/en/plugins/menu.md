@@ -2,7 +2,15 @@
 
 **English** · [Français](../../fr/plugins/menu.md)
 
-A small popup menu, opened by one key, that starts a tool (lazygit, gh-dash…) in a large popup over the current workspace. Tabs and panes stay as they are behind it; quitting the tool closes the popup.
+Starts a tool (lazygit, gh-dash, VS Code…) from one click or one key. In a tab that shows the file explorer of [herdr-explorer](https://github.com/gcaudan/herdr-explorer), the menu is a short `Tools` pane above it, in its column: icons, names, and figures on the workspace folder. Elsewhere it is a small popup. Tools that run in the terminal open in a large popup over the current workspace; tabs and panes stay as they are behind it, and quitting the tool closes the popup.
+
+```
+      󰊢        󰊤        󰨞
+   lazygit  gh-dash  VS Code
+
+     1.5G · 0,2 % du disque
+         3 552 fichiers
+```
 
 ## Installation
 
@@ -20,11 +28,20 @@ command = "imsike.menu.open"
 description = "tools menu"
 ```
 
+The icons are [Nerd Font](https://www.nerdfonts.com) glyphs: without a Nerd Font in the terminal, they show as blanks or boxes.
+
 ## Use
 
-`prefix+space` opens the menu, titled with the workspace's folder name. Choose an entry with its key, with the arrows (or `j`/`k`) and Enter, or with a click. Escape, `q` or Ctrl+C closes the menu. An entry's own key wins over `j`, `k` and `q`.
+**With the explorer.** The `Tools` pane opens with the explorer, however it is opened (`prefix+f`, opening on its own in a new tab), and closes with it. Click an icon or its name, or type the entry's key while the pane has the focus; hovering shows the entry in yellow. `prefix+space` closes the pane and opens it again; Escape, `q` or Ctrl+C in the pane closes it.
 
-The tool starts in the workspace's folder (or the focused pane's folder, see below) in a popup of 95% of the terminal. When the tool cannot start or ends with an error, the popup shows why and waits for Enter.
+Under the icons, the figures on the workspace folder (the explorer's folder):
+
+- its size on disk, every file included (`.git` and build folders too), and its share of the disk it is on;
+- its number of files, those of `.git` left out.
+
+**Without the explorer.** `prefix+space` opens the popup menu, titled with the workspace's folder name. Choose an entry with its key, with the arrows (or `j`/`k`) and Enter, or with a click. Escape, `q` or Ctrl+C closes the menu. An entry's own key wins over `j`, `k` and `q`.
+
+A terminal tool starts in the workspace's folder (or a terminal's folder, see below) in a popup of 95% of the terminal. When it cannot start or ends with an error, the popup shows why and waits for Enter. A program with a window of its own (VS Code) starts directly, without the popup.
 
 ## Entries
 
@@ -34,6 +51,7 @@ Without configuration the menu offers:
 |---|---|---|
 | `l` | lazygit | `lazygit` |
 | `g` | gh-dash | `gh dash` (the [gh-dash](https://github.com/dlvhdr/gh-dash) extension of the GitHub CLI) |
+| `c` | VS Code | `code .`: the workspace's folder in VS Code |
 
 To choose your own, write `menu.toml` in the plugin's config folder (`herdr plugin config-dir imsike.menu` prints it). The file replaces the built-in entries:
 
@@ -42,22 +60,51 @@ To choose your own, write `menu.toml` in the plugin's config folder (`herdr plug
 key = "l"                 # one character
 label = "lazygit"
 command = ["lazygit"]     # program and arguments, run without a shell
+icon = "󰊢"                # optional: a Nerd Font glyph; the key without it
 
 [[entries]]
 key = "t"
 label = "btop"
 command = ["btop"]
-cwd = "pane"              # "workspace" (default) or "pane": the focused pane's folder
+cwd = "pane"              # "workspace" (default) or "pane", see below
+
+[[entries]]
+key = "c"
+label = "VS Code"
+command = ["code", "."]
+popup = false             # a program with a window of its own: no popup
 ```
 
-A file that cannot be read or is invalid (unknown field, empty command, a key used twice) is ignored: the menu shows the built-in entries and the error on its bottom line. The file is read each time the menu opens; no reload is needed.
+The folder a tool starts in:
+
+| `cwd` | From the `Tools` pane | From the popup menu |
+|---|---|---|
+| `workspace` | the explorer's folder | the workspace's folder |
+| `pane` | the folder of the tab's first terminal | the focused pane's folder |
+
+On Windows, a command found on `PATH` as a batch file (`code` is `code.cmd`) runs without naming its extension.
+
+A file that cannot be read or is invalid (unknown field, empty command, a key used twice) is ignored: the menu shows the built-in entries, and the popup menu shows the error on its bottom line. The `Tools` pane reads the file when it opens, the popup menu each time it opens; no reload is needed.
 
 ## How it works, implications
 
+**The `Tools` pane**
+
+- It is a normal Herdr pane. Herdr only splits to the right or downwards: the pane opens below the explorer, then swaps places with it, and the focus goes back to the pane that had it.
+- It opens on Herdr's `pane.created` event of the explorer, once the explorer stops moving (it places and sizes itself right after it opens: about one second). It closes on the `pane.closed` event, as soon as its tab has no explorer, or no pane besides it and the explorer, so that the explorer can close its tab as it does on its own.
+- It asks for 5 rows, but Herdr never gives a side of a split less than a tenth of it: on a screen of fewer than 60 rows, it is taller. It takes its height back when the window is resized.
+- **While it is open, the explorer no longer keeps its width**: `<` and `>` do nothing and its width follows the window's in proportion. The explorer only looks for its width at the full height of its own pane; a change to it is proposed upstream.
+- The figures are measured in the background when the pane opens, then every 2 minutes: the whole folder is read, which takes a moment on a large one (`node_modules`, build folders).
+- It finds the explorer by its pane's label, `Explorer`; a later version of the explorer that renamed it would leave the menu as a popup only.
+- After a Herdr restart, Herdr restores the pane as a plain shell; the plugin closes it at startup, and the explorer, when it reopens, gets a new one.
+
+**The popup menu**
+
 - Herdr shows one popup at a time. The action therefore stays running while the menu is open: it waits for the menu to write the choice into a file of the plugin's state folder, then opens the tool's popup once the menu's is gone. While waiting it uses about 4 MB of memory and checks the file 20 times a second.
 - If the menu popup is closed by something else than the menu itself, the action keeps waiting, invisibly, for at most one hour.
-- Commands run as your user, with your environment, like any program you would start in a pane.
+
+Commands run as your user, with your environment, like any program you would start in a pane.
 
 ## Turn it off
 
-Remove the key from `config.toml`, then `herdr plugin disable imsike.menu` (or `herdr plugin uninstall imsike.menu`). `menu.toml` stays in the config folder until you delete it.
+Remove the key from `config.toml`, then `herdr plugin disable imsike.menu` (or `herdr plugin uninstall imsike.menu`): the `Tools` panes close with their explorer or at the next restart. `menu.toml` stays in the config folder until you delete it.

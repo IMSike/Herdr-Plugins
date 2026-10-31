@@ -1,6 +1,6 @@
 # menu
 
-A popup menu, opened by one key, that starts a tool (lazygit, gh-dash…) in a large popup over the current workspace.
+Starts a tool (lazygit, gh-dash, VS Code…) from a `Tools` pane of icons above the file explorer of herdr-explorer, or from a popup menu opened by one key.
 
 ```sh
 herdr plugin install IMSike/Herdr-Plugins/menu
