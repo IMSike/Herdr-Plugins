@@ -3,6 +3,7 @@ name = "herdr-menu"
 description = "Herdr plugin: a menu (a bar above the file explorer, or a popup) that opens a tool (lazygit, gh-dash…) in a full-size popup"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 publish.workspace = true
