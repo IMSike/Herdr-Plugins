@@ -35,6 +35,9 @@ pub struct Sample {
     pub at_ms: u64,
     /// pid -> (start time, CPU milliseconds)
     pub cpu: HashMap<u32, (u64, u64)>,
+    /// The whole machine's CPU times, where the system gives them.
+    #[serde(default)]
+    pub machine: Option<crate::machine::CpuTimes>,
 }
 
 impl Sample {
@@ -43,7 +46,11 @@ impl Sample {
             .iter()
             .map(|p| (p.pid, (p.start_time, p.cpu_ms)))
             .collect();
-        Self { at_ms, cpu }
+        Self {
+            at_ms,
+            cpu,
+            machine: None,
+        }
     }
 }
 
@@ -182,6 +189,7 @@ mod tests {
         let previous = Sample {
             at_ms: 0,
             cpu: HashMap::from([(1, (0, 40)), (2, (1, 300))]),
+            machine: None,
         };
         let usage = Table::new(&procs, &previous).tree(1);
         assert_eq!(
@@ -200,6 +208,7 @@ mod tests {
         let previous = Sample {
             at_ms: 0,
             cpu: HashMap::from([(1, (0, 500))]),
+            machine: None,
         };
         assert_eq!(Table::new(&procs, &previous).tree(1).cpu_ms, 20);
     }

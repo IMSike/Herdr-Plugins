@@ -2,8 +2,8 @@ id = "imsike.sidebar"
 name = "Sidebar"
 version = "0.0.0"
 min_herdr_version = "0.9.5"
-description = "A workspace → agents tree in the Agents panel, with CPU, memory and shell counts; the time and the total of all panes in the tab bar"
-platforms = ["linux", "macos", "windows"]
+description = "A workspace → agents tree in the Agents panel, with CPU, memory and shell counts; the totals of all panes and of the machine, and the time, in the tab bar"
+platforms = ["linux", "windows"]
 
 [[build]]
 command = ["cargo", "build", "--release", "--locked", "--target-dir", "target"]

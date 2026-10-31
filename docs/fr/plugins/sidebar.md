@@ -2,18 +2,18 @@
 
 [English](../../en/plugins/sidebar.md) · **Français**
 
-Transforme le panneau Agents de Herdr en arbre : les agents de chaque workspace listés sous son nom, avec CPU et mémoire par workspace et par agent, et le nombre de shells lancés par chaque agent. L'heure et le total de tous les panes s'affichent dans la barre d'onglets. Le plugin ne fait que fournir les valeurs ; leur affichage se règle dans les lignes de sidebar du `config.toml` de Herdr.
+Transforme le panneau Agents de Herdr en arbre : les agents de chaque workspace listés sous son nom, avec CPU et mémoire par workspace et par agent, et le nombre de shells lancés par chaque agent. La barre d'onglets affiche le total de tous les panes, celui de la machine entière et l'heure. Le plugin ne fait que fournir les valeurs ; leur affichage se règle dans les lignes de sidebar du `config.toml` de Herdr.
 
 ```
  agents                 arbre
-OS_Setup · 6% 1.2G
+api · 6% 1.2G
 ├ ◐ Général · 4% 853M  1
 └ ○ docs · 0% 275M
-CC-Plugins
+web
 └ ○ 1 · 1% 562M
 ```
 
-Un clic sur la ligne d'un agent ouvre cet agent. Les workspaces s'ouvrent toujours depuis le panneau Spaces au-dessus, réduit à une ligne chacun (`OS_Setup · main`) ; déplace la séparation entre les deux panneaux pour donner plus de place à l'arbre.
+Un clic sur la ligne d'un agent ouvre cet agent. Les workspaces s'ouvrent toujours depuis le panneau Spaces au-dessus, réduit à une ligne chacun (`api · main`) ; déplace la séparation entre les deux panneaux pour donner plus de place à l'arbre.
 
 ## Installation
 
@@ -33,7 +33,7 @@ Puis ajoute au `config.toml` de Herdr :
 [ui]
 sidebar_width = 34
 sidebar_max_width = 40
-# Lance le plugin toutes les 5 secondes ; affiche aussi l'heure et le total à droite de la barre d'onglets.
+# Lance le plugin toutes les 5 secondes ; affiche aussi les totaux et l'heure à droite de la barre d'onglets.
 # Windows (le dossier d'état est sous %LOCALAPPDATA%) :
 tab_bar_right = [
   { type = "command", command = '"%LOCALAPPDATA%\herdr\plugins\imsike.sidebar\herdr-sidebar.exe" tick', interval_seconds = 5, timeout_seconds = 3 },
@@ -61,7 +61,7 @@ active_row_bg = "#4a4426"
 
 Les couleurs vont avec le thème gruvbox.
 
-Sous Linux et macOS, la commande pointe vers le binaire du dossier d'état du plugin (`herdr-sidebar tick`, sans `.exe`).
+Sous Linux, la commande pointe vers la copie du dossier d'état du plugin (`herdr-sidebar tick`, sans `.exe`) : `install` affiche son chemin, que montre `herdr plugin log list --plugin imsike.sidebar`.
 
 ## Ce qui est affiché
 
@@ -69,7 +69,7 @@ Tokens des agents (panneau Agents) :
 
 | Token | Valeur |
 |---|---|
-| `$ws` | sur le premier agent de chaque workspace seulement : nom du workspace (`OS_Setup`) |
+| `$ws` | sur le premier agent de chaque workspace seulement : nom du workspace (`api`) |
 | `$ws_stats` | à côté de `$ws`, seulement quand le workspace a plus d'un agent (sinon les chiffres de l'agent suffisent) : CPU et mémoire du workspace (`6% 1.2G`) |
 | `$line` | branche de l'arbre (`├`, `└` pour le dernier agent du workspace), état et nom de l'onglet de l'agent (`├ ◐ Général`) |
 | `$stats` | CPU, mémoire et shells de l'agent (`4% 853M  1`) |
@@ -80,21 +80,22 @@ Symboles d'état : `◐` au travail, `◆` bloqué, `●` terminé (pas encore v
 
 Tokens des workspaces (panneau Spaces) : `$cpu` et `$ram`.
 
-Barre d'onglets : `<heure> <cpu> <mémoire>` (`14:05 6% 2.4G`), l'heure locale et le total de tous les panes, mis à jour à chaque passage.
+Barre d'onglets : `<cpu> <mémoire> · 󰍹 <cpu> <mémoire> · <heure>` (`6% 2.4G · 󰍹 35% 21.3G · 14:05`) : le total de tous les panes, puis celui de la machine entière (après l'icône écran Nerd Font), puis l'heure locale, mis à jour à chaque passage. Les chiffres de la machine comptent tous les processus, y compris ceux que le plugin ne peut pas lire (processus protégés, machines virtuelles) : sa part de CPU vient des temps CPU du système, sa mémoire est la mémoire utilisée (ce que le Gestionnaire des tâches affiche comme « En cours d'utilisation » sous Windows).
 
-- **CPU** : utilisé depuis le passage précédent, en part de la machine entière, arrondi au pourcent (`0%`, `12%` : moins de 0,5 % s'affiche `0%`) ; absent au premier passage.
+- **CPU** : utilisé depuis le passage précédent, en part de la machine entière, arrondi au pourcent (`0%`, `12%` : moins de 0,5 % s'affiche `0%`) ; absent au premier passage, et quand le passage précédent date de moins d'une seconde.
 - **Mémoire** : working set sous Windows, mémoire résidente ailleurs (`850M`, `1.2G`).
 - Les chiffres d'un agent couvrent tout l'arbre de processus de son pane : le shell, l'agent et tout ce qu'ils ont lancé. Un workspace additionne tous ses panes, agents ou non.
-- **Shells** (``, l'icône terminal Nerd Font, comme dans dx de CC-Plugins ; sans Nerd Font elle s'affiche comme un blanc ou un carré) : processus `bash`, `sh`, `zsh`, `fish`, `dash`, `nu`, `pwsh`, `powershell` ou `cmd` sous l'agent. Un shell lancé par un autre shell n'est pas recompté : Git Bash sous Windows enchaîne plusieurs `bash.exe` pour une seule commande, qui comptent pour un. Les commandes courtes n'apparaissent qu'un instant ; celles qui durent (un serveur, un watcher) restent visibles.
+- **Shells** (``, l'icône terminal Nerd Font ; sans Nerd Font elle s'affiche comme un blanc ou un carré) : processus `bash`, `sh`, `zsh`, `fish`, `dash`, `nu`, `pwsh`, `powershell` ou `cmd` sous l'agent. Un shell lancé par un autre shell n'est pas recompté : Git Bash sous Windows enchaîne plusieurs `bash.exe` pour une seule commande, qui comptent pour un. Les commandes courtes n'apparaissent qu'un instant ; celles qui durent (un serveur, un watcher) restent visibles.
 
 Pour vérifier les valeurs sans la sidebar, `herdr-sidebar show` (depuis le dossier d'état) les affiche, mesurées sur une seconde, sans les transmettre.
 
 ## Fonctionnement, implications
 
 - Herdr n'a pas de processus de plugin permanent : l'entrée de la barre d'onglets lance `herdr-sidebar tick` toutes les 5 secondes, et Herdr n'en démarre jamais un nouveau tant que le précédent tourne. Chaque passage lit tous les processus de la machine et demande à Herdr le processus de chaque pane ; il dure une fraction de seconde pour environ 25 ms de CPU, puis s'arrête.
-- Quand un agent apparaît ou change d'état, Herdr lance aussitôt le plugin tout comme le focus d'un pane, qui marque un agent terminé comme vu (événements `pane.agent_detected`, `pane.agent_status_changed`, `pane.focused`, `workspace.created`) : les états de l'arbre suivent sans attendre le passage suivant. Un workspace renommé apparaît au passage suivant.
+- Quand un agent apparaît ou change d'état, Herdr lance aussitôt le plugin tout comme le focus d'un pane, qui marque un agent terminé comme vu (événements `pane.agent_detected`, `pane.agent_status_changed`, `pane.focused`, `workspace.created`) : les états de l'arbre suivent sans attendre le passage suivant. Ces passages ne font que placer les agents dans l'arbre, sans lire les processus : les chiffres sont ceux du dernier passage, et un nouvel agent reçoit les siens au suivant. Un workspace renommé apparaît au passage suivant.
 - Le panneau Agents est trié par `$order` grâce à une vue d'agents de Herdr (nommée `arbre` dans l'en-tête du panneau), qui remplace le tri propre au panneau tant que le plugin est activé.
 - La part de CPU se calcule par rapport au passage précédent, enregistré dans `sample.json` du dossier d'état.
+- Un agent dont les processus ne peuvent pas être lus reste dans l'arbre avec les chiffres du dernier passage, jusqu'à leur expiration.
 - Les valeurs expirent après 20 secondes. Si les passages s'arrêtent, les lignes de l'arbre disparaissent au lieu de rester figées, et les agents sont listés sans lignes.
 - Herdr décale la deuxième ligne d'un bloc de deux cases : le premier agent d'un workspace (sous son en-tête) serait plus à droite que les autres. Le plugin complète la ligne des autres avec deux caractères braille vides (U+2800), car Herdr supprime les espaces ordinaires en début de valeur. Une ligne plus longue que la sidebar est coupée.
 - Le symbole `◐` remplace l'icône d'état de Herdr.

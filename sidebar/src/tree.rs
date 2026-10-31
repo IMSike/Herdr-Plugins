@@ -2,7 +2,7 @@
 //!
 //! Herdr draws one block per agent. Each block gets a `line` token
 //! (`├ ◐ Général`, with the agent's tab name), the first block of a workspace
-//! also gets a `ws` header token (`OS_Setup`), and an `order` token by which
+//! also gets a `ws` header token (`api`), and an `order` token by which
 //! the panel is sorted so that a workspace's agents follow its header.
 //! Figures go in tokens of their own, so they can be styled apart.
 
@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     fn groups_agents_under_their_workspace_in_sidebar_order() {
-        let spaces = [space("w1", "OS_Setup", 2), space("w3", "CC", 1)];
+        let spaces = [space("w1", "api", 2), space("w3", "CC", 1)];
         let agents = [
             agent("w1:pD", "w1:t4", "idle"),
             agent("w3:p1", "w3:t1", "done"),
@@ -140,7 +140,7 @@ mod tests {
             shown,
             [
                 ("w3:p1", Some("CC"), "└ ● tab"),
-                ("w1:p1", Some("OS_Setup"), "├ ◐ tab"),
+                ("w1:p1", Some("api"), "├ ◐ tab"),
                 ("w1:pD", None, "\u{2800}\u{2800}└ ○ tab"),
             ]
         );

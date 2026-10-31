@@ -9,6 +9,7 @@
 //! - `event` (agent, focus and workspace hooks) reports the same tokens right away.
 //! - `show` prints the tokens without reporting them.
 
+mod machine;
 mod tree;
 mod usage;
 
@@ -19,7 +20,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
-use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
+use sysinfo::{MemoryRefreshKind, ProcessRefreshKind, ProcessesToUpdate, System};
 
 use herdr_api::{format_size, request};
 use tree::Space;
@@ -34,6 +35,9 @@ const SAMPLE_FILE: &str = "sample.json";
 const TOKEN_TTL_MS: u64 = 20_000;
 /// A previous sample older than this gives no meaningful CPU average.
 const MAX_SAMPLE_AGE_MS: u64 = 120_000;
+/// Nor does one younger than this: a few milliseconds of CPU time make the
+/// share jump.
+const MIN_SAMPLE_AGE_MS: u64 = 1_000;
 
 fn main() -> ExitCode {
     let result = match std::env::args().nth(1).as_deref() {
@@ -53,7 +57,8 @@ fn main() -> ExitCode {
 }
 
 fn install() -> Result<(), String> {
-    copy_binary()?;
+    // The tab bar entry runs this copy: its path is the one to configure.
+    println!("{}", copy_binary()?.display());
     // Agents follow the `order` token: each workspace's agents after its header.
     let plugin = std::env::var(PLUGIN_ID_ENV).map_err(|_| format!("{PLUGIN_ID_ENV} absent"))?;
     request(
@@ -67,13 +72,14 @@ fn install() -> Result<(), String> {
     Ok(())
 }
 
-/// Copies the running binary into the state folder, unless it is already there.
-fn copy_binary() -> Result<(), String> {
+/// Copies the running binary into the state folder, unless it is already
+/// there, and returns the copy's path.
+fn copy_binary() -> Result<PathBuf, String> {
     let dir = PathBuf::from(std::env::var_os(STATE_DIR_ENV).ok_or("état du plugin inconnu")?);
     let source = std::env::current_exe().map_err(|e| e.to_string())?;
     let target = dir.join(source.file_name().ok_or("binaire sans nom")?);
     if fs::read(&target).ok() == Some(fs::read(&source).map_err(|e| e.to_string())?) {
-        return Ok(());
+        return Ok(target);
     }
     // Names of this process: two installs at once do not share a file.
     let pid = std::process::id();
@@ -94,7 +100,7 @@ fn copy_binary() -> Result<(), String> {
             }
         }
     }
-    renamed
+    renamed.map(|()| target)
 }
 
 #[derive(Deserialize)]
@@ -162,29 +168,57 @@ fn tick(mode: Mode) -> Result<(), String> {
             number: w.number,
         })
         .collect();
+    let agents = agents_of(&panes, &tabs);
+    let blocks = tree::blocks(&spaces, &agents);
+    let workspace_of = |pane_id: &str| {
+        agents
+            .iter()
+            .find(|a| a.pane_id == pane_id)
+            .map_or("", |a| a.workspace_id.as_str())
+    };
+    // A lone agent's figures already tell its workspace's.
+    let several = |workspace_id: &str| {
+        agents
+            .iter()
+            .filter(|a| a.workspace_id == workspace_id)
+            .nth(1)
+            .is_some()
+    };
+
+    // An event only moves the tree: the figures stay as the last run measured
+    // them, which spares a reading of every process on each focus change.
+    if mode == Mode::Event {
+        for block in blocks {
+            let mut tokens = layout_tokens(&block);
+            if block.header.is_none() || !several(workspace_of(&block.pane_id)) {
+                tokens.insert("ws_stats".into(), Value::Null);
+            }
+            send("pane.report_metadata", "pane_id", &block.pane_id, tokens);
+        }
+        return Ok(());
+    }
 
     let previous = match mode {
-        Mode::Tick | Mode::Event => None,
         // No saved sample to compare with: take one a second earlier.
         Mode::Show => {
-            let first = Sample::of(now_ms(), &read_processes()?);
+            let first = read_system()?.sample(now_ms());
             std::thread::sleep(std::time::Duration::from_secs(1));
             Some(first)
         }
+        _ => None,
     };
-    let procs = read_processes()?;
+    let system = read_system()?;
     let now = now_ms();
     let previous = previous.or_else(|| read_sample(&sample_path, now));
     let elapsed = previous.as_ref().map(|s| now.saturating_sub(s.at_ms));
     let empty = Sample::default();
-    let table = Table::new(&procs, previous.as_ref().unwrap_or(&empty));
+    let table = Table::new(&system.processes, previous.as_ref().unwrap_or(&empty));
     let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
     let cpu = |u: &Usage| elapsed.map(|e| format_cpu(cpu_percent(u.cpu_ms, e, cores)));
 
     let mut sums: Vec<(String, Usage)> = Vec::new();
     let mut total = Usage::default();
-    let mut agents = Vec::new();
-    let mut usages = Vec::new();
+    let mut usages: Vec<(&str, Usage)> = Vec::new();
     for pane in &panes {
         let Some(root) = shell_pid(&pane.pane_id) else {
             continue;
@@ -195,52 +229,29 @@ fn tick(mode: Mode) -> Result<(), String> {
             Some((_, sum)) => *sum += usage,
             None => sums.push((pane.workspace_id.clone(), usage)),
         }
-        if let Some(agent) = &pane.agent {
-            // The tab name tells agents apart; an unnamed tab shows its number.
-            let name = tabs
-                .iter()
-                .find(|t| t.tab_id == pane.tab_id)
-                .map(|t| t.label.clone())
-                .filter(|label| !label.is_empty())
-                .unwrap_or_else(|| agent.clone());
-            agents.push(tree::Agent {
-                pane_id: pane.pane_id.clone(),
-                workspace_id: pane.workspace_id.clone(),
-                tab_id: pane.tab_id.clone(),
-                name,
-                status: pane.agent_status.clone(),
-            });
-            usages.push((pane.pane_id.clone(), pane.workspace_id.clone(), usage));
-        }
+        usages.push((&pane.pane_id, usage));
     }
 
-    for block in tree::blocks(&spaces, &agents) {
-        let Some((_, workspace_id, usage)) = usages.iter().find(|(id, ..)| *id == block.pane_id)
-        else {
-            continue;
-        };
-        // A lone agent's figures already tell its workspace's.
-        let several = agents
-            .iter()
-            .filter(|a| a.workspace_id == *workspace_id)
-            .nth(1)
-            .is_some();
-        let workspace_stats = (block.header.is_some() && several).then(|| {
+    for block in blocks {
+        let workspace_id = workspace_of(&block.pane_id);
+        let workspace_stats = (block.header.is_some() && several(workspace_id)).then(|| {
             sums.iter()
                 .find(|(id, _)| id == workspace_id)
                 .map_or_else(String::new, |(_, u)| figures(cpu(u), u, false))
         });
-        let mut tokens = tokens(cpu(usage), usage);
-        let shells = match usage.shells {
-            0 => Value::Null,
-            1 => "1 shell".into(),
-            n => format!("{n} shells").into(),
-        };
-        tokens.insert("shells".into(), shells);
-        tokens.insert("order".into(), block.order.into());
-        tokens.insert("line".into(), block.line.into());
-        tokens.insert("stats".into(), figures(cpu(usage), usage, true).into());
-        tokens.insert("ws".into(), block.header.map_or(Value::Null, Value::from));
+        let mut tokens = layout_tokens(&block);
+        // An agent whose processes could not be read keeps its place in the
+        // tree, with the figures of the last run.
+        if let Some((_, usage)) = usages.iter().find(|(id, _)| *id == block.pane_id) {
+            tokens.extend(figure_tokens(cpu(usage), usage));
+            let shells = match usage.shells {
+                0 => Value::Null,
+                1 => "1 shell".into(),
+                n => format!("{n} shells").into(),
+            };
+            tokens.insert("shells".into(), shells);
+            tokens.insert("stats".into(), figures(cpu(usage), usage, true).into());
+        }
         tokens.insert(
             "ws_stats".into(),
             workspace_stats.map_or(Value::Null, Value::from),
@@ -252,29 +263,73 @@ fn tick(mode: Mode) -> Result<(), String> {
             "workspace.report_metadata",
             "workspace_id",
             id,
-            tokens(cpu(usage), usage),
+            figure_tokens(cpu(usage), usage),
         );
     }
 
-    // The local time, then the total of every pane: `14:05 6% 2.4G`.
-    let tab_bar = || {
-        let time = chrono::Local::now().format("%H:%M");
-        format!("{time} {}", figures(cpu(&total), &total, false))
-    };
-    match mode {
-        Mode::Event => {}
-        Mode::Tick => {
-            write_sample(&sample_path, &Sample::of(now, &procs));
-            println!("{}", tab_bar());
-        }
-        Mode::Show => println!("{}", tab_bar()),
+    // Every pane's total, the whole machine's, then the local time:
+    // `6% 2.4G · 󰍹 35% 21.3G · 14:05`.
+    let machine_cpu = previous
+        .as_ref()
+        .and_then(|p| machine::cpu_percent(p.machine?, system.cpu_times?))
+        .map(format_cpu);
+    let machine: Vec<String> = machine_cpu
+        .into_iter()
+        .chain([format_size(system.used_memory)])
+        .collect();
+    let time = chrono::Local::now().format("%H:%M");
+    println!(
+        "{} · {MACHINE_GLYPH} {} · {time}",
+        figures(cpu(&total), &total, false),
+        machine.join(" ")
+    );
+    if mode == Mode::Tick {
+        write_sample(&sample_path, &system.sample(now));
     }
     Ok(())
 }
 
-/// Nerd Font terminal glyph (nf-oct-terminal), as in CC-Plugins' dx. Some
-/// terminals draw it two cells wide: the space after it keeps the count clear.
+/// The agents among the panes, named after their tab: an unnamed tab shows
+/// the agent's name.
+fn agents_of(panes: &[Pane], tabs: &[Tab]) -> Vec<tree::Agent> {
+    panes
+        .iter()
+        .filter_map(|pane| {
+            let agent = pane.agent.as_ref()?;
+            let name = tabs
+                .iter()
+                .find(|t| t.tab_id == pane.tab_id)
+                .map(|t| t.label.clone())
+                .filter(|label| !label.is_empty())
+                .unwrap_or_else(|| agent.clone());
+            Some(tree::Agent {
+                pane_id: pane.pane_id.clone(),
+                workspace_id: pane.workspace_id.clone(),
+                tab_id: pane.tab_id.clone(),
+                name,
+                status: pane.agent_status.clone(),
+            })
+        })
+        .collect()
+}
+
+/// The tokens that place a block in the tree.
+fn layout_tokens(block: &tree::Block) -> Map<String, Value> {
+    let mut tokens = Map::new();
+    tokens.insert("order".into(), block.order.clone().into());
+    tokens.insert("line".into(), block.line.clone().into());
+    tokens.insert(
+        "ws".into(),
+        block.header.clone().map_or(Value::Null, Value::from),
+    );
+    tokens
+}
+
+/// Nerd Font terminal glyph (nf-oct-terminal). Some terminals draw it two
+/// cells wide: the space after it keeps the count clear.
 const SHELL_GLYPH: char = '\u{F489}';
+/// Nerd Font monitor glyph (nf-md-monitor), before the whole machine's figures.
+const MACHINE_GLYPH: char = '\u{F0379}';
 
 /// `4% 853M  1`; the CPU share is missing on the first run.
 fn figures(cpu: Option<String>, usage: &Usage, with_shells: bool) -> String {
@@ -287,7 +342,7 @@ fn figures(cpu: Option<String>, usage: &Usage, with_shells: bool) -> String {
 }
 
 /// `cpu` is left out (not cleared) on the first run, which has no average yet.
-fn tokens(cpu: Option<String>, usage: &Usage) -> Map<String, Value> {
+fn figure_tokens(cpu: Option<String>, usage: &Usage) -> Map<String, Value> {
     let mut tokens = Map::new();
     if let Some(cpu) = cpu {
         tokens.insert("cpu".into(), cpu.into());
@@ -326,14 +381,31 @@ fn shell_pid(pane_id: &str) -> Option<u32> {
         .and_then(|pid| u32::try_from(pid).ok())
 }
 
-fn read_processes() -> Result<Vec<Proc>, String> {
+/// What one run reads from the system.
+struct Reading {
+    processes: Vec<Proc>,
+    /// Memory in use on the whole machine.
+    used_memory: u64,
+    cpu_times: Option<machine::CpuTimes>,
+}
+
+impl Reading {
+    fn sample(&self, at_ms: u64) -> Sample {
+        let mut sample = Sample::of(at_ms, &self.processes);
+        sample.machine = self.cpu_times;
+        sample
+    }
+}
+
+fn read_system() -> Result<Reading, String> {
     let mut system = System::new().map_err(|e| format!("processus illisibles: {e:?}"))?;
     system.refresh_processes_specifics(
         ProcessesToUpdate::All,
         true,
         ProcessRefreshKind::nothing().with_cpu().with_memory(),
     );
-    Ok(system
+    system.refresh_memory_specifics(MemoryRefreshKind::nothing().with_ram());
+    let processes = system
         .processes()
         .values()
         .map(|p| Proc {
@@ -344,13 +416,20 @@ fn read_processes() -> Result<Vec<Proc>, String> {
             memory: p.memory(),
             name: p.name().to_string_lossy().into_owned(),
         })
-        .collect())
+        .collect();
+    Ok(Reading {
+        processes,
+        used_memory: system.used_memory(),
+        cpu_times: machine::cpu_times(),
+    })
 }
 
 fn read_sample(path: &Path, now: u64) -> Option<Sample> {
     let sample: Sample = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
     let age = now.checked_sub(sample.at_ms)?;
-    (age > 0 && age <= MAX_SAMPLE_AGE_MS).then_some(sample)
+    (MIN_SAMPLE_AGE_MS..=MAX_SAMPLE_AGE_MS)
+        .contains(&age)
+        .then_some(sample)
 }
 
 fn write_sample(path: &Path, sample: &Sample) {

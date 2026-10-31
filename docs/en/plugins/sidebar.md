@@ -2,18 +2,18 @@
 
 **English** · [Français](../../fr/plugins/sidebar.md)
 
-Turns Herdr's Agents panel into a tree: each workspace's agents listed under its name, with CPU and memory per workspace and per agent and the number of shells each agent is running. The time and the total of all panes go in the tab bar. The plugin only reports values; how they look is set by the sidebar rows of Herdr's `config.toml`.
+Turns Herdr's Agents panel into a tree: each workspace's agents listed under its name, with CPU and memory per workspace and per agent and the number of shells each agent is running. The tab bar shows the total of all panes, the whole machine's, and the time. The plugin only reports values; how they look is set by the sidebar rows of Herdr's `config.toml`.
 
 ```
  agents                 arbre
-OS_Setup · 6% 1.2G
+api · 6% 1.2G
 ├ ◐ Général · 4% 853M  1
 └ ○ docs · 0% 275M
-CC-Plugins
+web
 └ ○ 1 · 1% 562M
 ```
 
-Clicking an agent line opens that agent. Workspaces are still opened from the Spaces panel above, reduced to one line each (`OS_Setup · main`); drag the divider between the two panels to give the tree more room.
+Clicking an agent line opens that agent. Workspaces are still opened from the Spaces panel above, reduced to one line each (`api · main`); drag the divider between the two panels to give the tree more room.
 
 ## Installation
 
@@ -33,7 +33,7 @@ Then add to Herdr's `config.toml`:
 [ui]
 sidebar_width = 34
 sidebar_max_width = 40
-# Runs the plugin every 5 seconds; also shows the time and the total at the right of the tab bar.
+# Runs the plugin every 5 seconds; also shows the totals and the time at the right of the tab bar.
 # Windows (the state folder is under %LOCALAPPDATA%):
 tab_bar_right = [
   { type = "command", command = '"%LOCALAPPDATA%\herdr\plugins\imsike.sidebar\herdr-sidebar.exe" tick', interval_seconds = 5, timeout_seconds = 3 },
@@ -61,7 +61,7 @@ active_row_bg = "#4a4426"
 
 The colours suit the gruvbox theme.
 
-On Linux and macOS, point the command at the binary in the plugin's state folder (`herdr-sidebar tick`, without `.exe`).
+On Linux, point the command at the copy in the plugin's state folder (`herdr-sidebar tick`, without `.exe`): `install` prints its path, which `herdr plugin log list --plugin imsike.sidebar` shows.
 
 ## What it shows
 
@@ -69,7 +69,7 @@ Agent tokens (Agents panel):
 
 | Token | Value |
 |---|---|
-| `$ws` | on the first agent of each workspace only: the workspace's name (`OS_Setup`) |
+| `$ws` | on the first agent of each workspace only: the workspace's name (`api`) |
 | `$ws_stats` | next to `$ws`, only when the workspace has more than one agent (otherwise the agent's figures already tell it): the workspace's CPU and memory (`6% 1.2G`) |
 | `$line` | tree branch (`├`, `└` for the last agent of the workspace), state and the name of the agent's tab (`├ ◐ Général`) |
 | `$stats` | the agent's CPU, memory and shells (`4% 853M  1`) |
@@ -80,21 +80,22 @@ State glyphs: `◐` working, `◆` blocked, `●` done (finished, not seen yet),
 
 Workspace tokens (Spaces panel): `$cpu` and `$ram`.
 
-Tab bar: `<time> <cpu> <memory>` (`14:05 6% 2.4G`), the local time and the total of every pane, updated at each run.
+Tab bar: `<cpu> <memory> · 󰍹 <cpu> <memory> · <time>` (`6% 2.4G · 󰍹 35% 21.3G · 14:05`): the total of every pane, then the whole machine's (after the Nerd Font monitor icon), then the local time, updated at each run. The machine's figures count every process, those the plugin cannot read too (protected processes, virtual machines): its CPU share comes from the system's CPU times, its memory is the memory in use (what the Task Manager shows as "In use" on Windows).
 
-- **CPU**: used since the previous run, as a share of the whole machine, rounded to the percent (`0%`, `12%`: below 0.5% shows `0%`); missing on the first run.
+- **CPU**: used since the previous run, as a share of the whole machine, rounded to the percent (`0%`, `12%`: below 0.5% shows `0%`); missing on the first run, and when the previous run is less than a second old.
 - **Memory**: working set on Windows, resident memory elsewhere (`850M`, `1.2G`).
 - An agent's figures cover its pane's whole process tree: the shell, the agent and everything they started. A workspace adds up all its panes, agents or not.
-- **Shells** (``, the Nerd Font terminal icon, as in CC-Plugins' dx; without a Nerd Font it shows as a blank or a box): `bash`, `sh`, `zsh`, `fish`, `dash`, `nu`, `pwsh`, `powershell` or `cmd` processes below the agent. A shell started by another shell does not count again: Git Bash on Windows chains several `bash.exe` for one command, which count as one. Short commands appear only for an instant; long-running ones (a server, a watcher) stay visible.
+- **Shells** (``, the Nerd Font terminal icon; without a Nerd Font it shows as a blank or a box): `bash`, `sh`, `zsh`, `fish`, `dash`, `nu`, `pwsh`, `powershell` or `cmd` processes below the agent. A shell started by another shell does not count again: Git Bash on Windows chains several `bash.exe` for one command, which count as one. Short commands appear only for an instant; long-running ones (a server, a watcher) stay visible.
 
 To check the values without the sidebar, `herdr-sidebar show` (from the state folder) prints them, measured over one second, without reporting them.
 
 ## How it works, implications
 
 - Herdr has no long-running plugin process: the tab bar entry runs `herdr-sidebar tick` every 5 seconds, and Herdr never starts a run while the previous one is still going. Each run reads every process of the machine and asks Herdr for each pane's process; it takes a fraction of a second and about 25 ms of CPU, then exits.
-- When an agent appears or changes state, Herdr runs the plugin at once and so does focusing a pane, which marks a done agent as seen (`pane.agent_detected`, `pane.agent_status_changed`, `pane.focused`, `workspace.created` events): the tree's states follow without waiting for the next run. A renamed workspace appears at the next run.
+- When an agent appears or changes state, Herdr runs the plugin at once and so does focusing a pane, which marks a done agent as seen (`pane.agent_detected`, `pane.agent_status_changed`, `pane.focused`, `workspace.created` events): the tree's states follow without waiting for the next run. These runs only place the agents in the tree, without reading the processes: the figures are those of the last run, and a new agent gets its own at the next one. A renamed workspace appears at the next run.
 - The Agents panel is sorted by `$order` through a Herdr agent view (labelled `arbre` in the panel header), which replaces the panel's own sort while the plugin is enabled.
 - The CPU share compares with the previous run, saved in `sample.json` in the state folder.
+- An agent whose processes cannot be read stays in the tree with the figures of the last run, until they expire.
 - Values expire after 20 seconds. If the runs stop, the tree lines disappear instead of going stale, and agents are listed without lines.
 - Herdr indents a block's second row by two cells, so the first agent of a workspace (under its header) sits further right than the others. The plugin pads the others' lines with two blank braille characters (U+2800), since Herdr strips ordinary spaces at the start of a value. A line longer than the sidebar is cut.
 - The `◐` glyph replaces Herdr's state icon.
