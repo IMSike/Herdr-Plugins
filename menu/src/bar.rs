@@ -287,17 +287,24 @@ pub fn run(entries: &[Entry]) -> Result<(), String> {
     result
 }
 
-/// Measures the folder now and every `MEASURE_EVERY`, in the background.
+/// Measures the folder now and every `MEASURE_EVERY`, in the background. A
+/// folder too large to be read in full is measured once: the next readings
+/// would stop at the same limit.
 fn measure_in_background(root: PathBuf) -> mpsc::Receiver<Stats> {
     let (send, receive) = mpsc::channel();
     std::thread::spawn(move || {
-        while send.send(stats::measure(&root)).is_ok() {
+        loop {
+            let stats = stats::measure(&root, stats::Limit::default());
+            if send.send(stats).is_err() || !stats.complete {
+                return;
+            }
             std::thread::sleep(MEASURE_EVERY);
         }
     });
     receive
 }
 
+#[derive(Clone, PartialEq)]
 struct View<'a> {
     entries: &'a [Entry],
     hover: Option<usize>,
@@ -316,11 +323,17 @@ fn show(me: &str, entries: &[Entry]) -> io::Result<()> {
     };
     // The first check fits the height once the swap is done.
     let mut check_at = Some(Instant::now() + Duration::from_millis(300));
+    // Drawn again only when something changed.
+    let mut drawn: Option<(View, (u16, u16))> = None;
     loop {
         if let Some(stats) = measures.as_ref().and_then(|m| m.try_iter().last()) {
             view.stats = Some(stats);
         }
-        draw(&view)?;
+        let size = terminal::size()?;
+        if drawn.as_ref() != Some(&(view.clone(), size)) {
+            draw(&view)?;
+            drawn = Some((view.clone(), size));
+        }
         let until_check = check_at.map_or(Duration::MAX, |at| {
             at.saturating_duration_since(Instant::now())
         });
@@ -470,12 +483,7 @@ fn launch(me: &str, entry: &Entry) -> Result<(), String> {
         return crate::launch::detach(entry, cwd.as_deref());
     }
     let cwd = cwd.map(|p| p.to_string_lossy().into_owned());
-    let key = entry.key.to_string();
-    let mut env = vec![(crate::ENTRY_ENV, key.as_str())];
-    if let Some(cwd) = &cwd {
-        env.push((crate::CWD_ENV, cwd.as_str()));
-    }
-    herdr::open_pane_when_free("run", &env).map_err(|e| e.to_string())
+    crate::run_in_popup(entry, cwd.as_deref())
 }
 
 #[derive(Deserialize)]

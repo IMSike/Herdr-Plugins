@@ -84,7 +84,7 @@ The folder a tool starts in:
 
 On Windows, a command found on `PATH` as a batch file (`code` is `code.cmd`) runs without naming its extension.
 
-A file that cannot be read or is invalid (unknown field, empty command, a key used twice) is ignored: the menu shows the built-in entries, and the popup menu shows the error on its bottom line. The `Tools` pane reads the file when it opens, the popup menu each time it opens; no reload is needed.
+A file that cannot be read or is invalid (unknown field, empty command, a key used twice) is ignored: the menu shows the built-in entries, and the popup menu shows the error on its bottom line. The `Tools` pane reads the file when it opens, the popup menu each time it opens; no reload is needed. A tool starts as the menu showed it, even when the file changed in between.
 
 ## How it works, implications
 
@@ -94,14 +94,14 @@ A file that cannot be read or is invalid (unknown field, empty command, a key us
 - It opens on Herdr's `pane.created` event of the explorer, once the explorer stops moving (it places and sizes itself right after it opens: about one second). It closes on the `pane.closed` event, as soon as its tab has no explorer, or no pane besides it and the explorer, so that the explorer can close its tab as it does on its own.
 - It asks for 5 rows, but Herdr never gives a side of a split less than a tenth of it: on a screen of fewer than 60 rows, it is taller. It takes its height back when the window is resized.
 - **While it is open, the explorer no longer keeps its width**: `<` and `>` do nothing and its width follows the window's in proportion. The explorer only looks for its width at the full height of its own pane; a change to it is proposed upstream.
-- The figures are measured in the background when the pane opens, then every 2 minutes: the whole folder is read, which takes a moment on a large one (`node_modules`, build folders).
+- The figures are measured in the background when the pane opens, then every 2 minutes: the whole folder is read, which takes a moment on a large one (`node_modules`, build folders). The reading stops after 200,000 files and folders or 2 seconds, whichever comes first: the figures then start with `≥` (at least), and are not measured again while the pane stays open.
 - It finds the explorer by its pane's label, `Explorer`; a later version of the explorer that renamed it would leave the menu as a popup only.
 - After a Herdr restart, Herdr restores the pane as a plain shell; the plugin closes it at startup, and the explorer, when it reopens, gets a new one.
 
 **The popup menu**
 
-- Herdr shows one popup at a time. The action therefore stays running while the menu is open: it waits for the menu to write the choice into a file of the plugin's state folder, then opens the tool's popup once the menu's is gone. While waiting it uses about 4 MB of memory and checks the file 20 times a second.
-- If the menu popup is closed by something else than the menu itself, the action keeps waiting, invisibly, for at most one hour.
+- Herdr shows one popup at a time. The action therefore stays running while the menu is open: it waits for the menu to write the choice into a file of the plugin's state folder, then opens the tool's popup once the menu's is gone. While waiting it uses about 4 MB of memory, checks the file 20 times a second, and checks once a second that the menu still runs.
+- If the menu popup is closed by something else than the menu itself, the action sees within a second that the menu is gone, and stops.
 
 Commands run as your user, with your environment, like any program you would start in a pane.
 

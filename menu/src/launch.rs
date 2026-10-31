@@ -52,6 +52,10 @@ pub fn detach(entry: &Entry, cwd: Option<&Path>) -> Result<(), String> {
     if let Some(cwd) = cwd {
         command.current_dir(cwd);
     }
+    // A group of its own: closing the bar's pane hangs up the pane's group,
+    // not the program it started.
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut command, 0);
     let mut child = command
         .spawn()
         .map_err(|e| format!("impossible de lancer « {} » : {e}", entry.label))?;

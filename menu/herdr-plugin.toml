@@ -3,7 +3,7 @@ name = "Menu"
 version = "0.0.0"
 min_herdr_version = "0.9.5"
 description = "A menu that opens a tool (lazygit, gh-dash…) in a full-size popup: a bar of icons above the file explorer, or a popup"
-platforms = ["linux", "macos", "windows"]
+platforms = ["linux", "windows"]
 
 [[build]]
 command = ["cargo", "build", "--release", "--locked", "--target-dir", "target"]

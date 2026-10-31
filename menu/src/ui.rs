@@ -44,8 +44,13 @@ impl Drop for Screen {
 pub fn choose(title: &str, entries: &[Entry], error: Option<&str>) -> io::Result<Option<usize>> {
     let _screen = Screen::enter()?;
     let mut selected = 0usize;
+    // The first entry drawn: the list scrolls to keep the selection visible.
+    let mut top = 0usize;
     loop {
-        draw(title, entries, error, selected)?;
+        let (_, height) = terminal::size()?;
+        let visible = visible_rows(height);
+        top = scrolled(top, selected, visible);
+        draw(title, &entries[top..], error, selected - top, visible)?;
         match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => {
                 if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -74,8 +79,12 @@ pub fn choose(title: &str, entries: &[Entry], error: Option<&str>) -> io::Result
                 }
             }
             Event::Mouse(mouse) => {
+                // Only a drawn row answers a click.
                 let row = mouse.row.checked_sub(LIST_TOP).map(usize::from);
-                let hit = row.filter(|&r| r < entries.len());
+                let hit = row
+                    .filter(|&r| r < visible)
+                    .map(|r| top + r)
+                    .filter(|&i| i < entries.len());
                 match mouse.kind {
                     MouseEventKind::Down(MouseButton::Left) => {
                         if let Some(i) = hit {
@@ -95,7 +104,30 @@ pub fn choose(title: &str, entries: &[Entry], error: Option<&str>) -> io::Result
     }
 }
 
-fn draw(title: &str, entries: &[Entry], error: Option<&str>, selected: usize) -> io::Result<()> {
+/// Rows of the list: the title and a gap above, the error and help lines below.
+fn visible_rows(height: u16) -> usize {
+    usize::from(height.saturating_sub(LIST_TOP + 2))
+}
+
+/// The first entry to draw, moved just enough to show `selected`.
+fn scrolled(top: usize, selected: usize, visible: usize) -> usize {
+    if visible == 0 || selected < top {
+        selected
+    } else if selected >= top + visible {
+        selected + 1 - visible
+    } else {
+        top
+    }
+}
+
+/// Draws `entries` (from the first visible one) in `visible` rows.
+fn draw(
+    title: &str,
+    entries: &[Entry],
+    error: Option<&str>,
+    selected: usize,
+    visible: usize,
+) -> io::Result<()> {
     let (width, height) = terminal::size()?;
     let width = usize::from(width);
     let mut out = io::stdout();
@@ -106,11 +138,8 @@ fn draw(title: &str, entries: &[Entry], error: Option<&str>, selected: usize) ->
         Print(fit(&format!(" {title}"), width)),
         SetAttribute(Attribute::Reset)
     )?;
-    for (i, entry) in entries.iter().enumerate() {
+    for (i, entry) in entries.iter().take(visible).enumerate() {
         let row = LIST_TOP + i as u16;
-        if row >= height.saturating_sub(2) {
-            break;
-        }
         queue!(out, MoveTo(0, row))?;
         if i == selected {
             queue!(out, SetAttribute(Attribute::Reverse))?;
@@ -162,5 +191,14 @@ mod tests {
         assert_eq!(pad("é", 3), "é  ");
         assert_eq!(pad("abcdef", 3), "abc");
         assert_eq!(fit("Échap", 2), "Éc");
+    }
+
+    #[test]
+    fn the_list_scrolls_to_the_selection() {
+        assert_eq!(visible_rows(14), 10);
+        assert_eq!(scrolled(0, 3, 10), 0);
+        assert_eq!(scrolled(0, 12, 10), 3);
+        assert_eq!(scrolled(3, 1, 10), 1);
+        assert_eq!(scrolled(0, 5, 0), 5);
     }
 }

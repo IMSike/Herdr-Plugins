@@ -7,9 +7,11 @@
 //! screen, so the popup menu cannot open the tool itself. The action drives both:
 //!
 //! 1. `open` (action) opens the `menu` popup and waits for its choice file.
-//! 2. `menu` (popup) writes the chosen entry and the folder to start in, then exits.
+//! 2. `menu` (popup) writes its process id, then the chosen entry and the
+//!    folder to start in, and exits.
 //! 3. `open` reads the choice and opens the `run` popup, retrying while the menu
-//!    popup is being torn down.
+//!    popup is being torn down. It stops waiting as soon as the menu's process
+//!    is gone, however the popup was closed.
 //! 4. `run` (popup) runs the entry's command in that folder.
 
 mod bar;
@@ -21,6 +23,7 @@ mod ui;
 
 use config::Entry;
 use herdr::Context;
+use serde::{Deserialize, Serialize};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -28,11 +31,13 @@ use std::time::{Duration, Instant};
 
 /// Choice file the `menu` popup writes for the `open` action.
 const CHOICE_ENV: &str = "HERDR_MENU_CHOICE";
-/// Entry key and start folder the `open` action hands to the `run` popup.
+/// The entry (as JSON) and the start folder handed to the `run` popup.
 pub(crate) const ENTRY_ENV: &str = "HERDR_MENU_ENTRY";
 pub(crate) const CWD_ENV: &str = "HERDR_MENU_CWD";
-/// How long the action waits for a choice before giving up.
-const CHOICE_TIMEOUT: Duration = Duration::from_secs(60 * 60);
+/// How long the action waits for the menu to start.
+const START_TIMEOUT: Duration = Duration::from_secs(10);
+/// How often the action checks that the menu is still running.
+const ALIVE_EVERY: Duration = Duration::from_secs(1);
 
 fn main() -> ExitCode {
     let result = match std::env::args().nth(1).as_deref() {
@@ -59,24 +64,21 @@ fn entries() -> (Vec<Entry>, Option<String>) {
     config::load(dir.as_deref())
 }
 
-/// A choice: the entry's key and the folder to start in, one per line.
-#[derive(Debug, PartialEq, Eq)]
+/// A choice: the entry as the menu showed it, and the folder to start in.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct Choice {
-    key: char,
+    entry: Entry,
     cwd: Option<String>,
 }
 
 impl Choice {
     fn encode(&self) -> String {
-        format!("{}\n{}", self.key, self.cwd.as_deref().unwrap_or(""))
+        serde_json::to_string(self).unwrap_or_default()
     }
 
     /// `None` when the menu was closed without a choice (empty file).
     fn decode(text: &str) -> Option<Self> {
-        let mut lines = text.lines();
-        let key = lines.next()?.chars().next()?;
-        let cwd = lines.next().filter(|l| !l.is_empty()).map(str::to_string);
-        Some(Choice { key, cwd })
+        serde_json::from_str(text).ok()
     }
 }
 
@@ -92,33 +94,79 @@ fn open() -> Result<(), String> {
         .map(PathBuf::from)
         .ok_or("HERDR_PLUGIN_STATE_DIR absent")?;
     let choice_file = state.join(format!("choice-{}", std::process::id()));
+    let pid_file = pid_file(&choice_file);
     let _ = std::fs::remove_file(&choice_file);
+    let _ = std::fs::remove_file(&pid_file);
     let choice_path = choice_file.to_string_lossy().into_owned();
     herdr::open_pane("menu", &[(CHOICE_ENV, &choice_path)]).map_err(|e| e.to_string())?;
 
-    let deadline = Instant::now() + CHOICE_TIMEOUT;
-    let text = loop {
-        if let Ok(text) = std::fs::read_to_string(&choice_file) {
-            let _ = std::fs::remove_file(&choice_file);
-            break text;
-        }
-        if Instant::now() >= deadline {
-            return Err("aucun choix reçu du menu".into());
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    };
-    let Some(choice) = Choice::decode(&text) else {
+    let text = wait_for_choice(&choice_file, &pid_file);
+    let _ = std::fs::remove_file(&choice_file);
+    let _ = std::fs::remove_file(&pid_file);
+    let Some(choice) = text?.as_deref().and_then(Choice::decode) else {
         return Ok(());
     };
+    let cwd = choice.cwd.as_deref();
     // A program with a window of its own starts without the popup.
-    let (entries, _) = entries();
-    if let Some(entry) = entries.iter().find(|e| e.key == choice.key && !e.popup) {
-        return launch::detach(entry, choice.cwd.as_deref().map(Path::new));
+    if !choice.entry.popup {
+        return launch::detach(&choice.entry, cwd.map(Path::new));
     }
-    let key = choice.key.to_string();
-    let mut env = vec![(ENTRY_ENV, key.as_str())];
-    if let Some(cwd) = &choice.cwd {
-        env.push((CWD_ENV, cwd.as_str()));
+    run_in_popup(&choice.entry, cwd)
+}
+
+/// The choice file's content once the menu wrote it; `None` when the menu
+/// went away without writing it (its popup closed by something else).
+fn wait_for_choice(choice_file: &Path, pid_file: &Path) -> Result<Option<String>, String> {
+    let started = Instant::now();
+    let mut next_check = started + ALIVE_EVERY;
+    loop {
+        if let Ok(text) = std::fs::read_to_string(choice_file) {
+            return Ok(Some(text));
+        }
+        if Instant::now() >= next_check {
+            next_check += ALIVE_EVERY;
+            let pid = std::fs::read_to_string(pid_file)
+                .ok()
+                .and_then(|text| text.trim().parse::<u32>().ok());
+            let gone = match pid {
+                Some(pid) => !is_running(pid),
+                None => started.elapsed() >= START_TIMEOUT,
+            };
+            if gone {
+                // It may have written its choice just before exiting.
+                return Ok(std::fs::read_to_string(choice_file).ok());
+            }
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+fn pid_file(choice_file: &Path) -> PathBuf {
+    let mut name = choice_file.as_os_str().to_os_string();
+    name.push(".pid");
+    PathBuf::from(name)
+}
+
+fn is_running(pid: u32) -> bool {
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
+    let Ok(mut system) = System::new() else {
+        return true;
+    };
+    let pid = Pid::from_u32(pid);
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[pid]),
+        true,
+        ProcessRefreshKind::nothing(),
+    );
+    system.process(pid).is_some()
+}
+
+/// Opens the `run` popup for the entry.
+pub(crate) fn run_in_popup(entry: &Entry, cwd: Option<&str>) -> Result<(), String> {
+    let entry = serde_json::to_string(entry).map_err(|e| e.to_string())?;
+    let mut env = vec![(ENTRY_ENV, entry.as_str())];
+    if let Some(cwd) = cwd {
+        env.push((CWD_ENV, cwd));
     }
     herdr::open_pane_when_free("run", &env).map_err(|e| e.to_string())
 }
@@ -135,6 +183,11 @@ fn menu() -> Result<(), String> {
     let choice_file = std::env::var_os(CHOICE_ENV)
         .map(PathBuf::from)
         .ok_or(format!("{CHOICE_ENV} absent"))?;
+    // Tells the waiting action that the menu runs, and which process to watch.
+    let _ = herdr_api::write_atomic(
+        &pid_file(&choice_file),
+        std::process::id().to_string().as_bytes(),
+    );
     let (entries, error) = entries();
     let context = Context::from_env();
     let title = context
@@ -146,7 +199,7 @@ fn menu() -> Result<(), String> {
     let chosen = ui::choose(&title, &entries, error.as_deref());
     // Always answer the waiting action, even when the menu failed.
     let choice = chosen.as_ref().ok().copied().flatten().map(|i| Choice {
-        key: entries[i].key,
+        entry: entries[i].clone(),
         cwd: context
             .cwd(entries[i].cwd)
             .map(|p| p.to_string_lossy().into_owned()),
@@ -166,13 +219,12 @@ fn run() -> Result<(), String> {
     result
 }
 
+/// Runs the entry the menu or the bar showed, not one read again from
+/// `menu.toml`, which may have changed since.
 fn run_entry() -> Result<(), String> {
-    let key = std::env::var(ENTRY_ENV).map_err(|_| format!("{ENTRY_ENV} absent"))?;
-    let (entries, _) = entries();
-    let entry = entries
-        .iter()
-        .find(|e| key.chars().eq([e.key]))
-        .ok_or_else(|| format!("aucune entrée pour la touche « {key} »"))?;
+    let json = std::env::var(ENTRY_ENV).map_err(|_| format!("{ENTRY_ENV} absent"))?;
+    let entry: Entry =
+        serde_json::from_str(&json).map_err(|e| format!("{ENTRY_ENV} illisible : {e}"))?;
     let mut command = launch::command(&entry.command);
     if let Some(cwd) = std::env::var_os(CWD_ENV) {
         command.current_dir(cwd);
@@ -196,13 +248,14 @@ mod tests {
 
     #[test]
     fn choice_round_trips() {
+        let entries = config::defaults();
         let with_cwd = Choice {
-            key: 'l',
+            entry: entries[0].clone(),
             cwd: Some("C:\\repo\\app".into()),
         };
         assert_eq!(Choice::decode(&with_cwd.encode()), Some(with_cwd));
         let without_cwd = Choice {
-            key: 'g',
+            entry: entries[1].clone(),
             cwd: None,
         };
         assert_eq!(Choice::decode(&without_cwd.encode()), Some(without_cwd));
@@ -211,5 +264,10 @@ mod tests {
     #[test]
     fn empty_choice_means_closed() {
         assert_eq!(Choice::decode(""), None);
+    }
+
+    #[test]
+    fn this_process_runs() {
+        assert!(is_running(std::process::id()));
     }
 }
