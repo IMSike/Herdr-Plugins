@@ -7,6 +7,7 @@
 | Page | Contenu |
 |---|---|
 | [menu](plugins/menu.md) | Menu en popup qui lance un outil (lazygit, gh-dash…) dans un grand popup ; ses entrées, `menu.toml` |
+| [sidebar](plugins/sidebar.md) | Arbre workspace → agents avec CPU, mémoire et shells, en tokens de sidebar ; les lignes à ajouter au `config.toml` |
 
 ## Contribuer
 

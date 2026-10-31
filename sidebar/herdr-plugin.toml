@@ -1,0 +1,38 @@
+id = "imsike.sidebar"
+name = "Sidebar"
+version = "0.0.0"
+min_herdr_version = "0.9.5"
+description = "A workspace → agents tree in the Agents panel, with CPU, memory and shell counts; the time and the total of all panes in the tab bar"
+platforms = ["linux", "macos", "windows"]
+
+[[build]]
+command = ["cargo", "build", "--release", "--locked", "--target-dir", "target"]
+
+# Copies the binary to the plugin state folder, where the tab bar entry runs it.
+[[startup]]
+command = ["target/release/herdr-sidebar", "install"]
+
+[[actions]]
+id = "install"
+title = "Install the sidebar binary and agent order (after a link or an update)"
+contexts = ["workspace"]
+command = ["target/release/herdr-sidebar", "install"]
+
+# Redraws the tree as soon as an agent appears or changes state.
+[[events]]
+on = "pane.agent_detected"
+command = ["target/release/herdr-sidebar", "event"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["target/release/herdr-sidebar", "event"]
+
+# Focusing an agent marks it seen: a done agent turns idle.
+[[events]]
+on = "pane.focused"
+command = ["target/release/herdr-sidebar", "event"]
+
+# A new workspace gets its header without waiting for the next run.
+[[events]]
+on = "workspace.created"
+command = ["target/release/herdr-sidebar", "event"]

@@ -11,6 +11,7 @@
 | Plugin | Contents |
 |---|---|
 | [`menu`](docs/en/plugins/menu.md) | A popup menu, opened by one key, that starts a tool (lazygit, gh-dash…) in a large popup over the current workspace |
+| [`sidebar`](docs/en/plugins/sidebar.md) | A workspace → agents tree in Herdr's Agents panel, with CPU, memory and shell counts; time and total of all panes in the tab bar |
 
 ## Installation
 
