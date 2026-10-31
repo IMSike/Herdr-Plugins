@@ -24,7 +24,7 @@ use crossterm::queue;
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use crossterm::terminal::{self, Clear, ClearType};
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -61,7 +61,7 @@ fn label_is(pane: &Pane, label: &str) -> bool {
 /// A bar whose program runs. Herdr restores a pane as a plain shell after a
 /// restart: that one keeps the label, not the program.
 fn is_live(pane: &Pane) -> bool {
-    herdr::call(&["pane", "process-info", "--pane", &pane.pane_id])
+    herdr::call("pane.process_info", json!({ "pane_id": pane.pane_id }))
         .ok()
         .and_then(|r| {
             let processes = r["process_info"]["foreground_processes"]
@@ -86,7 +86,7 @@ pub fn toggle(context: &Context) -> Result<bool, String> {
     let bars: Vec<&Pane> = panes.iter().filter(|p| label_is(p, LABEL)).collect();
     if !bars.is_empty() {
         for bar in bars {
-            herdr::call(&["pane", "close", &bar.pane_id])?;
+            herdr::close(&bar.pane_id)?;
         }
         return Ok(true);
     }
@@ -111,7 +111,7 @@ pub fn on_pane_created() -> Result<(), String> {
         if is_live(bar) {
             return Ok(());
         }
-        let _ = herdr::call(&["pane", "close", &bar.pane_id]);
+        let _ = herdr::close(&bar.pane_id);
     }
     open_above(&explorer)
 }
@@ -126,7 +126,7 @@ pub fn on_pane_closed() -> Result<(), String> {
     for bar in panes.iter().filter(|p| label_is(p, LABEL)) {
         let tab: Vec<&Pane> = panes.iter().filter(|p| p.tab_id == bar.tab_id).collect();
         if !has_its_place(&tab) {
-            let _ = herdr::call(&["pane", "close", &bar.pane_id]);
+            let _ = herdr::close(&bar.pane_id);
         }
     }
     Ok(())
@@ -137,7 +137,7 @@ pub fn on_pane_closed() -> Result<(), String> {
 pub fn startup() -> Result<(), String> {
     for pane in herdr::all_panes()? {
         if label_is(&pane, LABEL) && !is_live(&pane) {
-            let _ = herdr::call(&["pane", "close", &pane.pane_id]);
+            let _ = herdr::close(&pane.pane_id);
         }
     }
     Ok(())
@@ -181,25 +181,18 @@ fn settled(pane: &str) -> bool {
 /// Opens the bar below the explorer and swaps them, leaving the focus where it was.
 fn open_above(explorer: &Pane) -> Result<(), String> {
     let focused = layout_of(&explorer.pane_id).and_then(|l| l.focused_pane_id);
-    let options = [
-        "--placement",
-        "split",
-        "--target-pane",
-        &explorer.pane_id,
-        "--direction",
-        "down",
-        "--no-focus",
-    ];
-    let bar = herdr::open_plugin_pane("bar", &options, &[])?
+    let options = json!({
+        "placement": "split",
+        "target_pane_id": explorer.pane_id,
+        "direction": "down",
+        "focus": false,
+    });
+    let bar = herdr::open_plugin_pane("bar", options, &[])?
         .ok_or("le pane de la barre n'a pas d'identifiant")?;
-    herdr::call(&[
-        "pane",
-        "swap",
-        "--source-pane",
-        &bar,
-        "--target-pane",
-        &explorer.pane_id,
-    ])?;
+    herdr::call(
+        "pane.swap",
+        json!({ "source_pane_id": bar, "target_pane_id": explorer.pane_id }),
+    )?;
     // Down to its height at once, before its program draws: it opens with half
     // of the column. Its border is one row; the bar corrects it once it runs.
     fit_rows(&bar, |height| height.saturating_sub(1));
@@ -242,7 +235,12 @@ fn focus(bar: &str, target: &str) {
         } else {
             "down"
         };
-        if herdr::call(&["pane", "focus", "--direction", direction, "--pane", now]).is_err() {
+        if herdr::call(
+            "pane.focus_direction",
+            json!({ "direction": direction, "pane_id": now }),
+        )
+        .is_err()
+        {
             return;
         }
     }
@@ -285,7 +283,7 @@ fn folders(me: &str) -> (Option<PathBuf>, Option<PathBuf>) {
 pub fn run(entries: &[Entry]) -> Result<(), String> {
     let me = std::env::var("HERDR_PANE_ID").map_err(|_| "HERDR_PANE_ID absent".to_string())?;
     let result = show(&me, entries).map_err(|e| e.to_string());
-    let _ = herdr::call(&["pane", "close", &me]);
+    let _ = herdr::close(&me);
     result
 }
 
@@ -512,7 +510,7 @@ struct Layout {
 }
 
 fn layout_of(pane: &str) -> Option<Layout> {
-    herdr::call(&["pane", "layout", "--pane", pane])
+    herdr::call("pane.layout", json!({ "pane_id": pane }))
         .ok()
         .and_then(|r| serde_json::from_value(r["layout"].clone()).ok())
 }
@@ -547,17 +545,10 @@ fn fit_rows(me: &str, rows: impl Fn(u16) -> u16) {
         return;
     };
     let direction = if delta > 0.0 { "down" } else { "up" };
-    let amount = format!("{:.6}", delta.abs());
-    let _ = herdr::call(&[
-        "pane",
-        "resize",
-        "--pane",
-        me,
-        "--direction",
-        direction,
-        "--amount",
-        &amount,
-    ]);
+    let _ = herdr::call(
+        "pane.resize",
+        json!({ "pane_id": me, "direction": direction, "amount": delta.abs() }),
+    );
 }
 
 /// How far to move the ratio of the split the bar tops, for its rows to be

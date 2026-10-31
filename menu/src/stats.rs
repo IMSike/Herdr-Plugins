@@ -61,7 +61,7 @@ fn starts_with_ignoring_case(path: &Path, prefix: &Path) -> bool {
 
 /// `850M · 0.3 %`: the size, and its share of the disk.
 pub fn size_line(stats: &Stats) -> String {
-    let size = format_bytes(stats.bytes);
+    let size = herdr_api::format_size(stats.bytes);
     match stats.disk.filter(|&d| d > 0) {
         Some(disk) => {
             let share = stats.bytes as f64 * 100.0 / disk as f64;
@@ -79,18 +79,6 @@ pub fn files_line(stats: &Stats) -> String {
         "fichiers"
     };
     format!("{} {unit}", group_thousands(stats.files))
-}
-
-fn format_bytes(bytes: u64) -> String {
-    const KIB: f64 = 1024.0;
-    let b = bytes as f64;
-    if b < KIB * KIB {
-        format!("{:.0}K", b / KIB)
-    } else if b < KIB * KIB * 1000.0 {
-        format!("{:.0}M", b / (KIB * KIB))
-    } else {
-        format!("{:.1}G", b / (KIB * KIB * KIB))
-    }
 }
 
 /// `0.3 %`, `12 %`, `< 0.1 %`.
@@ -123,8 +111,6 @@ mod tests {
 
     #[test]
     fn formats() {
-        assert_eq!(format_bytes(850 * 1024 * 1024), "850M");
-        assert_eq!(format_bytes(1229 * 1024 * 1024), "1.2G");
         assert_eq!(format_share(0.05), "< 0,1 %");
         assert_eq!(format_share(0.34), "0,3 %");
         assert_eq!(format_share(12.4), "12 %");

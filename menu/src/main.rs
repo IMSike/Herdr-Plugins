@@ -125,9 +125,10 @@ fn open() -> Result<(), String> {
 
 /// Writes the choice file all at once, so the action never reads half of it.
 fn write_choice(path: &Path, choice: Option<&Choice>) -> io::Result<()> {
-    let partial = path.with_extension("partial");
-    std::fs::write(&partial, choice.map(Choice::encode).unwrap_or_default())?;
-    std::fs::rename(&partial, path)
+    herdr_api::write_atomic(
+        path,
+        choice.map(Choice::encode).unwrap_or_default().as_bytes(),
+    )
 }
 
 fn menu() -> Result<(), String> {

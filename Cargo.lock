@@ -182,10 +182,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
+name = "herdr-api"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "herdr-menu"
 version = "0.0.0"
 dependencies = [
  "crossterm",
+ "herdr-api",
  "serde",
  "serde_json",
  "sysinfo",
@@ -197,6 +205,7 @@ name = "herdr-sidebar"
 version = "0.0.0"
 dependencies = [
  "chrono",
+ "herdr-api",
  "serde",
  "serde_json",
  "sysinfo",

@@ -153,17 +153,6 @@ pub fn format_cpu(percent: f64) -> String {
     format!("{percent:.0}%")
 }
 
-/// `850M`, `1.2G`.
-pub fn format_memory(bytes: u64) -> String {
-    const MIB: f64 = 1024.0 * 1024.0;
-    let mib = bytes as f64 / MIB;
-    if mib < 1000.0 {
-        format!("{mib:.0}M")
-    } else {
-        format!("{:.1}G", mib / 1024.0)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -229,8 +218,6 @@ mod tests {
         assert_eq!(format_cpu(0.42), "0%");
         assert_eq!(format_cpu(0.6), "1%");
         assert_eq!(format_cpu(12.5), "12%");
-        assert_eq!(format_memory(850 * 1024 * 1024), "850M");
-        assert_eq!(format_memory(1229 * 1024 * 1024), "1.2G");
         assert!(is_shell("PowerShell.exe") && is_shell("bash") && !is_shell("node.exe"));
     }
 }

@@ -2,9 +2,8 @@
 
 use crate::config::StartIn;
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Map, Value, json};
 use std::path::PathBuf;
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 /// The part of `HERDR_PLUGIN_CONTEXT_JSON` the menu uses.
@@ -34,7 +33,7 @@ impl Context {
     }
 }
 
-/// A tiled pane, as `pane list` and `pane get` give it.
+/// A tiled pane, as `pane.list` and `pane.get` give it.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Pane {
     pub pane_id: String,
@@ -47,29 +46,19 @@ pub struct Pane {
     pub cwd: Option<PathBuf>,
 }
 
-/// Runs a Herdr command and returns its `result`.
-pub fn call(args: &[&str]) -> Result<Value, String> {
-    let bin = std::env::var("HERDR_BIN_PATH").unwrap_or_else(|_| "herdr".into());
-    let output = Command::new(bin)
-        .args(args)
-        .output()
-        .map_err(|e| format!("herdr introuvable : {e}"))?;
-    if !output.status.success() {
-        let mut message = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        if message.is_empty() {
-            message = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        }
-        return Err(message);
-    }
-    let value: Value = serde_json::from_slice(&output.stdout).unwrap_or(Value::Null);
-    Ok(value.get("result").cloned().unwrap_or(Value::Null))
+/// Sends one request to the Herdr API and returns its `result`.
+pub fn call(method: &str, params: Value) -> Result<Value, String> {
+    herdr_api::request(method, params).map_err(String::from)
+}
+
+fn panes(params: Value) -> Result<Vec<Pane>, String> {
+    let mut result = call("pane.list", params)?;
+    serde_json::from_value(result["panes"].take()).map_err(|e| format!("pane.list illisible : {e}"))
 }
 
 /// The panes of a workspace.
 pub fn workspace_panes(workspace_id: &str) -> Result<Vec<Pane>, String> {
-    let result = call(&["pane", "list", "--workspace", workspace_id])?;
-    serde_json::from_value(result["panes"].clone())
-        .map_err(|e| format!("pane list illisible : {e}"))
+    panes(json!({ "workspace_id": workspace_id }))
 }
 
 /// The panes of a tab.
@@ -80,14 +69,16 @@ pub fn tab_panes(workspace_id: &str, tab_id: &str) -> Result<Vec<Pane>, String> 
 
 /// Every pane of every workspace.
 pub fn all_panes() -> Result<Vec<Pane>, String> {
-    let result = call(&["pane", "list"])?;
-    serde_json::from_value(result["panes"].clone())
-        .map_err(|e| format!("pane list illisible : {e}"))
+    panes(json!({}))
 }
 
 pub fn pane(pane_id: &str) -> Result<Pane, String> {
-    let result = call(&["pane", "get", pane_id])?;
-    serde_json::from_value(result["pane"].clone()).map_err(|e| format!("pane get illisible : {e}"))
+    let mut result = call("pane.get", json!({ "pane_id": pane_id }))?;
+    serde_json::from_value(result["pane"].take()).map_err(|e| format!("pane.get illisible : {e}"))
+}
+
+pub fn close(pane_id: &str) -> Result<(), String> {
+    call("pane.close", json!({ "pane_id": pane_id })).map(|_| ())
 }
 
 /// Why a pane did not open.
@@ -107,17 +98,14 @@ impl std::fmt::Display for OpenError {
     }
 }
 
-/// Opens one of this plugin's panes as its manifest places it, with extra
-/// environment variables.
+/// Opens one of this plugin's panes as its manifest places it, focused, with
+/// extra environment variables.
 pub fn open_pane(entrypoint: &str, env: &[(&str, &str)]) -> Result<(), OpenError> {
-    open_plugin_pane(entrypoint, &[], env)
+    open_plugin_pane(entrypoint, json!({ "focus": true }), env)
         .map(|_| ())
-        .map_err(|message| {
-            if message.contains("\"ui_busy\"") {
-                OpenError::Busy
-            } else {
-                OpenError::Other(message)
-            }
+        .map_err(|error| match error.code.as_deref() {
+            Some("ui_busy") => OpenError::Busy,
+            _ => OpenError::Other(error.into()),
         })
 }
 
@@ -134,30 +122,23 @@ pub fn open_pane_when_free(entrypoint: &str, env: &[(&str, &str)]) -> Result<(),
     }
 }
 
-/// Opens one of this plugin's panes with extra `plugin pane open` options;
-/// returns the new pane's id, when it has one (a popup has none).
+/// Opens one of this plugin's panes with extra `plugin.pane.open` parameters
+/// (an object); returns the new pane's id, when it has one (a popup has none).
 pub fn open_plugin_pane(
     entrypoint: &str,
-    options: &[&str],
+    options: Value,
     env: &[(&str, &str)],
-) -> Result<Option<String>, String> {
-    let plugin =
-        std::env::var("HERDR_PLUGIN_ID").map_err(|_| "HERDR_PLUGIN_ID absent".to_string())?;
-    let env: Vec<String> = env.iter().map(|(k, v)| format!("{k}={v}")).collect();
-    let mut args = vec![
-        "plugin",
-        "pane",
-        "open",
-        "--plugin",
-        &plugin,
-        "--entrypoint",
-        entrypoint,
-    ];
-    args.extend_from_slice(options);
-    for pair in &env {
-        args.extend(["--env", pair]);
+) -> Result<Option<String>, herdr_api::Error> {
+    let plugin = std::env::var("HERDR_PLUGIN_ID").unwrap_or_default();
+    let env: Map<String, Value> = env
+        .iter()
+        .map(|(k, v)| (k.to_string(), Value::from(*v)))
+        .collect();
+    let mut params = json!({ "plugin_id": plugin, "entrypoint": entrypoint, "env": env });
+    if let (Some(params), Value::Object(options)) = (params.as_object_mut(), options) {
+        params.extend(options);
     }
-    let result = call(&args)?;
+    let result = herdr_api::request("plugin.pane.open", params)?;
     Ok(result["plugin_pane"]["pane"]["pane_id"]
         .as_str()
         .map(str::to_string))

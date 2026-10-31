@@ -9,7 +9,6 @@
 //! - `event` (agent, focus and workspace hooks) reports the same tokens right away.
 //! - `show` prints the tokens without reporting them.
 
-mod herdr;
 mod tree;
 mod usage;
 
@@ -22,8 +21,9 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
 
+use herdr_api::{format_size, request};
 use tree::Space;
-use usage::{Proc, Sample, Table, Usage, cpu_percent, format_cpu, format_memory};
+use usage::{Proc, Sample, Table, Usage, cpu_percent, format_cpu};
 
 const SOURCE: &str = "imsike.sidebar";
 const PLUGIN_ID_ENV: &str = "HERDR_PLUGIN_ID";
@@ -56,7 +56,7 @@ fn install() -> Result<(), String> {
     copy_binary()?;
     // Agents follow the `order` token: each workspace's agents after its header.
     let plugin = std::env::var(PLUGIN_ID_ENV).map_err(|_| format!("{PLUGIN_ID_ENV} absent"))?;
-    herdr::request(
+    request(
         "agent.view.set",
         json!({
             "source": format!("plugin:{plugin}"),
@@ -75,15 +75,26 @@ fn copy_binary() -> Result<(), String> {
     if fs::read(&target).ok() == Some(fs::read(&source).map_err(|e| e.to_string())?) {
         return Ok(());
     }
-    let partial = target.with_extension("partial");
+    // Names of this process: two installs at once do not share a file.
+    let pid = std::process::id();
+    let partial = target.with_extension(format!("{pid}.partial"));
     fs::copy(&source, &partial).map_err(|e| e.to_string())?;
     // A running binary cannot be overwritten on Windows, but can be renamed.
-    let old = target.with_extension("old");
-    let _ = fs::remove_file(&old);
+    let old = target.with_extension(format!("{pid}.old"));
     let _ = fs::rename(&target, &old);
-    fs::rename(&partial, &target).map_err(|e| e.to_string())?;
-    let _ = fs::remove_file(&old);
-    Ok(())
+    let renamed = fs::rename(&partial, &target).map_err(|e| e.to_string());
+    if renamed.is_err() {
+        let _ = fs::remove_file(&partial);
+    }
+    // Old copies still running stay until a later install.
+    if let Ok(entries) = fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            if entry.path().extension().is_some_and(|e| e == "old") {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+    }
+    renamed
 }
 
 #[derive(Deserialize)]
@@ -268,7 +279,7 @@ const SHELL_GLYPH: char = '\u{F489}';
 /// `4% 853M  1`; the CPU share is missing on the first run.
 fn figures(cpu: Option<String>, usage: &Usage, with_shells: bool) -> String {
     let mut parts: Vec<String> = cpu.into_iter().collect();
-    parts.push(format_memory(usage.memory));
+    parts.push(format_size(usage.memory));
     if with_shells && usage.shells > 0 {
         parts.push(format!("{SHELL_GLYPH} {}", usage.shells));
     }
@@ -281,12 +292,12 @@ fn tokens(cpu: Option<String>, usage: &Usage) -> Map<String, Value> {
     if let Some(cpu) = cpu {
         tokens.insert("cpu".into(), cpu.into());
     }
-    tokens.insert("ram".into(), format_memory(usage.memory).into());
+    tokens.insert("ram".into(), format_size(usage.memory).into());
     tokens
 }
 
 fn list<T: serde::de::DeserializeOwned>(method: &str, field: &str) -> Result<Vec<T>, String> {
-    let items = herdr::request(method, json!({}))?
+    let items = request(method, json!({}))?
         .get_mut(field)
         .map(Value::take)
         .unwrap_or_default();
@@ -302,13 +313,13 @@ fn report(method: &str, key: &str, id: &str, tokens: Map<String, Value>, seq: u6
         "ttl_ms": TOKEN_TTL_MS,
         "seq": seq,
     });
-    if let Err(e) = herdr::request(method, params) {
+    if let Err(e) = request(method, params) {
         eprintln!("herdr-sidebar: {e}");
     }
 }
 
 fn shell_pid(pane_id: &str) -> Option<u32> {
-    let info = herdr::request("pane.process_info", json!({ "pane_id": pane_id })).ok()?;
+    let info = request("pane.process_info", json!({ "pane_id": pane_id })).ok()?;
     info.get("process_info")?
         .get("shell_pid")?
         .as_u64()
@@ -343,11 +354,9 @@ fn read_sample(path: &Path, now: u64) -> Option<Sample> {
 }
 
 fn write_sample(path: &Path, sample: &Sample) {
-    let partial = path.with_extension("partial");
     let written = serde_json::to_vec(sample)
         .map_err(|e| e.to_string())
-        .and_then(|bytes| fs::write(&partial, bytes).map_err(|e| e.to_string()))
-        .and_then(|()| fs::rename(&partial, path).map_err(|e| e.to_string()));
+        .and_then(|bytes| herdr_api::write_atomic(path, &bytes).map_err(|e| e.to_string()));
     if let Err(e) = written {
         eprintln!("herdr-sidebar: échantillon non enregistré: {e}");
     }
