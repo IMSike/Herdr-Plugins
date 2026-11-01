@@ -257,9 +257,11 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
             view.totals = sidebar_state
                 .as_deref()
                 .and_then(Totals::load)
-                .and_then(|t| {
-                    let age = herdr_api::unix_millis().saturating_sub(t.at_ms);
-                    (age <= TOTALS_FOR_AT_MOST.as_millis() as u64).then_some(t)
+                // Stamped in the future (the clock was set back): not fresh.
+                .filter(|t| {
+                    herdr_api::unix_millis()
+                        .checked_sub(t.at_ms)
+                        .is_some_and(|age| age <= TOTALS_FOR_AT_MOST.as_millis() as u64)
                 });
             let changed = modified(menu_file.as_deref());
             if changed != menu_changed {
