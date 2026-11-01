@@ -7,7 +7,7 @@ Turns Herdr's Agents panel into a tree: each workspace's agents listed under its
 ```
  agents                 arbre
 api · 6% 1.2G
-├ ◐ Général · 4% 853M  1
+├ ◐ Général · 4% 853M  1
 └ ○ docs · 0% 275M
 web
 └ ○ 1 · 1% 562M
@@ -74,7 +74,7 @@ Agent tokens (Agents panel):
 | `$ws` | on the first agent of each workspace only: the workspace's name (`api`) |
 | `$ws_stats` | next to `$ws`, only when the workspace has more than one agent (otherwise the agent's figures already tell it): the workspace's CPU and memory (`6% 1.2G`) |
 | `$line` | tree branch (`├`, `└` for the last agent of the workspace), state and the name of the agent's tab (`├ ◐ Général`) |
-| `$stats` | the agent's CPU, memory and shells (`4% 853M  1`) |
+| `$stats` | the agent's CPU, memory and shells (`4% 853M  1`) |
 | `$cpu`, `$ram`, `$shells` | the same figures on their own (`4%`, `853M`, `1 shell`), to build other layouts |
 | `$order` | the tree's sort key; not meant to be displayed |
 
@@ -84,10 +84,10 @@ Workspace tokens (Spaces panel): `$cpu` and `$ram`.
 
 Tab bar: `<cpu> <memory> · 󰍹 <cpu> <memory>` (`6% 2.4G · 󰍹 35% 21.3G`): the total of every pane, then the whole machine's (after the Nerd Font monitor icon), updated at each run. The time after them (`· 14:05`) is Herdr's own `datetime` entry: it stays when the plugin fails. The machine's figures count every process, those the plugin cannot read too (protected processes, virtual machines): its CPU share comes from the system's CPU times, its memory is the memory in use (what the Task Manager shows as "In use" on Windows).
 
-- **CPU**: used since the previous run, as a share of the whole machine, rounded to the percent (`0%`, `12%`: below 0.5% shows `0%`); missing on the first run, and when the previous run is less than a second old.
+- **CPU**: used since the previous run, as a share of the whole machine, rounded to the percent (`0%`, `12%`: below 0.5% shows `0%`); missing on the first run, and when the previous run is less than a second or more than two minutes old.
 - **Memory**: working set on Windows, resident memory elsewhere (`850M`, `1.2G`).
 - An agent's figures cover its pane's whole process tree: the shell, the agent and everything they started. A workspace adds up all its panes, agents or not.
-- **Shells** (``, the Nerd Font terminal icon; without a Nerd Font it shows as a blank or a box): `bash`, `sh`, `zsh`, `fish`, `dash`, `nu`, `pwsh`, `powershell` or `cmd` processes below the agent. A shell started by another shell does not count again: Git Bash on Windows chains several `bash.exe` for one command, which count as one. Short commands appear only for an instant; long-running ones (a server, a watcher) stay visible.
+- **Shells** (``, the Nerd Font terminal icon; without a Nerd Font it shows as a blank or a box): `bash`, `sh`, `zsh`, `fish`, `dash`, `nu`, `pwsh`, `powershell` or `cmd` processes below the agent. A shell started by another shell does not count again: Git Bash on Windows chains several `bash.exe` for one command, which count as one. Short commands appear only for an instant; long-running ones (a server, a watcher) stay visible.
 
 To check the values without the sidebar, `herdr-sidebar show` (from the state folder) prints them, measured over one second, without reporting them.
 
@@ -107,4 +107,4 @@ To check the values without the sidebar, `herdr-sidebar show` (from the state fo
 
 ## Turn it off
 
-Remove the `command` entry of `tab_bar_right` and the `$ws`, `$ws_stats`, `$line`, `$stats`, `$cpu`, `$ram` tokens from `config.toml` and the `[ui.sidebar.*]` rows (the default rows come back), then `herdr plugin disable imsike.sidebar` (or `herdr plugin uninstall imsike.sidebar`), which also gives the Agents panel its own sort back. The copied binary and `sample.json` stay in the state folder until you delete them.
+Remove the `command` entry of `tab_bar_right` and the `$ws`, `$ws_stats`, `$line`, `$stats`, `$cpu`, `$ram`, `$shells` tokens from `config.toml` and the `[ui.sidebar.*]` rows (the default rows come back), then `herdr plugin disable imsike.sidebar` (or `herdr plugin uninstall imsike.sidebar`), which also gives the Agents panel its own sort back. The copied binary and `sample.json` stay in the state folder until you delete them.

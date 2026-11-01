@@ -56,7 +56,7 @@ pub fn figure_tokens(cpu: Option<String>, usage: &Usage) -> Map<String, Value> {
     tokens
 }
 
-/// `4% 853M  1`; the CPU share is missing on the first run.
+/// `4% 853M  1`; the CPU share is missing on the first run.
 pub fn figures(cpu: Option<String>, usage: &Usage, with_shells: bool) -> String {
     let mut parts: Vec<String> = cpu.into_iter().collect();
     parts.push(format_size(usage.memory));

@@ -7,7 +7,7 @@ Transforme le panneau Agents de Herdr en arbre : les agents de chaque workspace 
 ```
  agents                 arbre
 api · 6% 1.2G
-├ ◐ Général · 4% 853M  1
+├ ◐ Général · 4% 853M  1
 └ ○ docs · 0% 275M
 web
 └ ○ 1 · 1% 562M
@@ -74,7 +74,7 @@ Tokens des agents (panneau Agents) :
 | `$ws` | sur le premier agent de chaque workspace seulement : nom du workspace (`api`) |
 | `$ws_stats` | à côté de `$ws`, seulement quand le workspace a plus d'un agent (sinon les chiffres de l'agent suffisent) : CPU et mémoire du workspace (`6% 1.2G`) |
 | `$line` | branche de l'arbre (`├`, `└` pour le dernier agent du workspace), état et nom de l'onglet de l'agent (`├ ◐ Général`) |
-| `$stats` | CPU, mémoire et shells de l'agent (`4% 853M  1`) |
+| `$stats` | CPU, mémoire et shells de l'agent (`4% 853M  1`) |
 | `$cpu`, `$ram`, `$shells` | les mêmes chiffres séparément (`4%`, `853M`, `1 shell`), pour composer d'autres dispositions |
 | `$order` | la clé de tri de l'arbre ; pas destinée à l'affichage |
 
@@ -84,10 +84,10 @@ Tokens des workspaces (panneau Spaces) : `$cpu` et `$ram`.
 
 Barre d'onglets : `<cpu> <mémoire> · 󰍹 <cpu> <mémoire>` (`6% 2.4G · 󰍹 35% 21.3G`) : le total de tous les panes, puis celui de la machine entière (après l'icône écran Nerd Font), mis à jour à chaque passage. L'heure qui suit (`· 14:05`) est l'entrée `datetime` propre à Herdr : elle reste affichée si le plugin échoue. Les chiffres de la machine comptent tous les processus, y compris ceux que le plugin ne peut pas lire (processus protégés, machines virtuelles) : sa part de CPU vient des temps CPU du système, sa mémoire est la mémoire utilisée (ce que le Gestionnaire des tâches affiche comme « En cours d'utilisation » sous Windows).
 
-- **CPU** : utilisé depuis le passage précédent, en part de la machine entière, arrondi au pourcent (`0%`, `12%` : moins de 0,5 % s'affiche `0%`) ; absent au premier passage, et quand le passage précédent date de moins d'une seconde.
+- **CPU** : utilisé depuis le passage précédent, en part de la machine entière, arrondi au pourcent (`0%`, `12%` : moins de 0,5 % s'affiche `0%`) ; absent au premier passage, et quand le passage précédent date de moins d'une seconde ou de plus de deux minutes.
 - **Mémoire** : working set sous Windows, mémoire résidente ailleurs (`850M`, `1.2G`).
 - Les chiffres d'un agent couvrent tout l'arbre de processus de son pane : le shell, l'agent et tout ce qu'ils ont lancé. Un workspace additionne tous ses panes, agents ou non.
-- **Shells** (``, l'icône terminal Nerd Font ; sans Nerd Font elle s'affiche comme un blanc ou un carré) : processus `bash`, `sh`, `zsh`, `fish`, `dash`, `nu`, `pwsh`, `powershell` ou `cmd` sous l'agent. Un shell lancé par un autre shell n'est pas recompté : Git Bash sous Windows enchaîne plusieurs `bash.exe` pour une seule commande, qui comptent pour un. Les commandes courtes n'apparaissent qu'un instant ; celles qui durent (un serveur, un watcher) restent visibles.
+- **Shells** (``, l'icône terminal Nerd Font ; sans Nerd Font elle s'affiche comme un blanc ou un carré) : processus `bash`, `sh`, `zsh`, `fish`, `dash`, `nu`, `pwsh`, `powershell` ou `cmd` sous l'agent. Un shell lancé par un autre shell n'est pas recompté : Git Bash sous Windows enchaîne plusieurs `bash.exe` pour une seule commande, qui comptent pour un. Les commandes courtes n'apparaissent qu'un instant ; celles qui durent (un serveur, un watcher) restent visibles.
 
 Pour vérifier les valeurs sans la sidebar, `herdr-sidebar show` (depuis le dossier d'état) les affiche, mesurées sur une seconde, sans les transmettre.
 
@@ -107,4 +107,4 @@ Pour vérifier les valeurs sans la sidebar, `herdr-sidebar show` (depuis le doss
 
 ## Désactiver
 
-Retirez l'entrée `command` de `tab_bar_right` et les tokens `$ws`, `$ws_stats`, `$line`, `$stats`, `$cpu`, `$ram` du `config.toml` et les lignes `[ui.sidebar.*]` (les lignes par défaut reviennent), puis `herdr plugin disable imsike.sidebar` (ou `herdr plugin uninstall imsike.sidebar`), ce qui rend aussi au panneau Agents son propre tri. Le binaire copié et `sample.json` restent dans le dossier d'état jusqu'à ce que vous les supprimiez.
+Retirez l'entrée `command` de `tab_bar_right` et les tokens `$ws`, `$ws_stats`, `$line`, `$stats`, `$cpu`, `$ram`, `$shells` du `config.toml` et les lignes `[ui.sidebar.*]` (les lignes par défaut reviennent), puis `herdr plugin disable imsike.sidebar` (ou `herdr plugin uninstall imsike.sidebar`), ce qui rend aussi au panneau Agents son propre tri. Le binaire copié et `sample.json` restent dans le dossier d'état jusqu'à ce que vous les supprimiez.
