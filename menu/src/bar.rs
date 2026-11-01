@@ -1,4 +1,5 @@
-//! The bar: a short pane of clickable icons stacked above the file explorer
+//! The bar (the `Tools` pane, called the bar in the code): a short pane of
+//! clickable icons stacked above the file explorer
 //! of gcaudan/herdr-explorer, in its column, with figures on the workspace
 //! folder under them. It stands in for the popup menu in a tab that shows the
 //! explorer.
@@ -54,6 +55,9 @@ const MESSAGE_FOR: Duration = Duration::from_secs(5);
 const FIGURES_TOP: u16 = 2;
 /// After the figures: a click measures them again (Nerd Font `nf-md-refresh`).
 const REFRESH: &str = "\u{F0450}";
+/// A bar just opened may not run its program yet: how long to wait for it.
+const STARTING: Duration = Duration::from_secs(2);
+
 fn label_is(pane: &Pane, label: &str) -> bool {
     pane.label.as_deref() == Some(label)
 }
@@ -67,13 +71,21 @@ fn is_live(pane: &Pane) -> bool {
             let processes = r["process_info"]["foreground_processes"]
                 .as_array()?
                 .clone();
-            Some(processes.iter().any(|p| {
-                p["name"]
-                    .as_str()
-                    .is_some_and(|n| n.to_ascii_lowercase().starts_with("herdr-menu"))
-            }))
+            Some(
+                processes
+                    .iter()
+                    .any(|p| p["name"].as_str().is_some_and(crate::is_this_program)),
+            )
         })
         .unwrap_or(false)
+}
+
+/// `is_live`, or soon to be: a restored shell never starts the program.
+fn is_or_becomes_live(pane: &Pane) -> bool {
+    is_live(pane) || {
+        std::thread::sleep(STARTING);
+        is_live(pane)
+    }
 }
 
 /// Closes the tab's bar, or opens one above the tab's explorer. `false` when
@@ -108,7 +120,7 @@ pub fn on_pane_created() -> Result<(), String> {
     }
     let panes = herdr::tab_panes(&explorer.workspace_id, &explorer.tab_id)?;
     for bar in panes.iter().filter(|p| label_is(p, LABEL)) {
-        if is_live(bar) {
+        if is_or_becomes_live(bar) {
             return Ok(());
         }
         let _ = herdr::close(&bar.pane_id);
@@ -136,7 +148,7 @@ pub fn on_pane_closed() -> Result<(), String> {
 /// explorer reopens with a new bar.
 pub fn startup() -> Result<(), String> {
     for pane in herdr::all_panes()? {
-        if label_is(&pane, LABEL) && !is_live(&pane) {
+        if label_is(&pane, LABEL) && !is_or_becomes_live(&pane) {
             let _ = herdr::close(&pane.pane_id);
         }
     }
@@ -188,7 +200,7 @@ fn open_above(explorer: &Pane) -> Result<(), String> {
         "focus": false,
     });
     let bar = herdr::open_plugin_pane("bar", options, &[])?
-        .ok_or("le pane de la barre n'a pas d'identifiant")?;
+        .ok_or("le pane Tools n'a pas d'identifiant")?;
     herdr::call(
         "pane.swap",
         json!({ "source_pane_id": bar, "target_pane_id": explorer.pane_id }),
@@ -345,9 +357,10 @@ fn measure_in_background(root: PathBuf) -> Measurer {
                 return;
             }
             last = Some(measured);
-            // Clicks made during the reading are answered by it.
-            while asked.try_recv().is_ok() {}
-            manual = false;
+            // Clicks made during a full reading are answered by it; one made
+            // during an automatic, limited reading asks for a full one.
+            let clicked = asked.try_iter().count() > 0;
+            manual = clicked && !manual;
         }
     });
     Measurer { news, ask }

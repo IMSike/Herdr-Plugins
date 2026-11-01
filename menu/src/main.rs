@@ -165,13 +165,18 @@ fn is_running(pid: u32) -> bool {
         true,
         ProcessRefreshKind::nothing(),
     );
-    let this = std::env::current_exe()
+    system
+        .process(pid)
+        .is_some_and(|p| is_this_program(&p.name().to_string_lossy()))
+}
+
+/// Whether a process name is this program's: the menu, the bar and the
+/// action are all this same binary.
+pub(crate) fn is_this_program(name: &str) -> bool {
+    std::env::current_exe()
         .ok()
-        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()));
-    system.process(pid).is_some_and(|p| {
-        this.as_deref()
-            .is_none_or(|this| same_program(this, &p.name().to_string_lossy()))
-    })
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+        .is_none_or(|this| same_program(&this, name))
 }
 
 /// Linux gives a process name of 15 characters at most.
