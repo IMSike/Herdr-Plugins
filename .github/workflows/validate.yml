@@ -1,8 +1,8 @@
 name: Plugins
 
 # Checks formatting, lints and runs the tests of every plugin of the Cargo
-# workspace, on Linux and Windows, and builds it with the oldest Rust it
-# declares. See CONTRIBUTING.md.
+# workspace, on Linux and Windows, and checks that it compiles with the
+# oldest Rust it declares. See CONTRIBUTING.md.
 
 on:
   pull_request:
@@ -12,6 +12,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same branch or pull request cancels the run it replaces.
+concurrency:
+  group: plugins-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     strategy:
@@ -20,6 +25,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+
+      # Dependencies built by an earlier run, per system.
+      - uses: Swatinem/rust-cache@v2
 
       - name: Formatting
         run: cargo fmt --all --check
@@ -44,5 +52,9 @@ jobs:
       - name: Rust 1.88
         run: rustup toolchain install 1.88 --profile minimal
 
-      - name: Build
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: rust-1.88
+
+      - name: Compile check
         run: cargo +1.88 check --locked --all-targets
