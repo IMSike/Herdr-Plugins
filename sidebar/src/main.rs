@@ -27,18 +27,18 @@ use sysinfo::{MemoryRefreshKind, ProcessRefreshKind, ProcessesToUpdate, System};
 
 use herdr_api::{env, request, request_field, unix_millis};
 use snapshot::{Pane, Snapshot};
-use usage::{Proc, Sample, Shell, Table, Usage, cpu_percent, format_cpu};
+use usage::{Proc, Sample, Shell, Table, Usage, cpu_share, format_cpu};
 
 const SOURCE: &str = "imsike.sidebar";
 const SAMPLE_FILE: &str = "sample.json";
+/// Held by the install copying the binary: another one at the same time
+/// leaves the copy to it.
+const INSTALL_LOCK: &str = "install.lock";
+/// A file of the state folder left this long by a run killed midway is removed.
+const STALE_AFTER: Duration = Duration::from_secs(60);
 /// Tokens vanish when no run refreshes them (Herdr closed the tab bar
 /// entry, or the plugin was removed).
 const TOKEN_TTL_MS: u64 = 20_000;
-/// A previous sample older than this gives no meaningful CPU average.
-const MAX_SAMPLE_AGE_MS: u64 = 120_000;
-/// Nor does one younger than this: a few milliseconds of CPU time make the
-/// share jump.
-const MIN_SAMPLE_AGE_MS: u64 = 1_000;
 
 fn main() -> ExitCode {
     let result = match std::env::args().nth(1).as_deref() {
@@ -76,40 +76,49 @@ fn install() -> Result<(), String> {
 /// Copies the running binary into the state folder, unless it is already
 /// there, and returns the copy's path.
 fn copy_binary() -> Result<PathBuf, String> {
-    let dir = herdr_api::state_dir().ok_or("état du plugin inconnu")?;
-    // What an install or a run killed midway left behind.
-    herdr_api::remove_stale(&dir, Duration::from_secs(60), |name| {
-        name.ends_with(".partial")
-    });
+    let dir = herdr_api::state_dir().ok_or(format!("{} absent", env::STATE_DIR))?;
     let source = std::env::current_exe().map_err(|e| e.to_string())?;
     let target = dir.join(source.file_name().ok_or("binaire sans nom")?);
     if fs::read(&target).ok() == Some(fs::read(&source).map_err(|e| e.to_string())?) {
         return Ok(target);
     }
-    // Names of this process: two installs at once do not share a file.
-    let pid = std::process::id();
-    let partial = target.with_extension(format!("{pid}.partial"));
-    fs::copy(&source, &partial).map_err(|e| e.to_string())?;
+    // The startup hook and the action can run at once: the install that
+    // takes the lock copies, the other one leaves the copy to it.
+    herdr_api::remove_stale(&dir, STALE_AFTER, |name| name == INSTALL_LOCK);
+    let lock = dir.join(INSTALL_LOCK);
+    if fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&lock)
+        .is_err()
+    {
+        return Ok(target);
+    }
+    let replaced = replace(&dir, &source, &target);
+    let _ = fs::remove_file(&lock);
+    replaced.map(|()| target)
+}
+
+/// Puts a copy of `source` in place of `target`; the caller holds the lock.
+fn replace(dir: &Path, source: &Path, target: &Path) -> Result<(), String> {
+    // What a run killed midway left, and the old copies no longer running
+    // (one still running cannot be removed on Windows: a later install will).
+    herdr_api::remove_stale(dir, STALE_AFTER, |name| name.ends_with(".partial"));
+    herdr_api::remove_stale(dir, Duration::ZERO, |name| name.ends_with(".old"));
+    let partial = target.with_extension("partial");
+    fs::copy(source, &partial).map_err(|e| e.to_string())?;
     // A running binary cannot be overwritten on Windows, but can be renamed.
-    let old = target.with_extension(format!("{pid}.old"));
-    let moved_aside = fs::rename(&target, &old).is_ok();
-    if let Err(e) = fs::rename(&partial, &target) {
+    let old = target.with_extension(format!("{}.old", unix_millis()));
+    let moved_aside = fs::rename(target, &old).is_ok();
+    if let Err(e) = fs::rename(&partial, target) {
         // An antivirus may still hold the new copy: put the old one back.
         let _ = fs::remove_file(&partial);
         if moved_aside {
-            let _ = fs::rename(&old, &target);
+            let _ = fs::rename(&old, target);
         }
         return Err(format!("copie impossible : {e}"));
     }
-    // Old copies still running stay until a later install.
-    if let Ok(entries) = fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            if entry.path().extension().is_some_and(|e| e == "old") {
-                let _ = fs::remove_file(entry.path());
-            }
-        }
-    }
-    Ok(target)
+    Ok(())
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -133,13 +142,27 @@ fn tick(mode: Mode) -> Result<(), String> {
             .map(Path::to_path_buf)
             .ok_or("dossier du binaire inconnu")?,
     };
+    let sample_path = state_dir.join(SAMPLE_FILE);
+    // The processes first, the slow part: the session read after them, and
+    // the reports, then describe the same moment. An event only moves the
+    // tree: the figures stay as the last run measured them, which spares a
+    // reading of every process on each focus change.
+    let measured = match mode {
+        Mode::Event => None,
+        Mode::Tick => Some((None, read_system()?, unix_millis())),
+        // No sample of a run 5 seconds earlier: take one a second earlier.
+        Mode::Show => {
+            let first = read_system()?.sample(unix_millis());
+            std::thread::sleep(Duration::from_secs(1));
+            Some((Some(first), read_system()?, unix_millis()))
+        }
+    };
     // Lets Herdr drop a report older than one already applied.
     let seq = unix_millis();
     let send = |method: &str, key: &str, id: &str, tokens: Map<String, Value>| match mode {
-        Mode::Show => println!("{id}: {}", Value::Object(tokens)),
+        Mode::Show => println!("{id} : {}", Value::Object(tokens)),
         _ => report(method, key, id, tokens, seq),
     };
-    let sample_path = state_dir.join(SAMPLE_FILE);
 
     let snapshot: Snapshot = request_field("session.snapshot", json!({}), "snapshot")?;
     let agents = snapshot.agents();
@@ -159,9 +182,7 @@ fn tick(mode: Mode) -> Result<(), String> {
             .is_some()
     };
 
-    // An event only moves the tree: the figures stay as the last run measured
-    // them, which spares a reading of every process on each focus change.
-    if mode == Mode::Event {
+    let Some((first, system, now)) = measured else {
         for block in blocks {
             let mut tokens = tokens::layout(&block);
             if block.header.is_none() || !several(workspace_of(&block.pane_id)) {
@@ -170,27 +191,16 @@ fn tick(mode: Mode) -> Result<(), String> {
             send("pane.report_metadata", "pane_id", &block.pane_id, tokens);
         }
         return Ok(());
-    }
+    };
 
     let saved = read_sample(&sample_path);
-    let first = match mode {
-        // No sample of a run 5 seconds earlier: take one a second earlier.
-        Mode::Show => {
-            let first = read_system()?.sample(unix_millis());
-            std::thread::sleep(Duration::from_secs(1));
-            Some(first)
-        }
-        _ => None,
-    };
-    let system = read_system()?;
-    let now = unix_millis();
     let known_shells = saved.as_ref().map(|s| s.shells.clone()).unwrap_or_default();
-    let previous = first.or_else(|| saved.filter(|s| is_usable(s, now)));
+    let previous = first.or_else(|| saved.filter(|s| s.is_usable(now)));
     let elapsed = previous.as_ref().map(|s| now.saturating_sub(s.at_ms));
     let empty = Sample::default();
     let table = Table::new(&system.processes, previous.as_ref().unwrap_or(&empty));
     let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
-    let cpu = |u: &Usage| elapsed.map(|e| format_cpu(cpu_percent(u.cpu_ms, e, cores)));
+    let cpu = |u: &Usage| elapsed.map(|e| format_cpu(cpu_share(u.cpu_ms, e, cores)));
 
     let mut shells: HashMap<String, Shell> = HashMap::new();
     let mut sums: Vec<(String, Usage)> = Vec::new();
@@ -311,7 +321,11 @@ fn read_system() -> Result<Reading, String> {
     system.refresh_processes_specifics(
         ProcessesToUpdate::All,
         true,
-        ProcessRefreshKind::nothing().with_cpu().with_memory(),
+        // On Linux, threads would otherwise be listed as processes of their own.
+        ProcessRefreshKind::nothing()
+            .with_cpu()
+            .with_memory()
+            .without_tasks(),
     );
     system.refresh_memory_specifics(MemoryRefreshKind::nothing().with_ram());
     let processes = system
@@ -335,12 +349,6 @@ fn read_system() -> Result<Reading, String> {
 
 fn read_sample(path: &Path) -> Option<Sample> {
     serde_json::from_slice(&fs::read(path).ok()?).ok()
-}
-
-/// Whether a sample is old enough, and recent enough, for a CPU average.
-fn is_usable(sample: &Sample, now: u64) -> bool {
-    now.checked_sub(sample.at_ms)
-        .is_some_and(|age| (MIN_SAMPLE_AGE_MS..=MAX_SAMPLE_AGE_MS).contains(&age))
 }
 
 fn write_sample(path: &Path, sample: &Sample) {

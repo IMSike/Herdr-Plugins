@@ -36,7 +36,7 @@ sidebar_max_width = 40
 # Lance le plugin toutes les 5 secondes et affiche ses totaux à droite de la barre d'onglets, puis l'heure (entrée propre à Herdr).
 # Windows (le dossier d'état est sous %LOCALAPPDATA%) :
 tab_bar_right = [
-  { type = "command", command = '"%LOCALAPPDATA%\herdr\plugins\imsike.sidebar\herdr-sidebar.exe" tick', interval_seconds = 5, timeout_seconds = 3 },
+  { type = "command", command = '"%LOCALAPPDATA%\herdr\plugins\imsike.sidebar\herdr-sidebar.exe" tick', interval_seconds = 5, timeout_seconds = 5 },
   { type = "datetime", format = "%H:%M" },
 ]
 tab_bar_right_separator = " · "

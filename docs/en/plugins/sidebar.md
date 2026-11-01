@@ -36,7 +36,7 @@ sidebar_max_width = 40
 # Runs the plugin every 5 seconds and shows its totals at the right of the tab bar, then the time (Herdr's own entry).
 # Windows (the state folder is under %LOCALAPPDATA%):
 tab_bar_right = [
-  { type = "command", command = '"%LOCALAPPDATA%\herdr\plugins\imsike.sidebar\herdr-sidebar.exe" tick', interval_seconds = 5, timeout_seconds = 3 },
+  { type = "command", command = '"%LOCALAPPDATA%\herdr\plugins\imsike.sidebar\herdr-sidebar.exe" tick', interval_seconds = 5, timeout_seconds = 5 },
   { type = "datetime", format = "%H:%M" },
 ]
 tab_bar_right_separator = " · "

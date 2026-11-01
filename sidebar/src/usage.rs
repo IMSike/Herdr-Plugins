@@ -16,6 +16,11 @@ const SHELLS: &[&str] = &[
     "powershell",
     "cmd",
 ];
+/// A previous sample older than this gives no meaningful CPU average.
+const MAX_SAMPLE_AGE_MS: u64 = 120_000;
+/// Nor does one younger than this: a few milliseconds of CPU time make the
+/// share jump.
+const MIN_SAMPLE_AGE_MS: u64 = 1_000;
 
 /// One running process, as read from the system.
 #[derive(Debug, Clone)]
@@ -64,6 +69,12 @@ impl Sample {
             cpu,
             ..Self::default()
         }
+    }
+
+    /// Whether the sample is old enough, and recent enough, for a CPU average.
+    pub fn is_usable(&self, now: u64) -> bool {
+        now.checked_sub(self.at_ms)
+            .is_some_and(|age| (MIN_SAMPLE_AGE_MS..=MAX_SAMPLE_AGE_MS).contains(&age))
     }
 }
 
@@ -165,8 +176,8 @@ fn is_shell(name: &str) -> bool {
     SHELLS.contains(&name)
 }
 
-/// CPU share of the whole machine, in percent.
-pub fn cpu_percent(cpu_ms: u64, elapsed_ms: u64, cores: usize) -> f64 {
+/// A process tree's CPU share of the whole machine, in percent.
+pub fn cpu_share(cpu_ms: u64, elapsed_ms: u64, cores: usize) -> f64 {
     if elapsed_ms == 0 || cores == 0 {
         return 0.0;
     }
@@ -240,11 +251,25 @@ mod tests {
 
     #[test]
     fn formats() {
-        assert_eq!(cpu_percent(500, 1000, 4), 12.5);
-        assert_eq!(cpu_percent(1, 0, 4), 0.0);
+        assert_eq!(cpu_share(500, 1000, 4), 12.5);
+        assert_eq!(cpu_share(1, 0, 4), 0.0);
         assert_eq!(format_cpu(0.42), "0%");
         assert_eq!(format_cpu(0.6), "1%");
         assert_eq!(format_cpu(12.5), "12%");
         assert!(is_shell("PowerShell.exe") && is_shell("bash") && !is_shell("node.exe"));
+    }
+
+    #[test]
+    fn a_sample_gives_an_average_between_one_second_and_two_minutes() {
+        let sample = Sample {
+            at_ms: 10_000,
+            ..Sample::default()
+        };
+        assert!(!sample.is_usable(10_500));
+        assert!(sample.is_usable(11_000));
+        assert!(sample.is_usable(130_000));
+        assert!(!sample.is_usable(130_001));
+        // Written by a clock set back since.
+        assert!(!sample.is_usable(9_000));
     }
 }
