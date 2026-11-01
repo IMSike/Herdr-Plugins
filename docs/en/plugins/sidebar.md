@@ -101,11 +101,12 @@ To check the values without the sidebar, `herdr-sidebar show` (from the state fo
 | `decimal_comma` | `true` | `2,4G` (`true`) or `2.4G` (`false`) |
 | `percent_space` | `false` | `4%` (`false`) or `4 %` with a narrow no-break space (`true`) |
 | `cpu_decimal` | `false` | `4%` (`false`) or `4,2%` (`true`) |
-| `memory_unit` | `"M"` | `853M`, `2,4G` (`"M"`); `853 Mo`, `2,4 Go` (`"Mo"`); `853 MB`, `2,4 GB` (`"MB"`); `K`, `M` or `G` as the size needs |
+| `memory_unit` | `"M"` | `853M`, `2,4G` (`"M"`); `853Mo`, `2,4Go` (`"Mo"`); `853MB`, `2,4GB` (`"MB"`); `K`, `M` or `G` as the size needs |
+| `memory_space` | `false` | `2,4Go` (`false`) or `2,4 Go` with a narrow no-break space before the unit (`true`) |
 | `ttl_seconds` | `20` | how long a value lasts when no run refreshes it; at least 1 |
 | `shells` | `["bash", "sh", "zsh", "fish", "dash", "nu", "pwsh", "powershell", "cmd"]` | process names counted as shells (without `.exe`, any case) |
 | `tab_bar` | `false` | also show the totals in the tab bar (`true`) |
-| `colors` | `false` | threshold colors, see [below](#threshold-colors) |
+| `colors` | `false` | threshold colors of the totals in the menu's `Tools` pane, see [below](#threshold-colors) |
 | `cpu_levels`, `memory_levels`, `machine_cpu_levels`, `machine_memory_levels` | see below | their thresholds |
 
 ```toml
@@ -113,33 +114,22 @@ percent_space = true
 shells = ["bash", "pwsh", "nu"]
 ```
 
-Each run reads the file: a change shows at the next run. A file that cannot be read or is invalid (unknown setting, `ttl_seconds = 0`, thresholds not in increasing order) is ignored: the runs use the defaults and say why in the plugin's log (`herdr plugin log list --plugin imsike.sidebar`). Colors, order and layout stay in Herdr's `config.toml`.
+Each run reads the file: a change shows at the next run. A file that cannot be read or is invalid (unknown setting, `ttl_seconds = 0`, thresholds not in increasing order) is ignored: the runs use the defaults and say why in the plugin's log (`herdr plugin log list --plugin imsike.sidebar`). Colors, order and layout of the Agents panel stay in Herdr's `config.toml`.
 
 Herdr runs the tab bar command without the plugin's environment, so without its config folder: `install` writes the folder's path in `config-dir`, in the state folder, where the tab bar runs read it. Until `install` has run once (at Herdr's start, or by hand), those runs use the defaults.
 
 ## Threshold colors
 
-With `colors = true`, each figure is green, yellow, orange or red against three thresholds: above the first (strictly) it is yellow, above the second orange, above the third red.
+The sidebar writes its totals, with their thresholds, in `totals.json`; the menu's `Tools` pane shows them (see [menu](menu.md#use)). With `colors = true`, each of its figures is green, yellow, orange or red against three thresholds: above the first (strictly) it is yellow, above the second orange, above the third red. Its bars (`totals = "bars"` in `menu.toml`) fade through the same colors at the same thresholds, with or without `colors`.
 
 | Thresholds | Default | For |
 |---|---|---|
-| `cpu_levels` | `[10, 25, 50]` (% of the machine) | the CPU of an agent, a workspace, and Herdr's total |
+| `cpu_levels` | `[10, 25, 50]` (% of the machine) | the CPU of all the workspaces (Herdr's processes) |
 | `memory_levels` | `[1, 2, 4]` (GiB) | their memory |
 | `machine_cpu_levels` | `[50, 70, 90]` (%) | the machine's CPU |
 | `machine_memory_levels` | `[60, 75, 90]` (% of its memory) | the machine's memory in use |
 
-Herdr colors a token only through the rules of its `config.toml`, and its numeric rules (`gt`, `lt`) refuse a value with a unit (`4% 853M`). So the plugin ends each colored value with one to four zero-width spaces (U+200B): one for green, four for red. Herdr matches them but draws nothing. Rules on `contains`, the longest first, give the colors; add them to the tokens to color, once:
-
-```toml
-  [{ token = "$line", fg = "#bdae93" }, { token = "$usage", fg = "#665c54", rules = [
-    { contains = "\u200B\u200B\u200B\u200B", fg = "#fb4934" },
-    { contains = "\u200B\u200B\u200B", fg = "#fe8019" },
-    { contains = "\u200B\u200B", fg = "#fabd2f" },
-    { contains = "\u200B", fg = "#b8bb26" },
-  ] }],
-```
-
-The markers are on `$cpu` and `$ram` (each its own level), `$usage`, `$stats` and `$ws_stats` (the higher level of their CPU and memory). Without the rules, the values look as before; without `colors = true`, they carry no marker and the rules match nothing. The menu's `Tools` pane colors the totals itself, from the levels the sidebar writes in `totals.json`.
+The Agents panel keeps the colors of Herdr's `config.toml`: coloring each agent's figures (through invisible markers that Herdr's `contains` rules match) was tried, and dropped for its rendering.
 
 ## How it works, implications
 
@@ -155,7 +145,7 @@ The markers are on `$cpu` and `$ram` (each its own level), `$usage`, `$stats` an
 - The `◐` glyph replaces Herdr's state icon.
 - The name shown is the agent's tab name: a tab never renamed shows its number, and two agents in one tab share a name. A renamed tab appears at the next run.
 - Herdr itself puts ` · ` between two tokens of a row (`Général · 4% 853M ·  1`); it cannot be changed. `$stats` keeps the figures in one token, without it.
-- The values carry their unit, so numeric color rules (`gt`, `lt`) do not apply to them: the threshold colors use invisible markers instead. With the colors on, an `equals` rule on a figure token no longer matches (the markers are part of the value).
+- The values carry their unit, so numeric color rules (`gt`, `lt`) do not apply to them.
 
 ## Turn it off
 

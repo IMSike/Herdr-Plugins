@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Map, Value, json};
 use sysinfo::{MemoryRefreshKind, ProcessRefreshKind, ProcessesToUpdate, System};
 
-use herdr_api::sidebar::{GIB, Level, Totals, TotalsLevels};
+use herdr_api::sidebar::{Totals, TotalsThresholds};
 use herdr_api::{request, request_field, unix_millis};
 use settings::Settings;
 use snapshot::{Pane, Snapshot};
@@ -274,12 +274,6 @@ fn tick(mode: Mode) -> Result<(), String> {
             })
     });
     let cpu = |u: &Usage| all_cores_ms.map(|ms| cpu_share(u.cpu_ms, ms));
-    let look = tokens::Look {
-        numbers,
-        levels: settings
-            .colors
-            .then_some((settings.cpu_levels, settings.memory_levels)),
-    };
 
     let mut shells: HashMap<String, Shell> = HashMap::new();
     let mut sums: Vec<(String, Usage)> = Vec::new();
@@ -305,7 +299,7 @@ fn tick(mode: Mode) -> Result<(), String> {
             sums.iter()
                 .find(|(id, _)| *id == block.workspace_id)
                 .map_or_else(String::new, |(_, u)| {
-                    tokens::figures(cpu(u), u, false, &look)
+                    tokens::figures(cpu(u), u, false, &numbers)
                 })
         });
         // An agent whose processes could not be read keeps its place in the
@@ -314,7 +308,7 @@ fn tick(mode: Mode) -> Result<(), String> {
             .iter()
             .find(|(id, _)| *id == block.pane_id)
             .map(|(_, u)| (cpu(u), u));
-        let tokens = tokens::agent(&block, usage, workspace, &look);
+        let tokens = tokens::agent(&block, usage, workspace, &numbers);
         send(&block.pane_id, tokens);
     }
 
@@ -328,15 +322,14 @@ fn tick(mode: Mode) -> Result<(), String> {
         memory: total.memory,
         machine_cpu,
         machine_memory: system.used_memory,
-        levels: settings.colors.then(|| TotalsLevels {
-            cpu: total_cpu.map(|c| Level::of(c, &settings.cpu_levels)),
-            memory: Level::of(total.memory as f64 / GIB, &settings.memory_levels),
-            machine_cpu: machine_cpu.map(|c| Level::of(c, &settings.machine_cpu_levels)),
-            machine_memory: Level::of(
-                system.used_memory as f64 * 100.0 / system.total_memory.max(1) as f64,
-                &settings.machine_memory_levels,
-            ),
-        }),
+        machine_total: system.total_memory,
+        colors: settings.colors,
+        thresholds: TotalsThresholds {
+            cpu: settings.cpu_levels,
+            memory: settings.memory_levels,
+            machine_cpu: settings.machine_cpu_levels,
+            machine_memory: settings.machine_memory_levels,
+        },
     };
     if mode == Mode::Show || settings.tab_bar {
         println!("{}", totals.line(&numbers));

@@ -19,8 +19,10 @@ pub struct Settings {
     pub percent_space: bool,
     /// `4,2%` rather than `4%`.
     pub cpu_decimal: bool,
-    /// `853M`, `853 Mo` or `853 MB`.
+    /// `853M`, `853Mo` or `853MB`.
     pub memory_unit: MemoryUnit,
+    /// `2,4 Go` rather than `2,4Go`.
+    pub memory_space: bool,
     /// How long a value lasts when no run refreshes it (Herdr closed the tab
     /// bar entry, or the plugin was removed).
     pub ttl_seconds: u64,
@@ -28,8 +30,7 @@ pub struct Settings {
     pub shells: Vec<String>,
     /// The totals in the tab bar too; the `Tools` pane shows them anyway.
     pub tab_bar: bool,
-    /// Marks each figure with its level, for Herdr's color rules and the
-    /// `Tools` pane.
+    /// Colors the totals of the `Tools` pane by their level.
     pub colors: bool,
     /// Thresholds of an agent's, a workspace's and Herdr's CPU (percent).
     pub cpu_levels: Thresholds,
@@ -49,6 +50,7 @@ impl Default for Settings {
             percent_space: numbers.percent_space,
             cpu_decimal: numbers.cpu_decimal,
             memory_unit: numbers.memory_unit,
+            memory_space: numbers.memory_space,
             ttl_seconds: sidebar::TTL_SECONDS,
             shells: sidebar::SHELLS.iter().map(|s| s.to_string()).collect(),
             tab_bar: false,
@@ -68,6 +70,7 @@ impl Settings {
             percent_space: self.percent_space,
             cpu_decimal: self.cpu_decimal,
             memory_unit: self.memory_unit,
+            memory_space: self.memory_space,
         }
     }
 

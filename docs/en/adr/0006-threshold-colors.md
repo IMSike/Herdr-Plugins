@@ -21,15 +21,16 @@ Thresholds: an agent's CPU is a share of the whole machine, and the machine's me
 
 ## Decision
 
-Option a. The sidebar's `colors` setting (off by default) turns the markers on; Herdr's `gt` semantics apply (above a threshold, strictly, is the next level). Two kinds of thresholds, each a set of three increasing values:
+Option a was tried first, then dropped for the agents: in the Agents panel, the colored figures did not render as well as expected. The colors stay in the `Tools` pane only, which draws them itself:
 
-- processes (agents, workspaces, Herdr's total): `cpu_levels` in percent of the machine, `memory_levels` in GiB;
-- the machine: `machine_cpu_levels` and `machine_memory_levels`, in percent.
+- the sidebar's `colors` setting (off by default) turns them on; Herdr's `gt` semantics are kept (above a threshold, strictly, is the next level);
+- two kinds of thresholds, each a set of three increasing values: Herdr's total (all the workspaces), `cpu_levels` in percent of the machine and `memory_levels` in GiB; the machine, `machine_cpu_levels` and `machine_memory_levels` in percent;
+- the sidebar writes the totals with their thresholds in `totals.json`; the `Tools` pane works out the levels. Its bars (`totals = "bars"` in `menu.toml`) fade from green to red through the same thresholds, whether `colors` is on or not.
 
-`$cpu` and `$ram` carry their own level; `$usage`, `$stats` and `$ws_stats` the higher of their CPU and memory. The sidebar writes the totals' levels in `totals.json`, which the `Tools` pane colors with the same colors as the example rules.
+The sidebar's values carry no marker: the Agents panel keeps the colors of Herdr's `config.toml`.
 
 ## Consequences
 
-- The colors of the agents need the rules in Herdr's `config.toml` (OS-Setup's `dotfiles/herdr/`); the plugin pages give them.
-- With the colors on, an `equals` rule on a figure token no longer matches.
-- If Herdr ever drew zero-width characters, or trimmed them from values, the markers would show or stop matching; the colors can be turned off with one setting.
+- No rule to add to Herdr's `config.toml`; the agents' figures are not colored by level.
+- `memory_levels` is in GiB of Herdr's processes while its bar fills with the share of the machine's memory: the gradient follows the GiB thresholds along the bar.
+- Coloring the agents again would mean option a or b, with the rendering issue to solve first.

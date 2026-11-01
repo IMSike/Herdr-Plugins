@@ -21,15 +21,16 @@ Seuils : le CPU d'un agent est une part de toute la machine, et la mémoire util
 
 ## Décision
 
-L'option a. Le réglage `colors` de la sidebar (désactivé par défaut) active les marqueurs ; la sémantique de `gt` de Herdr s'applique (au-dessus d'un seuil, strictement, c'est le niveau suivant). Deux sortes de seuils, chacune un jeu de trois valeurs croissantes :
+L'option a a d'abord été essayée, puis abandonnée pour les agents : dans le panneau Agents, les chiffres colorés ne rendaient pas aussi bien que prévu. Les couleurs restent dans le seul pane `Tools`, qui les dessine lui-même :
 
-- les processus (agents, workspaces, total de Herdr) : `cpu_levels` en pourcentage de la machine, `memory_levels` en Go ;
-- la machine : `machine_cpu_levels` et `machine_memory_levels`, en pourcentage.
+- le réglage `colors` de la sidebar (désactivé par défaut) les active ; la sémantique de `gt` de Herdr est gardée (au-dessus d'un seuil, strictement, c'est le niveau suivant) ;
+- deux sortes de seuils, chacune un jeu de trois valeurs croissantes : le total de Herdr (tous les workspaces), `cpu_levels` en pourcentage de la machine et `memory_levels` en Go ; la machine, `machine_cpu_levels` et `machine_memory_levels` en pourcentage ;
+- la sidebar écrit les totaux avec leurs seuils dans `totals.json` ; le pane `Tools` en déduit les niveaux. Ses barres (`totals = "bars"` dans `menu.toml`) passent du vert au rouge en dégradé par les mêmes seuils, que `colors` soit activé ou non.
 
-`$cpu` et `$ram` portent leur propre niveau ; `$usage`, `$stats` et `$ws_stats` le plus haut de leur CPU et de leur mémoire. La sidebar écrit les niveaux des totaux dans `totals.json`, que le pane `Tools` colore avec les mêmes couleurs que les règles d'exemple.
+Les valeurs de la sidebar ne portent aucun marqueur : le panneau Agents garde les couleurs du `config.toml` de Herdr.
 
 ## Conséquences
 
-- Les couleurs des agents demandent les règles dans le `config.toml` de Herdr (`dotfiles/herdr/` d'OS-Setup) ; les pages des plugins les donnent.
-- Couleurs activées, une règle `equals` sur un token de chiffres ne correspond plus.
-- Si Herdr se mettait à dessiner les caractères de largeur nulle, ou à les retirer des valeurs, les marqueurs s'afficheraient ou ne correspondraient plus ; un seul réglage désactive les couleurs.
+- Aucune règle à ajouter au `config.toml` de Herdr ; les chiffres des agents ne sont pas colorés par niveau.
+- `memory_levels` est en Go des processus de Herdr alors que sa barre se remplit de la part de la mémoire de la machine : le dégradé suit les seuils en Go le long de la barre.
+- Colorer à nouveau les agents demanderait l'option a ou b, une fois le problème de rendu résolu.
