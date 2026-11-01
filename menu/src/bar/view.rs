@@ -144,6 +144,8 @@ enum Button {
 /// Back (nf-md-arrow_left) and reload (nf-md-reload) buttons.
 const BACK: &str = "\u{F004D} Retour";
 const RELOAD: &str = "\u{F0453} Recharger";
+const BACK_ICON: &str = "\u{F004D}";
+const RELOAD_ICON: &str = "\u{F0453}";
 /// How often the totals of the sidebar and `menu.toml` are read again.
 const READ_EVERY: Duration = Duration::from_secs(2);
 /// Totals older than this are no longer shown: the sidebar stopped.
@@ -156,11 +158,16 @@ fn buttons(page: Page, width: u16) -> Vec<(Button, u16, u16, &'static str)> {
         Page::Tools => Vec::new(),
         Page::Disk => vec![(Button::Back, 0, 1, BACK)],
         Page::Files => {
-            let gap = 4;
-            let left = width.saturating_sub(len(BACK) + gap + len(RELOAD)) / 2;
+            // Their icons only when the names do not fit.
+            let (back, reload, gap) = if len(BACK) + 4 + len(RELOAD) <= width {
+                (BACK, RELOAD, 4)
+            } else {
+                (BACK_ICON, RELOAD_ICON, 2)
+            };
+            let left = width.saturating_sub(len(back) + gap + len(reload)) / 2;
             vec![
-                (Button::Back, 1, left, BACK),
-                (Button::Reload, 1, left + len(BACK) + gap, RELOAD),
+                (Button::Back, 1, left, back),
+                (Button::Reload, 1, left + len(back) + gap, reload),
             ]
         }
     }
@@ -517,6 +524,10 @@ fn draw_tools(out: &mut impl Write, view: &View, width: u16, rows: u16) -> io::R
         if top >= rows {
             break;
         }
+        // More icons than columns: those past the edge are left out.
+        if left >= width {
+            continue;
+        }
         let hovered = view.hover == Some(i);
         let color = if hovered { Color::Yellow } else { Color::Reset };
         // The icon (one cell in most fonts) over the middle of the name.
@@ -620,6 +631,15 @@ fn draw_bars(
         } else {
             format!("{kind} :")
         };
+        let level = gauge.level(totals.colors);
+        let value = format!("{text:>value_width$}");
+        // Too narrow for the label: the value alone.
+        if 1 + LABEL + 1 + value_width > usize::from(width) {
+            let value = fit(text, usize::from(width));
+            queue!(out, MoveTo(centered(0, width, &value), y))?;
+            draw_figure(out, &value, level, true)?;
+            continue;
+        }
         let pad = LABEL.saturating_sub(label.chars().count());
         queue!(
             out,
@@ -633,8 +653,6 @@ fn draw_bars(
             draw_gauge(out, gauge, bar)?;
             queue!(out, Print(" "))?;
         }
-        let level = gauge.level(totals.colors);
-        let value = format!("{text:>value_width$}");
         draw_figure(out, &value, level, true)?;
     }
     Ok(())
