@@ -1,7 +1,7 @@
-//! Herdr plugin `imsike.menu`: a menu that opens a tool in a full-size popup.
+//! Herdr plugin `imsike.menu`: a menu that opens a tool in a large popup.
 //!
 //! In a tab that shows the file explorer of gcaudan/herdr-explorer, the menu
-//! is a bar of icons above it (see `bar`); elsewhere it is a popup.
+//! is a `Tools` pane of icons above it (see `bar`); elsewhere it is a popup.
 //!
 //! Herdr shows one popup at a time and refuses to open another while one is on
 //! screen, so the popup menu cannot open the tool itself. The action drives both:
@@ -91,7 +91,7 @@ fn open() -> Result<(), String> {
     match bar::toggle(&Context::from_env()) {
         Ok(true) => return Ok(()),
         Ok(false) => {}
-        Err(message) => eprintln!("herdr-menu : barre impossible, menu en popup : {message}"),
+        Err(message) => eprintln!("herdr-menu : pane Tools impossible, menu en popup : {message}"),
     }
     let state = herdr_api::state_dir().ok_or(format!("{} absent", herdr_api::env::STATE_DIR))?;
     // What an action or a figures file killed midway left behind.

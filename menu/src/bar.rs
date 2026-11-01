@@ -543,7 +543,7 @@ fn draw(view: &View) -> io::Result<()> {
     out.flush()
 }
 
-/// Opens the entry's tool in the plugin's full-size popup, or on its own.
+/// Opens the entry's tool in the plugin's large popup, or on its own.
 fn launch(me: &str, entry: &Entry) -> Result<(), String> {
     let (explorer, terminal) = folders(me);
     let cwd = herdr::start_folder(entry.cwd, explorer, terminal);
