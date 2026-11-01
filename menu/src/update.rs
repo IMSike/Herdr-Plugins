@@ -13,8 +13,11 @@ use std::process::{Command, Stdio};
 pub fn open_window() -> Result<(), String> {
     let me = std::env::current_exe().map_err(|e| e.to_string())?;
     let mut command = terminal_window(&me)?;
+    command.env_remove(INSIDE_HERDR);
+    // The new console window is the update's input and output on Windows:
+    // given null ones, it would show nothing and read no answer.
+    #[cfg(not(windows))]
     command
-        .env_remove(INSIDE_HERDR)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
