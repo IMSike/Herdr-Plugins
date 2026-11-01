@@ -79,7 +79,7 @@ pub fn cpu_times() -> Option<CpuTimes> {
 /// `/proc/stat`'s `cpu` line (user nice system idle iowait irq softirq
 /// steal…, in clock ticks) and its `cpuN` lines, with `/proc/uptime`, a
 /// clock that a change of the wall clock does not move.
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg(any(target_os = "linux", test))]
 fn parse_proc(stat: &str, uptime: Option<&str>) -> Option<CpuTimes> {
     let line = stat.lines().find(|l| l.starts_with("cpu "))?;
     let fields: Vec<u64> = line

@@ -278,7 +278,7 @@ mod tests {
     }
 
     #[test]
-    fn formats() {
+    fn shares_of_the_machine_and_shells_of_any_case() {
         assert_eq!(cpu_share(500, 4000), 12.5);
         assert_eq!(cpu_share(1, 0), 0.0);
         let (procs, shells, empty) = (Vec::new(), shells(), Sample::default());

@@ -29,9 +29,8 @@ use std::time::{Duration, Instant};
 use serde_json::{Map, Value, json};
 use sysinfo::{MemoryRefreshKind, ProcessRefreshKind, ProcessesToUpdate, System};
 
-use herdr_api::sidebar::Settings;
-use herdr_api::sidebar::{Totals, TotalsThresholds};
-use herdr_api::{request, request_field, unix_millis};
+use herdr_api::sidebar::{Settings, Totals};
+use herdr_api::{Lock, request, request_field, unix_millis};
 use snapshot::{Pane, Snapshot};
 use usage::{Proc, Sample, Shell, Table, Usage, cpu_share};
 
@@ -96,39 +95,12 @@ fn copy_binary() -> Result<PathBuf, String> {
     let target = dir.join(source.file_name().ok_or("binaire sans nom")?);
     // The startup hook and the action can run at once: the install that
     // takes the lock copies, the other one leaves the copy to it.
-    if !take_lock(&dir).map_err(|e| format!("verrou impossible : {e}"))? {
+    let lock =
+        Lock::take(&dir.join(INSTALL_LOCK)).map_err(|e| format!("verrou impossible : {e}"))?;
+    if lock.is_none() {
         return Ok(target);
     }
-    let replaced = replace(&dir, &source, &target);
-    let _ = fs::remove_file(dir.join(INSTALL_LOCK));
-    replaced.map(|()| target)
-}
-
-/// Takes the install lock; `false` when another install holds it. A lock
-/// older than `STALE_AFTER` was left by an install killed midway: it is
-/// taken over by renaming it, which only one install can do.
-fn take_lock(dir: &Path) -> io::Result<bool> {
-    let lock = dir.join(INSTALL_LOCK);
-    for _ in 0..2 {
-        match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&lock)
-        {
-            Ok(_) => return Ok(true),
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                let stale =
-                    fs::metadata(&lock).is_ok_and(|m| herdr_api::is_older_than(&m, STALE_AFTER));
-                let taken = lock.with_extension(format!("{}.stale", std::process::id()));
-                if !stale || fs::rename(&lock, &taken).is_err() {
-                    return Ok(false);
-                }
-                let _ = fs::remove_file(&taken);
-            }
-            Err(e) => return Err(e),
-        }
-    }
-    Ok(false)
+    replace(&dir, &source, &target).map(|()| target)
 }
 
 /// Puts a copy of `source` in place of `target`, unless it is the same
@@ -184,6 +156,9 @@ enum Mode {
 fn tick(mode: Mode) -> Result<(), String> {
     let started = Instant::now();
     let late = || mode != Mode::Show && started.elapsed() >= RUN_DEADLINE;
+    if mode != Mode::Show {
+        herdr_api::set_deadline(started + RUN_DEADLINE);
+    }
     let state_dir = match herdr_api::state_dir() {
         Ok(dir) => dir,
         // The tab bar entry gets no plugin context: it runs the copy that
@@ -248,7 +223,7 @@ fn tick(mode: Mode) -> Result<(), String> {
         return if late() { too_slow() } else { Ok(()) };
     };
 
-    let mut saved = read_sample(&sample_path);
+    let mut saved: Option<Sample> = herdr_api::read_json(&sample_path);
     let known_shells = saved
         .as_mut()
         .map(|s| std::mem::take(&mut s.shells))
@@ -275,42 +250,28 @@ fn tick(mode: Mode) -> Result<(), String> {
     let cpu = |u: &Usage| all_cores_ms.map(|ms| cpu_share(u.cpu_ms, ms));
 
     let mut shells: HashMap<String, Shell> = HashMap::new();
-    let mut sums: Vec<(String, Usage)> = Vec::new();
-    let mut total = Usage::default();
-    let mut usages: Vec<(&str, Usage)> = Vec::new();
-    for pane in &snapshot.panes {
+    let measures = Measures::of(&snapshot.panes, |pane| {
         let known = known_shells.get(&pane.pane_id);
-        let Some(shell) = shell_of(pane, known, &table, !late()) else {
-            continue;
-        };
+        let shell = shell_of(pane, known, &table, !late())?;
         let usage = table.tree(shell.pid);
         shells.insert(pane.pane_id.clone(), shell);
-        total += usage;
-        match sums.iter_mut().find(|(id, _)| *id == pane.workspace_id) {
-            Some((_, sum)) => *sum += usage,
-            None => sums.push((pane.workspace_id.clone(), usage)),
-        }
-        usages.push((&pane.pane_id, usage));
-    }
+        Some(usage)
+    });
 
     for block in blocks {
         let workspace = block.workspace_figures.then(|| {
-            sums.iter()
-                .find(|(id, _)| *id == block.workspace_id)
-                .map_or_else(String::new, |(_, u)| {
-                    tokens::figures(cpu(u), u, false, &numbers)
-                })
+            measures
+                .workspace(&block.workspace_id)
+                .map_or_else(String::new, |u| tokens::figures(cpu(u), u, false, &numbers))
         });
         // An agent whose processes could not be read keeps its place in the
         // tree, with the figures of the last run.
-        let usage = usages
-            .iter()
-            .find(|(id, _)| *id == block.pane_id)
-            .map(|(_, u)| (cpu(u), u));
+        let usage = measures.pane(&block.pane_id).map(|u| (cpu(u), u));
         let tokens = tokens::agent(&block, usage, workspace, &numbers);
         send(&block.pane_id, tokens);
     }
 
+    let total = measures.total;
     let total_cpu = cpu(&total);
     let machine_cpu = previous
         .as_ref()
@@ -323,12 +284,7 @@ fn tick(mode: Mode) -> Result<(), String> {
         machine_memory: system.used_memory,
         machine_total: system.total_memory,
         colors: settings.colors,
-        thresholds: TotalsThresholds {
-            cpu: settings.cpu_levels,
-            memory: settings.memory_levels,
-            machine_cpu: settings.machine_cpu_levels,
-            machine_memory: settings.machine_memory_levels,
-        },
+        thresholds: settings.thresholds(),
     };
     if mode == Mode::Show || settings.tab_bar {
         println!("{}", totals.line(&numbers));
@@ -336,7 +292,9 @@ fn tick(mode: Mode) -> Result<(), String> {
     if mode == Mode::Tick {
         let mut sample = system.sample(now);
         sample.shells = shells;
-        write_sample(&sample_path, &sample);
+        if let Err(e) = herdr_api::write_json(&sample_path, &sample) {
+            eprintln!("herdr-sidebar : échantillon non enregistré : {e}");
+        }
         if let Err(e) = totals.save(&state_dir) {
             eprintln!("herdr-sidebar : totaux non enregistrés : {e}");
         }
@@ -345,6 +303,50 @@ fn tick(mode: Mode) -> Result<(), String> {
         return too_slow();
     }
     Ok(())
+}
+
+/// What a run measured: each pane's usage, each workspace's, and the total
+/// of all of them (Herdr's).
+#[derive(Debug, Default)]
+struct Measures<'a> {
+    panes: Vec<(&'a str, Usage)>,
+    workspaces: Vec<(&'a str, Usage)>,
+    total: Usage,
+}
+
+impl<'a> Measures<'a> {
+    /// The panes' usage, as `usage_of` reads it; a pane it cannot read is
+    /// left out.
+    fn of(panes: &'a [Pane], mut usage_of: impl FnMut(&Pane) -> Option<Usage>) -> Self {
+        let mut measures = Self::default();
+        for pane in panes {
+            let Some(usage) = usage_of(pane) else {
+                continue;
+            };
+            measures.total += usage;
+            match measures
+                .workspaces
+                .iter_mut()
+                .find(|(id, _)| *id == pane.workspace_id)
+            {
+                Some((_, sum)) => *sum += usage,
+                None => measures.workspaces.push((&pane.workspace_id, usage)),
+            }
+            measures.panes.push((&pane.pane_id, usage));
+        }
+        measures
+    }
+
+    fn pane(&self, id: &str) -> Option<&Usage> {
+        self.panes.iter().find(|(p, _)| *p == id).map(|(_, u)| u)
+    }
+
+    fn workspace(&self, id: &str) -> Option<&Usage> {
+        self.workspaces
+            .iter()
+            .find(|(w, _)| *w == id)
+            .map(|(_, u)| u)
+    }
 }
 
 /// The pane's shell: the one the last run found, while its terminal and its
@@ -456,15 +458,56 @@ fn config_dir(state_dir: &Path) -> Option<PathBuf> {
         })
 }
 
-fn read_sample(path: &Path) -> Option<Sample> {
-    serde_json::from_slice(&fs::read(path).ok()?).ok()
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-fn write_sample(path: &Path, sample: &Sample) {
-    let written = serde_json::to_vec(sample)
-        .map_err(|e| e.to_string())
-        .and_then(|bytes| herdr_api::write_atomic(path, &bytes).map_err(|e| e.to_string()));
-    if let Err(e) = written {
-        eprintln!("herdr-sidebar : échantillon non enregistré : {e}");
+    fn pane(pane_id: &str, workspace_id: &str) -> Pane {
+        serde_json::from_value(json!({
+            "pane_id": pane_id,
+            "workspace_id": workspace_id,
+            "tab_id": "t",
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn sums_the_panes_by_workspace() {
+        let panes = [
+            pane("p1", "w1"),
+            pane("p2", "w1"),
+            pane("p3", "w2"),
+            pane("p4", "w2"),
+        ];
+        let usage = |memory| Usage {
+            memory,
+            ..Usage::default()
+        };
+        // p4's processes cannot be read: it is left out.
+        let measures = Measures::of(&panes, |p| match p.pane_id.as_str() {
+            "p1" => Some(usage(1)),
+            "p2" => Some(usage(2)),
+            "p3" => Some(usage(4)),
+            _ => None,
+        });
+        assert_eq!(measures.pane("p2"), Some(&usage(2)));
+        assert_eq!(measures.pane("p4"), None);
+        assert_eq!(measures.workspace("w1"), Some(&usage(3)));
+        assert_eq!(measures.workspace("w2"), Some(&usage(4)));
+        assert_eq!(measures.total, usage(7));
+    }
+
+    #[test]
+    fn tells_a_copy_from_another_file() {
+        let dir = std::env::temp_dir().join(format!("herdr-sidebar-copy-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let (a, b) = (dir.join("a"), dir.join("b"));
+        fs::write(&a, "binary").unwrap();
+        assert!(!is_same_file_content(&a, &b).unwrap());
+        fs::write(&b, "binary").unwrap();
+        assert!(is_same_file_content(&a, &b).unwrap());
+        fs::write(&b, "binarz").unwrap();
+        assert!(!is_same_file_content(&a, &b).unwrap());
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

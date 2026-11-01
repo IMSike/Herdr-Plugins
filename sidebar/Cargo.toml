@@ -1,6 +1,6 @@
 [package]
 name = "herdr-sidebar"
-description = "Herdr plugin: a workspace and agents tree with CPU and memory in the Agents panel, and the totals in the tab bar"
+description = "Herdr plugin: a workspace and agents tree with CPU and memory in the Agents panel, and the totals for the menu's Tools pane or the tab bar"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
