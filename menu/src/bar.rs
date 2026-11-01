@@ -14,7 +14,7 @@
 
 use crate::config::{Entry, StartIn};
 use crate::herdr::{self, Context, Pane};
-use crate::stats::{self, Stats};
+use crate::stats::{self, Measured, Stats};
 use crate::ui::Screen;
 use crossterm::cursor::MoveTo;
 use crossterm::event::{
@@ -26,7 +26,7 @@ use crossterm::terminal::{self, Clear, ClearType};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -49,8 +49,11 @@ const ROWS: u16 = 5;
 const MIN_SLOT: u16 = 9;
 /// Wait after a resize before checking the tab, so that a drag checks once.
 const SETTLE: Duration = Duration::from_millis(400);
-/// How often the figures on the folder are measured again.
-const MEASURE_EVERY: Duration = Duration::from_secs(120);
+/// First row of the figures (with the gap above them): a click there measures
+/// the folder again.
+const FIGURES_TOP: u16 = 2;
+/// After the figures: a click measures them again (Nerd Font `nf-md-refresh`).
+const REFRESH: &str = "\u{F0450}";
 /// Smallest share Herdr gives a side of a split.
 const MIN_RATIO: f64 = 0.1;
 
@@ -287,48 +290,115 @@ pub fn run(entries: &[Entry]) -> Result<(), String> {
     result
 }
 
-/// Measures the folder now and every `MEASURE_EVERY`, in the background. A
-/// folder too large to be read in full is measured once: the next readings
-/// would stop at the same limit.
-fn measure_in_background(root: PathBuf) -> mpsc::Receiver<Stats> {
-    let (send, receive) = mpsc::channel();
+/// What the measuring thread tells the bar.
+enum Measure {
+    Started,
+    Done(Measured),
+}
+
+/// The bar's link to its measuring thread.
+struct Measurer {
+    news: mpsc::Receiver<Measure>,
+    /// A click on the figures: measure now.
+    ask: mpsc::Sender<()>,
+}
+
+/// Measures the folder in the background whenever its figures are due (see
+/// `stats::lifetime`) or asked for. Figures kept in the plugin's state folder,
+/// by this bar or another one of the folder, are shown without a reading.
+/// The thread ends with the bar.
+fn measure_in_background(root: PathBuf) -> Measurer {
+    let (send, news) = mpsc::channel();
+    let (ask, asked) = mpsc::channel::<()>();
+    let file = std::env::var_os("HERDR_PLUGIN_STATE_DIR")
+        .map(|dir| stats::cache_file(Path::new(&dir), &root));
     std::thread::spawn(move || {
+        let mut last: Option<Measured> = None;
+        let mut manual = false;
         loop {
-            let stats = stats::measure(&root, stats::Limit::default());
-            if send.send(stats).is_err() || !stats.complete {
+            let kept = file.as_deref().and_then(|f| stats::load(f, &root));
+            last = Measured::newest(last.take(), kept);
+            if !manual && let Some(known) = &last {
+                if send.send(Measure::Done(known.clone())).is_err() {
+                    return;
+                }
+                let due_in = known.due_in();
+                if due_in > 0 {
+                    match asked.recv_timeout(Duration::from_secs(due_in)) {
+                        Ok(()) => manual = true,
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                        Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                    }
+                    continue;
+                }
+            }
+            if send.send(Measure::Started).is_err() {
                 return;
             }
-            std::thread::sleep(MEASURE_EVERY);
+            let limit = if manual {
+                stats::Limit::manual()
+            } else {
+                stats::Limit::default()
+            };
+            let measured = Measured::now(&root, stats::measure(&root, limit));
+            if let Some(file) = &file {
+                stats::save(file, &measured);
+            }
+            if send.send(Measure::Done(measured.clone())).is_err() {
+                return;
+            }
+            last = Some(measured);
+            // Clicks made during the reading are answered by it.
+            while asked.try_recv().is_ok() {}
+            manual = false;
         }
     });
-    receive
+    Measurer { news, ask }
 }
 
 #[derive(Clone, PartialEq)]
 struct View<'a> {
     entries: &'a [Entry],
     hover: Option<usize>,
+    /// The pointer is over the figures.
+    hover_figures: bool,
     message: Option<String>,
     stats: Option<Stats>,
+    /// How old the figures are, once old enough to say.
+    age: Option<String>,
+    measuring: bool,
 }
 
 fn show(me: &str, entries: &[Entry]) -> io::Result<()> {
     let _screen = Screen::enter()?;
-    let measures = folders(me).0.map(measure_in_background);
+    let measurer = folders(me).0.map(measure_in_background);
+    let mut measured_at = None;
     let mut view = View {
         entries,
         hover: None,
+        hover_figures: false,
         message: None,
         stats: None,
+        age: None,
+        measuring: false,
     };
     // The first check fits the height once the swap is done.
     let mut check_at = Some(Instant::now() + Duration::from_millis(300));
     // Drawn again only when something changed.
     let mut drawn: Option<(View, (u16, u16))> = None;
     loop {
-        if let Some(stats) = measures.as_ref().and_then(|m| m.try_iter().last()) {
-            view.stats = Some(stats);
+        for news in measurer.iter().flat_map(|m| m.news.try_iter()) {
+            match news {
+                Measure::Started => view.measuring = true,
+                Measure::Done(measured) => {
+                    view.measuring = false;
+                    view.stats = Some(measured.stats);
+                    measured_at = Some(measured.at);
+                }
+            }
         }
+        view.age =
+            measured_at.and_then(|at| stats::age_label(stats::unix_now().saturating_sub(at)));
         let size = terminal::size()?;
         if drawn.as_ref() != Some(&(view.clone(), size)) {
             draw(&view)?;
@@ -376,10 +446,17 @@ fn show(me: &str, entries: &[Entry]) -> io::Result<()> {
                     mouse.row,
                     mouse.column,
                 );
+                let on_figures = view.stats.is_some() && mouse.row >= FIGURES_TOP;
                 match mouse.kind {
-                    MouseEventKind::Down(MouseButton::Left) => hit,
+                    MouseEventKind::Down(MouseButton::Left) => {
+                        if on_figures && let Some(m) = &measurer {
+                            let _ = m.ask.send(());
+                        }
+                        hit
+                    }
                     MouseEventKind::Moved => {
                         view.hover = hit;
+                        view.hover_figures = on_figures;
                         None
                     }
                     _ => None,
@@ -452,20 +529,38 @@ fn draw(view: &View) -> io::Result<()> {
     // Figures, or an error, under the names, after a gap when there is room.
     let first = if rows >= ROWS { 3 } else { 2 };
     let cut = |text: String| -> String { text.chars().take(usize::from(width)).collect() };
-    let lines: Vec<(String, Color)> = match (&view.message, &view.stats) {
-        (Some(message), _) => vec![(cut(message.clone()), Color::Red)],
-        (None, Some(stats)) => vec![
-            (cut(stats::size_line(stats)), Color::DarkGrey),
-            (cut(stats::files_line(stats)), Color::DarkGrey),
-        ],
+    // Each line: its text, its colour, and what follows in another colour.
+    let lines: Vec<(String, Color, String)> = match (&view.message, &view.stats) {
+        (Some(message), _) => vec![(message.clone(), Color::Red, String::new())],
+        (None, Some(stats)) => {
+            let mut files = stats::files_line(stats);
+            if let Some(age) = &view.age {
+                files = format!("{files} · {age}");
+            }
+            let refresh = if view.measuring { "…" } else { REFRESH };
+            vec![
+                (stats::size_line(stats), Color::DarkGrey, String::new()),
+                (files, Color::DarkGrey, format!(" {refresh}")),
+            ]
+        }
         (None, None) => Vec::new(),
     };
-    for (row, (text, colour)) in (first..rows).zip(lines) {
+    let suffix_colour = if view.hover_figures {
+        Color::Yellow
+    } else {
+        Color::DarkGrey
+    };
+    for (row, (text, colour, suffix)) in (first..rows).zip(lines) {
+        let whole = cut(format!("{text}{suffix}"));
+        let text = cut(text);
+        let suffix: String = whole.chars().skip(text.chars().count()).collect();
         queue!(
             out,
-            MoveTo(centred(0, width, &text), row),
+            MoveTo(centred(0, width, &whole), row),
             SetForegroundColor(colour),
             Print(text),
+            SetForegroundColor(suffix_colour),
+            Print(suffix),
             ResetColor
         )?;
     }

@@ -1,10 +1,11 @@
 //! What the bar shows under its icons: the size of the workspace folder, its
 //! share of its disk, and its number of files.
 
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Stats {
     /// Bytes of every file under the folder, `.git` included.
     pub bytes: u64,
@@ -14,6 +15,9 @@ pub struct Stats {
     pub disk: Option<u64>,
     /// `false` when the walk stopped at its limit: the figures are a floor.
     pub complete: bool,
+    /// Files and folders read: what a reading costs.
+    #[serde(default)]
+    pub entries: u64,
 }
 
 /// Where a walk stops, so that a huge folder (a home folder, a disk root)
@@ -36,6 +40,103 @@ impl Default for Limit {
     }
 }
 
+impl Limit {
+    /// A reading asked for with a click: most folders are read in full.
+    pub fn manual() -> Self {
+        Limit {
+            entries: 5_000_000,
+            time: Duration::from_secs(60),
+        }
+    }
+}
+
+/// How long figures stay current: the larger the folder, the rarer the
+/// reading. A folder read only in part waits a day, or a click.
+pub fn lifetime(stats: &Stats) -> Duration {
+    let minutes = match stats.entries {
+        _ if !stats.complete => 24 * 60,
+        0..10_000 => 2,
+        10_000..50_000 => 15,
+        50_000..200_000 => 2 * 60,
+        _ => 24 * 60,
+    };
+    Duration::from_secs(minutes * 60)
+}
+
+/// Figures with the time they were measured at, kept in the plugin's state
+/// folder: the bars of a folder share them, and a bar that opens again shows
+/// them without reading the folder.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Measured {
+    pub root: PathBuf,
+    pub stats: Stats,
+    /// Seconds since the Unix epoch.
+    pub at: u64,
+}
+
+impl Measured {
+    pub fn now(root: &Path, stats: Stats) -> Self {
+        Measured {
+            root: root.to_path_buf(),
+            stats,
+            at: unix_now(),
+        }
+    }
+
+    /// Seconds until the figures need a new reading; 0 when they do now.
+    pub fn due_in(&self) -> u64 {
+        (self.at + lifetime(&self.stats).as_secs()).saturating_sub(unix_now())
+    }
+
+    /// The more recent of two readings of the same folder.
+    pub fn newest(a: Option<Self>, b: Option<Self>) -> Option<Self> {
+        match (a, b) {
+            (Some(a), Some(b)) => Some(if a.at >= b.at { a } else { b }),
+            (a, b) => a.or(b),
+        }
+    }
+}
+
+pub fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+/// The file of `root`'s figures in `dir`, named by a hash of its path.
+pub fn cache_file(dir: &Path, root: &Path) -> PathBuf {
+    // FNV-1a: stable from one build to the next, unlike the std hasher.
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in normalized(root).to_string_lossy().bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    dir.join(format!("stats-{hash:016x}.json"))
+}
+
+/// The figures of `root` kept in `file`, if any.
+pub fn load(file: &Path, root: &Path) -> Option<Measured> {
+    let text = std::fs::read_to_string(file).ok()?;
+    let measured: Measured = serde_json::from_str(&text).ok()?;
+    (normalized(&measured.root) == normalized(root)).then_some(measured)
+}
+
+pub fn save(file: &Path, measured: &Measured) {
+    if let Ok(json) = serde_json::to_vec(measured) {
+        let _ = herdr_api::write_atomic(file, &json);
+    }
+}
+
+/// `3 h`, `2 j`: how old the figures are, from an hour on.
+pub fn age_label(seconds: u64) -> Option<String> {
+    let hours = seconds / 3600;
+    match hours {
+        0 => None,
+        1..48 => Some(format!("{hours} h")),
+        _ => Some(format!("{} j", hours / 24)),
+    }
+}
+
 /// Walks the folder without following links; unreadable folders are skipped.
 pub fn measure(root: &Path, limit: Limit) -> Stats {
     let mut stats = Stats {
@@ -52,6 +153,7 @@ pub fn measure(root: &Path, limit: Limit) -> Stats {
         };
         for entry in entries.flatten() {
             entries_read += 1;
+            stats.entries = entries_read;
             if entries_read > limit.entries
                 || (entries_read.is_multiple_of(1000) && Instant::now() >= deadline)
             {
@@ -88,11 +190,15 @@ fn disk_size(path: &Path) -> Option<u64> {
 /// Whether `path` is `mount` or inside it, by whole components: `/data2` is
 /// not inside `/data`. Windows paths differ in case only (`C:\` and `c:\`).
 fn is_under(path: &Path, mount: &Path) -> bool {
+    normalized(path).starts_with(normalized(mount))
+}
+
+/// `path` as compared: lowercased on Windows, where paths differ in case only.
+fn normalized(path: &Path) -> PathBuf {
     if cfg!(windows) {
-        let lower = |p: &Path| PathBuf::from(p.to_string_lossy().to_lowercase());
-        lower(path).starts_with(lower(mount))
+        PathBuf::from(path.to_string_lossy().to_lowercase())
     } else {
-        path.starts_with(mount)
+        path.to_path_buf()
     }
 }
 
@@ -165,6 +271,7 @@ mod tests {
             files: 1,
             disk: None,
             complete: true,
+            entries: 2,
         };
         assert_eq!(size_line(&stats), "850M");
         assert_eq!(files_line(&stats), "1 fichier");
@@ -193,8 +300,57 @@ mod tests {
         };
         let cut = measure(&root, small);
         let _ = std::fs::remove_dir_all(&root);
-        assert_eq!((stats.bytes, stats.files, stats.complete), (8, 1, true));
+        // .git, objects, x, src, a.rs
+        assert_eq!(
+            (stats.bytes, stats.files, stats.complete, stats.entries),
+            (8, 1, true, 5)
+        );
         assert!(!cut.complete);
+    }
+
+    #[test]
+    fn larger_folders_are_read_less_often() {
+        let after = |entries, complete| {
+            lifetime(&Stats {
+                entries,
+                complete,
+                ..Stats::default()
+            })
+            .as_secs()
+                / 60
+        };
+        assert_eq!(after(5_000, true), 2);
+        assert_eq!(after(30_000, true), 15);
+        assert_eq!(after(150_000, true), 120);
+        assert_eq!(after(900_000, true), 1440);
+        assert_eq!(after(5_000, false), 1440);
+        assert_eq!(age_label(3599), None);
+        assert_eq!(age_label(3 * 3600), Some("3 h".into()));
+        assert_eq!(age_label(50 * 3600), Some("2 j".into()));
+    }
+
+    #[test]
+    fn figures_are_kept_per_folder() {
+        let dir = std::env::temp_dir().join(format!("herdr-menu-cache-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (a, b) = (Path::new("/work/a"), Path::new("/work/b"));
+        assert_ne!(cache_file(&dir, a), cache_file(&dir, b));
+        let measured = Measured::now(a, Stats::default());
+        save(&cache_file(&dir, a), &measured);
+        let loaded = load(&cache_file(&dir, a), a);
+        // Another folder never reads it, even under its file name.
+        let other = load(&cache_file(&dir, a), b);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(loaded, Some(measured.clone()));
+        assert_eq!(other, None);
+        let older = Measured {
+            at: 1,
+            ..measured.clone()
+        };
+        assert_eq!(
+            Measured::newest(Some(older), Some(measured.clone())),
+            Some(measured)
+        );
     }
 
     #[test]

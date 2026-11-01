@@ -37,7 +37,7 @@ Les icônes sont des glyphes [Nerd Font](https://www.nerdfonts.com) : sans Nerd 
 Sous les icônes, les chiffres du dossier du workspace (celui de l'explorateur) :
 
 - sa taille sur le disque, tous fichiers compris (`.git` et dossiers de build aussi), et la part qu'il représente de son disque ;
-- son nombre de fichiers, hors `.git`.
+- son nombre de fichiers, hors `.git`, l'âge des chiffres à partir d'une heure (`· 3 h`), et une icône : un clic sur les chiffres mesure à nouveau le dossier (`…` pendant la lecture).
 
 **Sans l'explorateur.** `prefix+space` ouvre le menu en popup, titré du nom du dossier du workspace. Choisir une entrée par sa touche, par les flèches (ou `j`/`k`) et Entrée, ou d'un clic. Échap, `q` ou Ctrl+C ferme le menu. La touche propre à une entrée l'emporte sur `j`, `k` et `q`.
 
@@ -94,7 +94,16 @@ Un fichier illisible ou invalide (champ inconnu, commande vide, touche utilisée
 - Il s'ouvre sur l'événement `pane.created` de l'explorateur, une fois que celui-ci ne bouge plus (il se place et se dimensionne juste après son ouverture : environ une seconde). Il se ferme sur l'événement `pane.closed`, dès que son onglet n'a plus d'explorateur, ou plus d'autre pane qu'eux deux, pour que l'explorateur puisse fermer son onglet comme il le fait seul.
 - Il demande 5 lignes, mais Herdr ne donne jamais moins d'un dixième d'un split à chacun de ses côtés : sur un écran de moins de 60 lignes, il est plus haut. Il reprend sa hauteur quand la fenêtre change de taille.
 - **Tant qu'il est ouvert, l'explorateur ne garde plus sa largeur** : `<` et `>` ne font plus rien, et sa largeur suit celle de la fenêtre en proportion. L'explorateur ne cherche sa largeur que sur toute la hauteur de son propre pane ; une correction lui est proposée.
-- Les chiffres sont mesurés en arrière-plan à l'ouverture du pane, puis toutes les 2 minutes : tout le dossier est lu, ce qui prend un moment sur un gros dossier (`node_modules`, dossiers de build). La lecture s'arrête après 200 000 fichiers et dossiers ou 2 secondes, au premier atteint : les chiffres commencent alors par `≥` (au moins) et ne sont plus mesurés tant que le pane reste ouvert.
+- Les chiffres sont mesurés en arrière-plan : tout le dossier est lu, ce qui prend un moment sur un gros dossier (`node_modules`, dossiers de build). La lecture s'arrête après 200 000 fichiers et dossiers ou 2 secondes, au premier atteint : les chiffres commencent alors par `≥` (au moins). Une lecture demandée d'un clic va jusqu'à 5 millions de fichiers et dossiers ou 60 secondes.
+- Les chiffres sont gardés dans un fichier du dossier d'état du plugin, un par dossier (son chemin et ses chiffres) : les panes d'un même dossier les partagent, et un pane qui se rouvre les affiche sans relire le dossier. Ils sont mesurés à nouveau une fois plus vieux que :
+
+  | Fichiers et dossiers lus | Nouvelle mesure après |
+  | --- | --- |
+  | moins de 10 000 | 2 minutes |
+  | moins de 50 000 | 15 minutes |
+  | moins de 200 000 | 2 heures |
+  | plus, ou lecture arrêtée à sa limite | 1 jour |
+
 - Il trouve l'explorateur par le nom de son pane, `Explorer` ; une version de l'explorateur qui le renommerait ramènerait le menu au seul popup.
 - Après un redémarrage de Herdr, Herdr restaure le pane comme un simple shell ; le plugin le ferme au démarrage, et l'explorateur, en se rouvrant, en reçoit un nouveau.
 
@@ -107,4 +116,4 @@ Les commandes tournent sous votre compte, avec votre environnement, comme tout p
 
 ## Désactiver
 
-Retirer la touche de `config.toml`, puis `herdr plugin disable imsike.menu` (ou `herdr plugin uninstall imsike.menu`) : les panes `Tools` se ferment avec leur explorateur ou au redémarrage suivant. `menu.toml` reste dans le dossier de configuration jusqu'à ce que vous le supprimiez.
+Retirer la touche de `config.toml`, puis `herdr plugin disable imsike.menu` (ou `herdr plugin uninstall imsike.menu`) : les panes `Tools` se ferment avec leur explorateur ou au redémarrage suivant. `menu.toml` reste dans le dossier de configuration, et les fichiers des chiffres dans le dossier d'état, jusqu'à ce que vous les supprimiez.
