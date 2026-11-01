@@ -210,52 +210,9 @@ fn open_above(explorer: &Pane) -> Result<(), String> {
     fit_rows(&bar, |height| height.saturating_sub(1));
     // The swap moves the focus to the bar: give it back.
     if let Some(focused) = focused {
-        focus(&bar, &focused);
+        let _ = herdr::call("pane.focus", json!({ "pane_id": focused }));
     }
     Ok(())
-}
-
-/// Moves the focus to `target`: Herdr only moves it to a neighbour, so walk
-/// towards it a few steps.
-fn focus(bar: &str, target: &str) {
-    for _ in 0..6 {
-        let Some(layout) = layout_of(bar) else {
-            return;
-        };
-        let Some(now) = layout.focused_pane_id.as_deref() else {
-            return;
-        };
-        if now == target {
-            return;
-        }
-        let rect_of = |id: &str| {
-            layout
-                .panes
-                .iter()
-                .find(|p| p.pane_id == id)
-                .map(|p| &p.rect)
-        };
-        let (Some(from), Some(to)) = (rect_of(now), rect_of(target)) else {
-            return;
-        };
-        let direction = if to.x + to.width <= from.x {
-            "left"
-        } else if to.x >= from.x + from.width {
-            "right"
-        } else if to.y + to.height <= from.y {
-            "up"
-        } else {
-            "down"
-        };
-        if herdr::call(
-            "pane.focus_direction",
-            json!({ "direction": direction, "pane_id": now }),
-        )
-        .is_err()
-        {
-            return;
-        }
-    }
 }
 
 /// A pane that is neither the bar nor one of the explorer's.
