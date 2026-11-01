@@ -67,7 +67,7 @@ Chaque push sur `main` (direct ou pull request fusionnée) reçoit un tag et une
 | autre chose | correctif : `0.1.0` → `0.1.1` |
 | décision du mainteneur seulement | majeure : lancer le workflow à la main avec `major` |
 
-La première version est `v0.0.0`. Pas de changelog pour l'instant. Le workflow écrit la version dans chaque `herdr-plugin.toml` et la commite sur `main` avant de poser le tag ; un nouveau plugin commence à `0.0.0` ([ADR 0002](docs/fr/adr/0002-plugin-versions.md)).
+La première version est `v0.0.0`. Pas de changelog pour l'instant. Le workflow ne fait que poser le tag : chaque `herdr-plugin.toml` garde `version = "0.0.0"`, que Herdr exige mais n'utilise pas ([ADR 0002](docs/fr/adr/0002-plugin-versions.md)).
 
 ## Pull requests
 
