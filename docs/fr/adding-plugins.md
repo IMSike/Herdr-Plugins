@@ -17,6 +17,8 @@ Un plugin de ce dépôt est une crate Rust du workspace Cargo racine, dans son p
                          (mise en forme, calculs) dans un module à part, sans I/O, avec ses tests
 ```
 
+Un plugin qui a des réglages garde le modèle de son fichier (tous les réglages en commentaire à leur valeur par défaut) dans `<nom>/templates/`, dans le dossier du plugin dont c'est le fichier, même quand son code se trouve dans `crates/herdr-api` ou qu'un autre plugin l'écrit.
+
 Ajoutez le dossier à `members` dans le `Cargo.toml` racine. Le code utile à plusieurs plugins (requêtes à Herdr, ses variables d'environnement, écritures atomiques) se trouve dans `crates/herdr-api` : utilisez-le avec `herdr-api.workspace = true` plutôt que de le réécrire.
 
 ## Crate

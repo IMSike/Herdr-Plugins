@@ -6,8 +6,10 @@ mod socket;
 
 pub use socket::{Error, request, request_field};
 
-use serde::Deserialize;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -48,6 +50,12 @@ pub mod env {
     pub const EVENT_JSON: &str = "HERDR_PLUGIN_EVENT_JSON";
     /// The pane a plugin pane's program runs in.
     pub const PANE_ID: &str = "HERDR_PANE_ID";
+    /// The `herdr` binary that runs this session, in Herdr's panes.
+    pub const BIN_PATH: &str = "HERDR_BIN_PATH";
+    /// Herdr's `config.toml`, when set.
+    pub const CONFIG_PATH: &str = "HERDR_CONFIG_PATH";
+    /// Set in Herdr's panes; `herdr update` refuses to run where it is.
+    pub const INSIDE: &str = "HERDR_ENV";
 }
 
 /// An environment variable Herdr or the plugin sets: its absence is an error.
@@ -110,6 +118,17 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     })
 }
 
+/// A JSON file's content; `None` when it is missing or unreadable.
+pub fn read_json<T: DeserializeOwned>(path: &Path) -> Option<T> {
+    serde_json::from_slice(&std::fs::read(path).ok()?).ok()
+}
+
+/// Writes `value` as JSON to `path`, all at once (see `write_atomic`).
+pub fn write_json<T: Serialize>(path: &Path, value: &T) -> io::Result<()> {
+    let bytes = serde_json::to_vec(value).map_err(io::Error::other)?;
+    write_atomic(path, &bytes)
+}
+
 /// How the plugins write their figures, as their settings choose.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NumberFormat {
@@ -126,7 +145,7 @@ pub struct NumberFormat {
 }
 
 /// How a size is written; `K`, `M` or `G` as the size needs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum MemoryUnit {
     /// `853M`, `2,4G`.
     #[default]
@@ -281,6 +300,17 @@ mod tests {
         write_atomic(&path, b"new").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"new");
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn reads_back_what_it_wrote_as_json() {
+        let dir = std::env::temp_dir().join(format!("herdr-api-json-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("a.json");
+        write_json(&path, &vec![1, 2]).unwrap();
+        assert_eq!(read_json::<Vec<u32>>(&path), Some(vec![1, 2]));
+        assert_eq!(read_json::<Vec<u32>>(&dir.join("none.json")), None);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

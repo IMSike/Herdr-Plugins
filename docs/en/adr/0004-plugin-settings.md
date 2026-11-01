@@ -34,3 +34,4 @@ The screen also opens Herdr's `config.toml`, `menu.toml` and, when the sidebar i
 - A new setting means a field with its default, the template, a line of the settings screen, and the plugin's page, in both languages.
 - The menu writes `menu.toml` and `sidebar.toml`, never Herdr's `config.toml`; a versioned copy of the plugins' files (OS-Setup) must be updated by hand after a change made on the screen.
 - Until the sidebar's `install` has run once after an update, its tab bar runs use the defaults.
+- The sidebar's settings are read by the sidebar and the menu with the same code, in `crates/herdr-api`; the template of `sidebar.toml` stays in `sidebar/templates/`, with the plugin whose file it is.

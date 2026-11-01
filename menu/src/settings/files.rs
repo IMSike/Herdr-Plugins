@@ -11,7 +11,7 @@ use std::process::{Command, Stdio};
 /// What a new `menu.toml` holds: every setting, commented out.
 pub const MENU_TEMPLATE: &str = include_str!("../../templates/menu.toml");
 /// What a new `sidebar.toml` holds.
-pub const SIDEBAR_TEMPLATE: &str = include_str!("../../templates/sidebar.toml");
+pub const SIDEBAR_TEMPLATE: &str = herdr_api::sidebar::TEMPLATE;
 /// The editor (as JSON) and the files (as JSON) handed to the `edit` pane.
 const EDITOR_ENV: &str = "HERDR_MENU_EDITOR";
 const FILES_ENV: &str = "HERDR_MENU_FILES";

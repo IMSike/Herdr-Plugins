@@ -218,7 +218,7 @@ mod tests {
     use super::*;
 
     fn shells() -> Vec<String> {
-        crate::settings::Settings::default().shells
+        herdr_api::sidebar::Settings::default().shells
     }
 
     fn proc(pid: u32, parent: Option<u32>, start: u64, cpu: u64, name: &str) -> Proc {

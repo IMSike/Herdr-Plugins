@@ -17,6 +17,8 @@ A plugin of this repository is a Rust crate of the root Cargo workspace, in a fo
                          in a module of its own, without I/O, with its tests
 ```
 
+A plugin with settings keeps the template of its file (every setting commented out at its default) in `<name>/templates/`, in the folder of the plugin whose file it is, even when its code lives in `crates/herdr-api` or another plugin writes it.
+
 Add the folder to `members` in the root `Cargo.toml`. Code that several plugins need (requests to Herdr, its environment variables, atomic writes) lives in `crates/herdr-api`: depend on it with `herdr-api.workspace = true` rather than writing it again.
 
 ## Crate

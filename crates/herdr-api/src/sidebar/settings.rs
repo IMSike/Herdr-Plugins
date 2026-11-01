@@ -1,16 +1,22 @@
-//! The plugin's settings: `sidebar.toml` in its config folder. A missing file
-//! or setting keeps its default; a file that cannot be used is ignored, and
-//! the run says why in Herdr's log.
+//! The sidebar's settings: `sidebar.toml` in its config folder. A missing
+//! file or setting keeps its default; a file that cannot be used is ignored
+//! as a whole. The sidebar reads them at each run, the menu's settings
+//! screen shows and changes them.
 
 use std::path::Path;
 
-use herdr_api::sidebar::{self, Thresholds, check_thresholds};
-use herdr_api::{MemoryUnit, NumberFormat};
-use serde::Deserialize;
+use super::{
+    CPU_LEVELS, MACHINE_CPU_LEVELS, MACHINE_MEMORY_LEVELS, MEMORY_LEVELS, SETTINGS_FILE, SHELLS,
+    TTL_SECONDS, Thresholds, TotalsThresholds, check_thresholds,
+};
+use crate::{MemoryUnit, NumberFormat};
+use serde::{Deserialize, Serialize};
 
-pub const FILE_NAME: &str = sidebar::SETTINGS_FILE;
+/// What a new `sidebar.toml` holds: every setting, commented out at its
+/// default.
+pub const TEMPLATE: &str = include_str!("../../../../sidebar/templates/sidebar.toml");
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     /// `2,4G` rather than `2.4G`.
@@ -32,9 +38,9 @@ pub struct Settings {
     pub tab_bar: bool,
     /// Colors the totals of the `Tools` pane by their level.
     pub colors: bool,
-    /// Thresholds of an agent's, a workspace's and Herdr's CPU (percent).
+    /// Thresholds of Herdr's total CPU, all workspaces (percent).
     pub cpu_levels: Thresholds,
-    /// Thresholds of their memory (GiB).
+    /// Thresholds of its memory (GiB).
     pub memory_levels: Thresholds,
     /// Thresholds of the machine's CPU (percent).
     pub machine_cpu_levels: Thresholds,
@@ -51,14 +57,14 @@ impl Default for Settings {
             cpu_decimal: numbers.cpu_decimal,
             memory_unit: numbers.memory_unit,
             memory_space: numbers.memory_space,
-            ttl_seconds: sidebar::TTL_SECONDS,
-            shells: sidebar::SHELLS.iter().map(|s| s.to_string()).collect(),
+            ttl_seconds: TTL_SECONDS,
+            shells: SHELLS.iter().map(|s| s.to_string()).collect(),
             tab_bar: false,
             colors: false,
-            cpu_levels: sidebar::CPU_LEVELS,
-            memory_levels: sidebar::MEMORY_LEVELS,
-            machine_cpu_levels: sidebar::MACHINE_CPU_LEVELS,
-            machine_memory_levels: sidebar::MACHINE_MEMORY_LEVELS,
+            cpu_levels: CPU_LEVELS,
+            memory_levels: MEMORY_LEVELS,
+            machine_cpu_levels: MACHINE_CPU_LEVELS,
+            machine_memory_levels: MACHINE_MEMORY_LEVELS,
         }
     }
 }
@@ -74,16 +80,31 @@ impl Settings {
         }
     }
 
+    pub fn thresholds(&self) -> TotalsThresholds {
+        TotalsThresholds {
+            cpu: self.cpu_levels,
+            memory: self.memory_levels,
+            machine_cpu: self.machine_cpu_levels,
+            machine_memory: self.machine_memory_levels,
+        }
+    }
+
     /// The settings of `config_dir`, the defaults without a file; `Err` says
     /// why the file is ignored.
     pub fn load(config_dir: Option<&Path>) -> Result<Self, String> {
-        let Some(dir) = config_dir else {
-            return Ok(Self::default());
-        };
-        match std::fs::read_to_string(dir.join(FILE_NAME)) {
-            Ok(text) => Self::parse(&text).map_err(|e| format!("{FILE_NAME} ignoré : {e}")),
+        match config_dir {
+            Some(dir) => Self::read(&dir.join(SETTINGS_FILE)),
+            None => Ok(Self::default()),
+        }
+    }
+
+    /// The settings of the file `path`, the defaults when it does not exist;
+    /// `Err` says why it is ignored.
+    pub fn read(path: &Path) -> Result<Self, String> {
+        match std::fs::read_to_string(path) {
+            Ok(text) => Self::parse(&text).map_err(|e| format!("{SETTINGS_FILE} ignoré : {e}")),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
-            Err(e) => Err(format!("{FILE_NAME} illisible : {e}")),
+            Err(e) => Err(format!("{SETTINGS_FILE} illisible : {e}")),
         }
     }
 
@@ -129,17 +150,41 @@ cpu_levels = [5, 20.5, 60]
         assert!(Settings::parse("memory_unit = \"Gb\"").is_err());
     }
 
-    /// The menu's `Réglages` entry writes this template: uncommented, it
-    /// gives the defaults.
     #[test]
-    fn the_menu_template_gives_the_defaults() {
-        let template = include_str!("../../menu/templates/sidebar.toml");
-        let uncommented: String = template
+    fn a_file_that_cannot_be_used_says_why() {
+        let dir = std::env::temp_dir().join(format!("herdr-api-settings-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(Settings::load(Some(&dir)), Ok(Settings::default()));
+        std::fs::write(dir.join(SETTINGS_FILE), "unknown = 1\n").unwrap();
+        let error = Settings::load(Some(&dir)).unwrap_err();
+        assert!(error.starts_with("sidebar.toml ignoré"), "{error}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Uncommented, the template gives the defaults, and it has a line for
+    /// every setting.
+    #[test]
+    fn the_template_gives_every_setting_its_default() {
+        let lines: Vec<&str> = TEMPLATE
             .lines()
             .filter_map(|line| line.strip_prefix("# "))
             .filter(|line| line.contains(" = "))
-            .map(|line| format!("{line}\n"))
             .collect();
+        let uncommented: String = lines.iter().map(|line| format!("{line}\n")).collect();
         assert_eq!(Settings::parse(&uncommented).unwrap(), Settings::default());
+        let mut in_template: Vec<&str> = lines
+            .iter()
+            .filter_map(|line| line.split(" = ").next())
+            .collect();
+        in_template.sort_unstable();
+        let defaults = serde_json::to_value(Settings::default()).unwrap();
+        let mut settings: Vec<&str> = defaults
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        settings.sort_unstable();
+        assert_eq!(in_template, settings);
     }
 }

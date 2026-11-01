@@ -14,7 +14,6 @@
 
 mod machine;
 mod seq;
-mod settings;
 mod snapshot;
 mod tokens;
 mod tree;
@@ -30,9 +29,9 @@ use std::time::{Duration, Instant};
 use serde_json::{Map, Value, json};
 use sysinfo::{MemoryRefreshKind, ProcessRefreshKind, ProcessesToUpdate, System};
 
+use herdr_api::sidebar::Settings;
 use herdr_api::sidebar::{Totals, TotalsThresholds};
 use herdr_api::{request, request_field, unix_millis};
-use settings::Settings;
 use snapshot::{Pane, Snapshot};
 use usage::{Proc, Sample, Shell, Table, Usage, cpu_share};
 

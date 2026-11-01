@@ -1,7 +1,11 @@
-//! What the sidebar shares with the other plugins: its id, the defaults of
-//! its settings (the menu's settings screen shows them), the levels of its
+//! What the sidebar shares with the other plugins: its id, its settings
+//! (the menu's settings screen shows and changes them), the levels of its
 //! threshold colors, and the totals its runs leave in its state folder (the
 //! `Tools` pane shows them).
+
+mod settings;
+
+pub use settings::{Settings, TEMPLATE};
 
 use crate::NumberFormat;
 use serde::{Deserialize, Serialize};
@@ -25,10 +29,10 @@ pub const SHELLS: &[&str] = &[
     "powershell",
     "cmd",
 ];
-/// Default thresholds of an agent's, a workspace's and Herdr's CPU share
-/// (percent of the machine).
+/// Default thresholds of Herdr's total CPU share, all workspaces (percent of
+/// the machine).
 pub const CPU_LEVELS: Thresholds = [10.0, 25.0, 50.0];
-/// Default thresholds of their memory (GiB).
+/// Default thresholds of its memory (GiB).
 pub const MEMORY_LEVELS: Thresholds = [1.0, 2.0, 4.0];
 /// Default thresholds of the machine's CPU share (percent).
 pub const MACHINE_CPU_LEVELS: Thresholds = [50.0, 70.0, 90.0];
@@ -220,13 +224,12 @@ impl Totals {
     }
 
     pub fn save(&self, state_dir: &Path) -> std::io::Result<()> {
-        let bytes = serde_json::to_vec(self).map_err(std::io::Error::other)?;
-        crate::write_atomic(&Self::file(state_dir), &bytes)
+        crate::write_json(&Self::file(state_dir), self)
     }
 
     /// The totals of the sidebar's last run, when there are some.
     pub fn load(state_dir: &Path) -> Option<Self> {
-        serde_json::from_slice(&std::fs::read(Self::file(state_dir)).ok()?).ok()
+        crate::read_json(&Self::file(state_dir))
     }
 }
 

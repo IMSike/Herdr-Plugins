@@ -34,3 +34,4 @@ L'écran ouvre aussi le `config.toml` de Herdr, `menu.toml` et, quand la sidebar
 - Un nouveau réglage, c'est un champ avec sa valeur par défaut, le modèle, une ligne de l'écran des réglages et la page du plugin, dans les deux langues.
 - Le menu écrit `menu.toml` et `sidebar.toml`, jamais le `config.toml` de Herdr ; une copie versionnée des fichiers des plugins (OS-Setup) se met à jour à la main après un changement fait à l'écran.
 - Tant que l'action `install` de la sidebar n'a pas tourné une fois après une mise à jour, ses passages de la barre d'onglets prennent les valeurs par défaut.
+- Les réglages de la sidebar sont lus par la sidebar et par le menu avec le même code, dans `crates/herdr-api` ; le modèle de `sidebar.toml` reste dans `sidebar/templates/`, avec le plugin dont c'est le fichier.
