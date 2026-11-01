@@ -15,7 +15,8 @@ pub enum StartIn {
     /// The workspace's root folder.
     #[default]
     Workspace,
-    /// The folder of the pane that had the focus.
+    /// The folder of the focused pane; from the `Tools` pane, of the tab's
+    /// first terminal.
     Pane,
 }
 
