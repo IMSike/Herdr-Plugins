@@ -86,8 +86,8 @@ impl Levels {
 
     fn name(self) -> &'static str {
         match self {
-            Self::Cpu => "Seuils CPU (agents, Herdr)",
-            Self::Memory => "Seuils mémoire (agents, Herdr)",
+            Self::Cpu => "Seuils CPU (Workspaces)",
+            Self::Memory => "Seuils mémoire (Workspaces)",
             Self::MachineCpu => "Seuils CPU (machine)",
             Self::MachineMemory => "Seuils mémoire (machine)",
         }

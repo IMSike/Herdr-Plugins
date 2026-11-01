@@ -136,7 +136,7 @@ La fenêtre attend Entrée avant de se fermer, erreur comprise.
 | Shells | `shells` : Entrée pour les taper, séparés par des virgules, Entrée pour enregistrer, Échap pour annuler | `sidebar.toml` |
 | Totaux dans la barre d'onglets | `tab_bar` | `sidebar.toml` |
 | Couleurs | `colors` : les [couleurs par seuil](sidebar.md#couleurs-par-seuil) | `sidebar.toml` |
-| Seuils CPU, Seuils mémoire (agents, Herdr ; machine) | les quatre jeux de seuils : Entrée pour taper trois valeurs croissantes séparées par des espaces (`10 25 50`), Entrée pour enregistrer, Échap pour annuler | `sidebar.toml` |
+| Seuils CPU, Seuils mémoire (Workspaces ; machine) | les quatre jeux de seuils : Entrée pour taper trois valeurs croissantes séparées par des espaces (`10 25 50`), Entrée pour enregistrer, Échap pour annuler | `sidebar.toml` |
 | Ouvrir les fichiers de configuration… | ouvre les fichiers dans un éditeur, voir plus bas | |
 | Recharger la configuration de Herdr | recharge le `config.toml` de Herdr et dit si Herdr l'a accepté | |
 

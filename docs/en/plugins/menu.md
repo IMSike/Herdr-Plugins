@@ -136,7 +136,7 @@ The window waits for Enter before closing, an error included.
 | Shells | `shells`: Enter to type them, separated by commas, Enter to save, Escape to cancel | `sidebar.toml` |
 | Totaux dans la barre d'onglets | `tab_bar` | `sidebar.toml` |
 | Couleurs | `colors`: the [threshold colors](sidebar.md#threshold-colors) | `sidebar.toml` |
-| Seuils CPU, Seuils mémoire (agents, Herdr; machine) | the four sets of thresholds: Enter to type three increasing values separated by spaces (`10 25 50`), Enter to save, Escape to cancel | `sidebar.toml` |
+| Seuils CPU, Seuils mémoire (Workspaces; machine) | the four sets of thresholds: Enter to type three increasing values separated by spaces (`10 25 50`), Enter to save, Escape to cancel | `sidebar.toml` |
 | Ouvrir les fichiers de configuration… | opens the files in an editor, see below | |
 | Recharger la configuration de Herdr | reloads Herdr's `config.toml` and says whether Herdr accepted it | |
 

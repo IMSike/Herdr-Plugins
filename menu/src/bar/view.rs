@@ -18,7 +18,7 @@ use crossterm::event::{
 use crossterm::queue;
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use crossterm::terminal::{self, Clear, ClearType};
-use herdr_api::sidebar::{Level, Totals};
+use herdr_api::sidebar::{Level, MACHINE_GLYPH, Totals};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -548,7 +548,8 @@ fn draw_tools(out: &mut impl Write, view: &View, width: u16, rows: u16) -> io::R
         if row < rows && whole.chars().count() <= usize::from(width) {
             queue!(out, MoveTo(centered(0, width, &whole), row))?;
             for (text, level) in totals {
-                draw_figure(out, text, *level, text.chars().any(char::is_numeric))?;
+                let shown = text.chars().any(char::is_numeric) || text.contains(MACHINE_GLYPH);
+                draw_figure(out, text, *level, shown)?;
             }
         } else if row < rows {
             let text = fit(&whole, usize::from(width));
@@ -559,7 +560,8 @@ fn draw_tools(out: &mut impl Write, view: &View, width: u16, rows: u16) -> io::R
 }
 
 /// One piece of the totals: a figure in the color of its level (bold, in
-/// the terminal's color without the threshold colors), a separator in grey.
+/// the terminal's color without the threshold colors) or the machine's
+/// glyph (bold), a separator in grey.
 fn draw_figure(
     out: &mut impl Write,
     text: &str,
