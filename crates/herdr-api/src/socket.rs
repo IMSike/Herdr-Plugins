@@ -3,6 +3,8 @@
 
 use std::fmt;
 use std::io::{self, BufRead, BufReader, Write};
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use serde::de::DeserializeOwned;
@@ -12,6 +14,19 @@ const SOCKET_ENV: &str = crate::env::SOCKET_PATH;
 /// A request Herdr has not answered by then is given up: a plugin never
 /// hangs on a busy or stuck server.
 const TIMEOUT: Duration = Duration::from_secs(3);
+/// Requests still waiting for Herdr, each on its thread: past this many, a
+/// stuck Herdr is not sent more (their threads would pile up in a
+/// long-running pane).
+const MAX_WAITING: usize = 4;
+static WAITING: AtomicUsize = AtomicUsize::new(0);
+/// When the run must be over, if it has a limit: no request lasts past it.
+static DEADLINE: OnceLock<Instant> = OnceLock::new();
+
+/// Requests end by `deadline` at the latest (the first one set holds): a
+/// run with a time limit of its own is not held up past it.
+pub fn set_deadline(deadline: Instant) {
+    let _ = DEADLINE.set(deadline);
+}
 
 /// Why a request failed.
 #[derive(Debug)]
@@ -91,16 +106,28 @@ fn talk<S: io::Read + Write>(mut stream: S, line: &str) -> io::Result<String> {
 
 /// Neither a Unix socket's connect nor a named pipe opened as a file has a
 /// timeout: the whole exchange runs on a thread of its own, given up after
-/// `TIMEOUT` (on Windows the thread ends with the process, or when Herdr
-/// answers).
+/// `TIMEOUT` or at the run's deadline (on Windows the thread ends with the
+/// process, or when Herdr answers).
 fn exchange(path: String, line: String) -> io::Result<String> {
+    let mut deadline = Instant::now() + TIMEOUT;
+    if let Some(&limit) = DEADLINE.get() {
+        deadline = deadline.min(limit);
+    }
+    if WAITING.fetch_add(1, Ordering::SeqCst) >= MAX_WAITING {
+        WAITING.fetch_sub(1, Ordering::SeqCst);
+        return Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "Herdr ne répond plus aux requêtes précédentes",
+        ));
+    }
     let (sender, receiver) = std::sync::mpsc::channel();
-    let deadline = Instant::now() + TIMEOUT;
     std::thread::spawn(move || {
-        let _ = sender.send(connect(&path, deadline).and_then(|stream| talk(stream, &line)));
+        let answer = connect(&path, deadline).and_then(|stream| talk(stream, &line));
+        WAITING.fetch_sub(1, Ordering::SeqCst);
+        let _ = sender.send(answer);
     });
     receiver
-        .recv_timeout(TIMEOUT)
+        .recv_timeout(deadline.saturating_duration_since(Instant::now()))
         .unwrap_or_else(|_| Err(io::Error::new(io::ErrorKind::TimedOut, "pas de réponse")))
 }
 

@@ -4,7 +4,7 @@
 pub mod sidebar;
 mod socket;
 
-pub use socket::{Error, request, request_field};
+pub use socket::{Error, request, request_field, set_deadline};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -81,13 +81,13 @@ pub fn unix_millis() -> u64 {
         .map_or(0, |d| d.as_millis() as u64)
 }
 
-/// Whether the file was last written more than `age` ago.
+/// Whether the file was last written more than `age` ago. A date in the
+/// future (written before the clock was set back) counts as old: otherwise
+/// the file would stay young until the clock caught up.
 pub fn is_older_than(metadata: &std::fs::Metadata, age: Duration) -> bool {
     metadata
         .modified()
-        .ok()
-        .and_then(|modified| modified.elapsed().ok())
-        .is_some_and(|elapsed| elapsed > age)
+        .is_ok_and(|modified| modified.elapsed().ok().is_none_or(|elapsed| elapsed > age))
 }
 
 /// Removes the files of `dir` that `matches` and that were last written
