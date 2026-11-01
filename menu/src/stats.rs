@@ -128,58 +128,25 @@ pub fn cache_file(dir: &Path, root: &Path) -> PathBuf {
 
 /// The figures of `root` kept in `file`, if any.
 pub fn load(file: &Path, root: &Path) -> Option<Measured> {
-    let text = std::fs::read_to_string(file).ok()?;
-    let measured: Measured = serde_json::from_str(&text).ok()?;
+    let measured: Measured = herdr_api::read_json(file)?;
     (normalized(&measured.root) == normalized(root)).then_some(measured)
 }
 
-/// Held while a bar measures a folder: another bar of the same folder waits
-/// for its figures instead of walking the folder too. Released when dropped.
-pub struct ReadingLock(Option<PathBuf>);
-
-impl ReadingLock {
-    /// A reading longer than this was cut short (its bar killed): its lock
-    /// is taken over. The longest reading lasts a minute (`Limit::manual`).
-    const STALE_AFTER: Duration = Duration::from_secs(120);
-
-    /// The lock of the folder whose figures go to `file`; `None` while
-    /// another bar holds it.
-    pub fn take(file: &Path) -> Option<Self> {
-        let path = file.with_extension("lock");
-        for _ in 0..2 {
-            match std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&path)
-            {
-                Ok(_) => return Some(Self(Some(path))),
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                    let stale = std::fs::metadata(&path)
-                        .is_ok_and(|m| herdr_api::is_older_than(&m, Self::STALE_AFTER));
-                    if !stale || std::fs::remove_file(&path).is_err() {
-                        return None;
-                    }
-                }
-                // The state folder cannot be written: measure without a lock.
-                Err(_) => return Some(Self(None)),
-            }
-        }
-        None
-    }
-}
-
-impl Drop for ReadingLock {
-    fn drop(&mut self) {
-        if let Some(path) = &self.0 {
-            let _ = std::fs::remove_file(path);
-        }
+/// The lock of the folder whose figures go to `file`, held while a bar
+/// measures it: another bar of the same folder waits for its figures
+/// instead of walking the folder too. `None` while another bar holds it;
+/// `Some(None)` when the state folder cannot be written (measure without).
+pub fn reading_lock(file: &Path) -> Option<Option<herdr_api::Lock>> {
+    match herdr_api::Lock::take(&file.with_extension("lock")) {
+        Ok(Some(lock)) => Some(Some(lock)),
+        Ok(None) => None,
+        Err(_) => Some(None),
     }
 }
 
 /// Keeps the figures for the other bars of the folder and the next ones.
 pub fn save(file: &Path, measured: &Measured) -> Result<(), String> {
-    let json = serde_json::to_vec(measured).map_err(|e| e.to_string())?;
-    herdr_api::write_atomic(file, &json).map_err(|e| e.to_string())
+    herdr_api::write_json(file, measured).map_err(|e| e.to_string())
 }
 
 /// Walks the folder without following links; unreadable folders are skipped.
