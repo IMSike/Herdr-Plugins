@@ -12,6 +12,8 @@
 //! explorer, then swaps places with it. Herdr gives a side of a split a tenth
 //! of it at least, so the bar is never shorter than a tenth of the column.
 
+mod geometry;
+
 use crate::config::{Entry, StartIn};
 use crate::herdr::{self, Context, Pane};
 use crate::stats::{self, Measured, Stats};
@@ -23,7 +25,7 @@ use crossterm::event::{
 use crossterm::queue;
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use crossterm::terminal::{self, Clear, ClearType};
-use serde::Deserialize;
+use geometry::{Layout, ROWS, centred, ratio_change, slot_at, slots};
 use serde_json::{Value, json};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -43,10 +45,6 @@ const EXPLORER_PANES: &[&str] = &[
     "Changes",
     "Editor",
 ];
-/// Rows the bar asks for: icons, names, a gap and two lines of figures.
-const ROWS: u16 = 5;
-/// Narrowest column of one entry.
-const MIN_SLOT: u16 = 9;
 /// Wait after a resize before checking the tab, so that a drag checks once.
 const SETTLE: Duration = Duration::from_millis(400);
 /// First row of the figures (with the gap above them): a click there measures
@@ -54,9 +52,6 @@ const SETTLE: Duration = Duration::from_millis(400);
 const FIGURES_TOP: u16 = 2;
 /// After the figures: a click measures them again (Nerd Font `nf-md-refresh`).
 const REFRESH: &str = "\u{F0450}";
-/// Smallest share Herdr gives a side of a split.
-const MIN_RATIO: f64 = 0.1;
-
 fn label_is(pane: &Pane, label: &str) -> bool {
     pane.label.as_deref() == Some(label)
 }
@@ -470,33 +465,6 @@ fn show(me: &str, entries: &[Entry]) -> io::Result<()> {
     }
 }
 
-/// Columns of one entry and the column the first one starts at, centred.
-fn slots(width: u16, entries: &[Entry]) -> (u16, u16) {
-    let count = entries.len().max(1) as u16;
-    let longest = entries
-        .iter()
-        .map(|e| e.label.chars().count() as u16)
-        .max()
-        .unwrap_or(0);
-    let slot = (longest + 2).max(MIN_SLOT).min(width / count).max(1);
-    (slot, width.saturating_sub(slot * count) / 2)
-}
-
-/// The entry under a click: its icon or its name.
-fn slot_at((slot, start): (u16, u16), count: usize, row: u16, column: u16) -> Option<usize> {
-    if row > 1 {
-        return None;
-    }
-    let index = usize::from(column.checked_sub(start)? / slot);
-    (index < count).then_some(index)
-}
-
-/// The column `text` starts at, centred in `width` columns from `start`.
-fn centred(start: u16, width: u16, text: &str) -> u16 {
-    let len = text.chars().count() as u16;
-    start + width.saturating_sub(len) / 2
-}
-
 fn draw(view: &View) -> io::Result<()> {
     let (width, rows) = terminal::size()?;
     let (slot, start) = slots(width, view.entries);
@@ -581,37 +549,6 @@ fn launch(me: &str, entry: &Entry) -> Result<(), String> {
     crate::run_in_popup(entry, cwd.as_deref())
 }
 
-#[derive(Deserialize)]
-struct Rect {
-    x: u16,
-    y: u16,
-    width: u16,
-    height: u16,
-}
-
-#[derive(Deserialize)]
-struct LayoutPane {
-    pane_id: String,
-    rect: Rect,
-}
-
-#[derive(Deserialize)]
-struct Split {
-    direction: String,
-    ratio: f64,
-    rect: Rect,
-}
-
-#[derive(Deserialize)]
-struct Layout {
-    panes: Vec<LayoutPane>,
-    splits: Vec<Split>,
-    #[serde(default)]
-    zoomed: bool,
-    #[serde(default)]
-    focused_pane_id: Option<String>,
-}
-
 fn layout_of(pane: &str) -> Option<Layout> {
     herdr::call("pane.layout", json!({ "pane_id": pane }))
         .ok()
@@ -654,107 +591,9 @@ fn fit_rows(me: &str, rows: impl Fn(u16) -> u16) {
     );
 }
 
-/// How far to move the ratio of the split the bar tops, for its rows to be
-/// `ROWS`; `None` when it already has them or is not on top of a split.
-fn ratio_change(layout: &Layout, me: &str, rows: u16) -> Option<f64> {
-    let rect = &layout.panes.iter().find(|p| p.pane_id == me)?.rect;
-    let split = layout.splits.iter().find(|s| {
-        s.direction == "down"
-            && s.rect.x == rect.x
-            && s.rect.y == rect.y
-            && s.rect.width == rect.width
-            && s.rect.height > rect.height
-    })?;
-    // What the pane takes beyond its terminal's rows: its border.
-    let border = rect.height.saturating_sub(rows);
-    let want = ROWS + border;
-    if rect.height == want {
-        return None;
-    }
-    // Herdr keeps a side of a split at a tenth at least: on a short screen
-    // the bar gets more rows than it asks for.
-    let ratio = ((f64::from(want) + 0.25) / f64::from(split.rect.height)).max(MIN_RATIO);
-    let delta = ratio - split.ratio;
-    (delta.abs() * f64::from(split.rect.height) >= 0.5).then_some(delta)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn rect(x: u16, y: u16, width: u16, height: u16) -> Rect {
-        Rect {
-            x,
-            y,
-            width,
-            height,
-        }
-    }
-
-    fn entry(label: &str) -> Entry {
-        Entry {
-            key: 'x',
-            label: label.into(),
-            command: vec!["x".into()],
-            cwd: StartIn::Workspace,
-            icon: None,
-            popup: true,
-        }
-    }
-
-    #[test]
-    fn slots_are_centred_and_fit_the_width() {
-        let entries = [entry("lazygit"), entry("gh-dash"), entry("VS Code")];
-        // 3 slots of 9 in 38 columns: 5 columns on the left.
-        assert_eq!(slots(38, &entries), (9, 5));
-        // Too narrow: the slots share the width.
-        assert_eq!(slots(20, &entries), (6, 1));
-        assert_eq!(centred(5, 9, "lazygit"), 6);
-    }
-
-    #[test]
-    fn clicks_map_to_slots() {
-        let geometry = (9, 5);
-        assert_eq!(slot_at(geometry, 3, 0, 5), Some(0));
-        assert_eq!(slot_at(geometry, 3, 1, 14), Some(1));
-        assert_eq!(slot_at(geometry, 3, 0, 31), Some(2));
-        assert_eq!(slot_at(geometry, 3, 0, 4), None);
-        assert_eq!(slot_at(geometry, 3, 0, 32), None);
-        assert_eq!(slot_at(geometry, 3, 2, 10), None);
-    }
-
-    #[test]
-    fn shrinks_the_bar_to_its_rows() {
-        let layout = Layout {
-            panes: vec![
-                LayoutPane {
-                    pane_id: "bar".into(),
-                    rect: rect(160, 0, 40, 30),
-                },
-                LayoutPane {
-                    pane_id: "explorer".into(),
-                    rect: rect(160, 30, 40, 20),
-                },
-            ],
-            splits: vec![Split {
-                direction: "down".into(),
-                ratio: 0.6,
-                rect: rect(160, 0, 40, 50),
-            }],
-            zoomed: false,
-            focused_pane_id: None,
-        };
-        // 29 rows inside 30: a border of 1, so 6 rows in all.
-        let delta = ratio_change(&layout, "bar", 29).unwrap();
-        assert!((delta - (6.25 / 50.0 - 0.6)).abs() < 1e-9);
-        assert_eq!(ratio_change(&layout, "explorer", 19), None);
-        // Taller than it asks for, but already at Herdr's smallest share.
-        let mut low = layout;
-        low.splits[0].ratio = MIN_RATIO;
-        low.splits[0].rect.height = 60;
-        low.panes[0].rect.height = 6;
-        assert_eq!(ratio_change(&low, "bar", 5), None);
-    }
 
     #[test]
     fn only_other_panes_are_terminals() {
