@@ -2,13 +2,13 @@
 
 [English](../../en/plugins/menu.md) · **Français**
 
-Lance un outil (lazygit, gh-dash, VS Code…) d'un clic ou d'une touche. Dans un onglet qui affiche l'explorateur de fichiers de [herdr-explorer](https://github.com/gcaudan/herdr-explorer), le menu est un petit pane `Tools` au-dessus de lui, dans sa colonne : icônes, noms et chiffres sur le dossier du workspace. Ailleurs, c'est un petit popup. Les outils en terminal s'ouvrent dans un grand popup au-dessus du workspace courant ; les onglets et les panes restent tels quels derrière, et quitter l'outil ferme le popup.
+Lance un outil (lazygit, gh-dash, VS Code…) d'un clic ou d'une touche, met à jour Herdr et ouvre les fichiers de réglages. Dans un onglet qui affiche l'explorateur de fichiers de [herdr-explorer](https://github.com/gcaudan/herdr-explorer), le menu est un petit pane `Tools` au-dessus de lui, dans sa colonne : icônes, noms et chiffres sur le dossier du workspace. Ailleurs, c'est un petit popup. Les outils en terminal s'ouvrent dans un grand popup au-dessus du workspace courant ; les onglets et les panes restent tels quels derrière, et quitter l'outil ferme le popup.
 
 ```
-      󰊢        󰊤        󰨞
-   lazygit  gh-dash  VS Code
+   󰊢        󰊤        󰨞       󰚰       󰒓
+lazygit  gh-dash  VS Code   Herdr  Réglages
 
-     1,5G · 0,2 % du disque
+     1,5G · 0,2% du disque
          3 552 fichiers
 ```
 
@@ -52,8 +52,10 @@ Sans configuration, le menu propose :
 | `l` | lazygit | `lazygit` |
 | `g` | gh-dash | `gh dash` (l'extension [gh-dash](https://github.com/dlvhdr/gh-dash) de la CLI GitHub) |
 | `c` | VS Code | `code .` : le dossier du workspace dans VS Code |
+| `u` | Herdr | action intégrée `update-herdr` : met à jour Herdr, voir [plus bas](#entrées-intégrées) |
+| `s` | Réglages | action intégrée `settings` : ouvre les fichiers de réglages, voir [plus bas](#entrées-intégrées) |
 
-Pour choisir les vôtres, écrivez `menu.toml` dans le dossier de configuration du plugin (`herdr plugin config-dir imsike.menu` l'affiche). Le fichier remplace les entrées intégrées :
+Pour choisir les vôtres, écrivez `menu.toml` dans le dossier de configuration du plugin (`herdr plugin config-dir imsike.menu` l'affiche ; l'entrée **Réglages** l'ouvre, après l'avoir créé avec tous les réglages en commentaire). Ses entrées remplacent toutes les entrées intégrées ; un fichier sans entrée les garde :
 
 ```toml
 [[entries]]
@@ -73,7 +75,19 @@ key = "c"
 label = "VS Code"
 command = ["code", "."]
 popup = false             # un programme avec sa propre fenêtre : pas de popup
+
+[[entries]]
+key = "u"
+label = "Herdr"
+action = "update-herdr"   # ou "settings" : une entrée intégrée, à la place de command
 ```
+
+En tête du fichier, avant les entrées, les réglages des chiffres sous les icônes :
+
+| Réglage | Par défaut | Effet |
+|---|---|---|
+| `decimal_comma` | `true` | `1,5G` (`true`) ou `1.5G` (`false`) |
+| `percent_space` | `false` | `0,2%` (`false`) ou `0,2 %` avec une espace fine insécable (`true`) |
 
 Le dossier où démarre un outil :
 
@@ -84,7 +98,27 @@ Le dossier où démarre un outil :
 
 Sous Windows, une commande est cherchée dans le `PATH`, avant les dossiers du système (`bash` est le premier du `PATH`, Git Bash par exemple, pas celui de WSL), et un fichier batch (`code` est `code.cmd`) se lance sans préciser son extension.
 
-Un fichier illisible ou invalide (champ inconnu, commande vide, touche utilisée deux fois) est ignoré : le menu affiche les entrées intégrées, et affiche l'erreur : le menu en popup au-dessus de sa ligne d'aide, le pane `Tools` en rouge à la place des chiffres pendant 5 secondes. Le pane `Tools` lit le fichier à son ouverture, le menu en popup à chaque ouverture ; aucun rechargement n'est nécessaire. Un outil démarre tel que le menu l'affichait, même si le fichier a changé entre-temps.
+Un fichier illisible ou invalide (champ inconnu, commande vide, commande et action à la fois, touche utilisée deux fois) est ignoré : le menu affiche les entrées intégrées, et affiche l'erreur : le menu en popup au-dessus de sa ligne d'aide, le pane `Tools` en rouge à la place des chiffres pendant 5 secondes. Le pane `Tools` lit le fichier à son ouverture, le menu en popup à chaque ouverture ; aucun rechargement n'est nécessaire. Un outil démarre tel que le menu l'affichait, même si le fichier a changé entre-temps.
+
+## Entrées intégrées
+
+Les deux tournent dans le grand popup, qui montre ce qu'elles font et demande avant tout ce qui ne peut pas être annulé.
+
+**Herdr** (`u`) installe la dernière version de Herdr avec `herdr update` (avec `--handoff` quand le serveur sait passer ses sessions à la nouvelle version, ce qu'il ne sait pas faire sous Windows). Puis `herdr status --json` indique si le serveur en cours est encore l'ancienne version :
+
+- sinon, le popup dit que Herdr est à jour et attend Entrée ;
+- si oui, il dit combien de panes se ferment et combien d'agents s'arrêtent (`5 panes, dont 2 agents (1 au travail)`) et demande `Redémarrer maintenant ? [o/N]`. Toute autre réponse que `o` (ou `oui`) annule : la nouvelle version tournera au prochain démarrage de Herdr.
+- Une fois confirmé, `herdr` est mis dans le presse-papiers (avec `clip`, `pbcopy`, `wl-copy`, `xclip` ou `xsel`, le premier qui fonctionne), et Entrée arrête le serveur (`herdr server stop`) : **tous les panes se ferment et tous les agents s'arrêtent**, comme quand on quitte Herdr. Collez la commande dans le terminal pour relancer Herdr.
+
+**Réglages** (`s`) ouvre dans un éditeur, ensemble :
+
+- le `config.toml` de Herdr (le chemin que donne l'aide de Herdr, qui suit `HERDR_CONFIG_PATH`) ;
+- le `menu.toml` du menu ;
+- le `sidebar.toml` de la sidebar, quand le plugin [sidebar](sidebar.md) est installé.
+
+Le fichier d'un plugin qui n'existe pas encore est d'abord créé avec tous les réglages en commentaire, à leur valeur par défaut. L'éditeur est `VISUAL`, sinon `EDITOR` (arguments permis : `code --wait`) ; sans eux, sous Windows, VS Code (`code --wait` : le popup attend que les onglets des fichiers soient fermés) quand il est dans le `PATH`, sinon le Bloc-notes, un fichier après l'autre ; ailleurs `nano`, sinon `vi`. Une fois l'éditeur fermé, le popup vérifie `menu.toml`, puis `config.toml` (`herdr config check`), et recharge la configuration de Herdr (`herdr server reload-config`) ; une erreur reste affichée jusqu'à Entrée. La sidebar lit son fichier à chaque passage ; le pane `Tools` lit `menu.toml` à son ouverture (`prefix+space` deux fois).
+
+Le plugin ne fait qu'ouvrir le `config.toml` de Herdr : il ne l'écrit jamais ([ADR 0004](../adr/0004-plugin-settings.md), [ADR 0005](../adr/0005-herdr-update-entry.md)).
 
 ## Fonctionnement, implications
 
@@ -116,4 +150,4 @@ Les commandes tournent sous votre compte, avec votre environnement, comme tout p
 
 ## Désactiver
 
-Retirez la touche de `config.toml`, puis `herdr plugin disable imsike.menu` (ou `herdr plugin uninstall imsike.menu`) : les panes `Tools` se ferment avec leur explorateur ou au redémarrage suivant. `menu.toml` reste dans le dossier de configuration, et les fichiers des chiffres dans le dossier d'état, jusqu'à ce que vous les supprimiez.
+Pour retirer une entrée intégrée, listez dans `menu.toml` les entrées à garder. Pour désactiver tout le menu, retirez la touche de `config.toml`, puis `herdr plugin disable imsike.menu` (ou `herdr plugin uninstall imsike.menu`) : les panes `Tools` se ferment avec leur explorateur ou au redémarrage suivant. `menu.toml` reste dans le dossier de configuration, et les fichiers des chiffres dans le dossier d'état, jusqu'à ce que vous les supprimiez.

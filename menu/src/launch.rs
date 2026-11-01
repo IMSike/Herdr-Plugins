@@ -2,7 +2,7 @@
 //! programs that open their own window (`popup = false`).
 
 use crate::config::Entry;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 /// The command of `argv`, without a shell. On Windows a bare name is looked
@@ -22,23 +22,31 @@ fn program(name: &str) -> std::ffi::OsString {
     if bare.extension().is_some() || bare.components().count() > 1 {
         return name.into();
     }
-    let Some(path) = std::env::var_os("PATH") else {
-        return name.into();
-    };
-    for dir in std::env::split_paths(&path) {
-        for ext in ["exe", "cmd", "bat"] {
-            let file = dir.join(format!("{name}.{ext}"));
-            if file.is_file() {
-                return file.into_os_string();
-            }
-        }
-    }
-    name.into()
+    find_on_path(name).map_or_else(|| name.into(), PathBuf::into_os_string)
 }
 
 #[cfg(not(windows))]
 fn program(name: &str) -> std::ffi::OsString {
     name.into()
+}
+
+/// Where the program `name` is on `PATH`, if it is there.
+pub fn find_on_path(name: &str) -> Option<PathBuf> {
+    let extensions: &[&str] = if cfg!(windows) {
+        &["exe", "cmd", "bat"]
+    } else {
+        &[""]
+    };
+    std::env::split_paths(&std::env::var_os("PATH")?).find_map(|dir| {
+        extensions.iter().find_map(|ext| {
+            let file = if ext.is_empty() {
+                dir.join(name)
+            } else {
+                dir.join(format!("{name}.{ext}"))
+            };
+            file.is_file().then_some(file)
+        })
+    })
 }
 
 /// Starts the entry without waiting for it: its output goes nowhere.

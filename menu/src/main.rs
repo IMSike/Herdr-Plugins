@@ -14,6 +14,7 @@
 //!    is gone, however the popup was closed.
 //! 4. `run` (popup) runs the entry's command in that folder.
 
+mod actions;
 mod bar;
 mod config;
 mod herdr;
@@ -52,8 +53,8 @@ fn main() -> ExitCode {
         Some("menu") => menu(),
         Some("run") => run(),
         Some("bar") => {
-            let (entries, error) = entries();
-            bar::run(&entries, error)
+            let (menu, error) = menu_config();
+            bar::run(&menu, error)
         }
         Some("startup") => bar::startup(),
         Some("pane-created") => bar::on_pane_created(),
@@ -69,9 +70,12 @@ fn main() -> ExitCode {
     }
 }
 
-fn entries() -> (Vec<Entry>, Option<String>) {
-    let dir = std::env::var_os(herdr_api::env::CONFIG_DIR).map(PathBuf::from);
-    config::load(dir.as_deref())
+fn menu_config() -> (config::Menu, Option<String>) {
+    config::load(config_dir().as_deref())
+}
+
+pub(crate) fn config_dir() -> Option<PathBuf> {
+    std::env::var_os(herdr_api::env::CONFIG_DIR).map(PathBuf::from)
 }
 
 /// A choice: the entry as the menu showed it, and the folder to start in.
@@ -120,7 +124,7 @@ fn open() -> Result<(), String> {
     };
     let cwd = choice.cwd.as_deref();
     // A program with a window of its own starts without the popup.
-    if !choice.entry.popup {
+    if !choice.entry.in_popup() {
         return launch::detach(&choice.entry, cwd.map(Path::new));
     }
     run_in_popup(&choice.entry, cwd)
@@ -266,7 +270,8 @@ fn menu() -> Result<(), String> {
     // Tells the waiting action that the menu runs, and which process to watch.
     let me = MenuProcess::this().encode();
     let _ = herdr_api::write_atomic(&pid_file(&choice_file), me.as_bytes());
-    let (entries, error) = entries();
+    let (menu, error) = menu_config();
+    let entries = menu.entries;
     let context = Context::from_env();
     let title = context
         .workspace_cwd
@@ -289,12 +294,16 @@ fn menu() -> Result<(), String> {
 fn run() -> Result<(), String> {
     let result = run_entry();
     if let Err(message) = &result {
-        // The popup closes with this process: leave the message on screen until Enter.
-        println!("{message}\n\nAppuyer sur Entrée pour fermer.");
-        let _ = io::stdout().flush();
-        let _ = io::stdin().read_line(&mut String::new());
+        pause(&format!("{message}\n\nAppuyer sur Entrée pour fermer."));
     }
     result
+}
+
+/// Leaves `message` on screen until Enter: the popup closes with this process.
+pub(crate) fn pause(message: &str) {
+    println!("{message}");
+    let _ = io::stdout().flush();
+    let _ = io::stdin().read_line(&mut String::new());
 }
 
 /// Runs the entry the menu or the bar showed, not one read again from
@@ -303,6 +312,9 @@ fn run_entry() -> Result<(), String> {
     let json = herdr_api::var(ENTRY_ENV)?;
     let entry: Entry =
         serde_json::from_str(&json).map_err(|e| format!("{ENTRY_ENV} illisible : {e}"))?;
+    if let Some(action) = entry.action {
+        return actions::run(action);
+    }
     let mut command = launch::command(&entry.command)?;
     if let Some(cwd) = std::env::var_os(CWD_ENV) {
         command.current_dir(cwd);

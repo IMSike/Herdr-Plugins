@@ -15,7 +15,7 @@
 
 mod geometry;
 
-use crate::config::Entry;
+use crate::config::{Entry, Menu};
 use crate::herdr::{self, Context, Pane};
 use crate::stats::{self, Measured, Stats};
 use crate::ui::{Screen, fit};
@@ -27,6 +27,7 @@ use crossterm::queue;
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use crossterm::terminal::{self, Clear, ClearType};
 use geometry::{Layout, ROWS, centered, ratio_change, slot_at, slots};
+use herdr_api::NumberFormat;
 use serde_json::{Value, json};
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -268,9 +269,9 @@ fn folders(me: &str) -> (Option<PathBuf>, Option<PathBuf>) {
 
 /// Runs the bar until it is closed or no longer has a place. `error` says
 /// why `menu.toml` was ignored: it is shown first, in place of the figures.
-pub fn run(entries: &[Entry], error: Option<String>) -> Result<(), String> {
+pub fn run(menu: &Menu, error: Option<String>) -> Result<(), String> {
     let me = herdr_api::var(herdr_api::env::PANE_ID)?;
-    let result = show(&me, entries, error).map_err(|e| e.to_string());
+    let result = show(&me, &menu.entries, menu.numbers, error).map_err(|e| e.to_string());
     let _ = herdr::close(&me);
     result
 }
@@ -365,6 +366,7 @@ fn measure_in_background(root: PathBuf) -> Measurer {
 #[derive(Clone, PartialEq)]
 struct View<'a> {
     entries: &'a [Entry],
+    numbers: NumberFormat,
     hover: Option<usize>,
     /// The pointer is over the figures.
     hover_figures: bool,
@@ -375,7 +377,12 @@ struct View<'a> {
     measuring: bool,
 }
 
-fn show(me: &str, entries: &[Entry], error: Option<String>) -> io::Result<()> {
+fn show(
+    me: &str,
+    entries: &[Entry],
+    numbers: NumberFormat,
+    error: Option<String>,
+) -> io::Result<()> {
     let _screen = Screen::enter()?;
     let measurer = folders(me).0.map(measure_in_background);
     // Launches run on threads of their own: the bar keeps answering while a
@@ -386,6 +393,7 @@ fn show(me: &str, entries: &[Entry], error: Option<String>) -> io::Result<()> {
     let mut message_until = Instant::now() + MESSAGE_FOR;
     let mut view = View {
         entries,
+        numbers,
         hover: None,
         hover_figures: false,
         message: error,
@@ -545,7 +553,11 @@ fn draw(view: &View) -> io::Result<()> {
             }
             let refresh = if view.measuring { "…" } else { REFRESH };
             vec![
-                (stats::size_line(stats), Color::DarkGrey, String::new()),
+                (
+                    stats::size_line(stats, &view.numbers),
+                    Color::DarkGrey,
+                    String::new(),
+                ),
                 (files, Color::DarkGrey, format!(" {refresh}")),
             ]
         }
@@ -577,7 +589,7 @@ fn draw(view: &View) -> io::Result<()> {
 fn launch(me: &str, entry: &Entry) -> Result<(), String> {
     let (explorer, terminal) = folders(me);
     let cwd = herdr::start_folder(entry.cwd, explorer, terminal);
-    if !entry.popup {
+    if !entry.in_popup() {
         return crate::launch::detach(entry, cwd.as_deref());
     }
     let cwd = cwd.map(|p| p.to_string_lossy().into_owned());
@@ -636,6 +648,8 @@ mod tests {
             workspace_id: "w".into(),
             label: label.map(str::to_string),
             cwd: None,
+            agent: None,
+            agent_status: None,
         };
         assert!(is_terminal(&pane(None)));
         assert!(is_terminal(&pane(Some("lazygit"))));

@@ -1,0 +1,16 @@
+# Réglages de la barre latérale (imsike.sidebar). Une ligne commentée garde sa
+# valeur par défaut. Chaque passage du plugin relit ce fichier.
+# Couleurs et ordre des valeurs : section [ui.sidebar] du config.toml de Herdr.
+
+# 2,4G plutôt que 2.4G.
+# decimal_comma = true
+
+# 4 % plutôt que 4%.
+# percent_space = false
+
+# Durée de vie d'une valeur, en secondes, quand plus aucun passage ne la
+# rafraîchit (plugin retiré, Herdr qui ne lance plus la commande).
+# ttl_seconds = 20
+
+# Noms des processus comptés comme shells (sans .exe, casse indifférente).
+# shells = ["bash", "sh", "zsh", "fish", "dash", "nu", "pwsh", "powershell", "cmd"]

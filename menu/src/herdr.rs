@@ -61,6 +61,11 @@ pub struct Pane {
     pub label: Option<String>,
     #[serde(default)]
     pub cwd: Option<PathBuf>,
+    /// The agent Herdr detected in the pane.
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub agent_status: Option<String>,
 }
 
 fn panes(params: Value) -> Result<Vec<Pane>, String> {
@@ -89,6 +94,16 @@ pub fn pane(pane_id: &str) -> Result<Pane, String> {
         json!({ "pane_id": pane_id }),
         "pane",
     )?)
+}
+
+/// Whether the plugin `id` is installed.
+pub fn has_plugin(id: &str) -> Result<bool, String> {
+    #[derive(Deserialize)]
+    struct Plugin {
+        plugin_id: String,
+    }
+    let plugins: Vec<Plugin> = herdr_api::request_field("plugin.list", json!({}), "plugins")?;
+    Ok(plugins.iter().any(|p| p.plugin_id == id))
 }
 
 pub fn close(pane_id: &str) -> Result<(), String> {

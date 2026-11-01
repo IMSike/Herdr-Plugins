@@ -117,6 +117,7 @@ mod tests {
             key: 'x',
             label: label.into(),
             command: vec!["x".into()],
+            action: None,
             cwd: StartIn::Workspace,
             icon: None,
             popup: true,

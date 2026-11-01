@@ -1,5 +1,7 @@
 //! The figures as the bar writes them, in French.
 
+use herdr_api::NumberFormat;
+
 use super::Stats;
 
 /// `3 h`, `2 j`: how old the figures are, from an hour on.
@@ -17,14 +19,17 @@ fn at_least(stats: &Stats) -> &'static str {
     if stats.complete { "" } else { "≥ " }
 }
 
-/// `850M · 0,3 % du disque`: the size, and its share of the disk.
-pub fn size_line(stats: &Stats) -> String {
+/// `850M · 0,3% du disque`: the size, and its share of the disk.
+pub fn size_line(stats: &Stats, numbers: &NumberFormat) -> String {
     let more = at_least(stats);
-    let size = herdr_api::format_size(stats.bytes);
+    let size = numbers.size(stats.bytes);
     match stats.disk.filter(|&d| d > 0) {
         Some(disk) => {
             let share = stats.bytes as f64 * 100.0 / disk as f64;
-            format!("{more}{size} · {more}{} du disque", format_share(share))
+            format!(
+                "{more}{size} · {more}{} du disque",
+                format_share(share, numbers)
+            )
         }
         None => format!("{more}{size}"),
     }
@@ -40,15 +45,14 @@ pub fn files_line(stats: &Stats) -> String {
     format!("{}{} {unit}", at_least(stats), group_thousands(stats.files))
 }
 
-/// `0,3 %`, `12 %`, `< 0,1 %`.
-fn format_share(percent: f64) -> String {
-    use herdr_api::format_percent;
+/// `0,3%`, `12%`, `< 0,1%`.
+fn format_share(percent: f64, numbers: &NumberFormat) -> String {
     if percent < 0.1 {
-        format!("< {}", format_percent("0,1"))
+        format!("< {}", numbers.percent(numbers.decimal(0.1)))
     } else if percent < 10.0 {
-        format_percent(format!("{percent:.1}").replace('.', ","))
+        numbers.percent(numbers.decimal(percent))
     } else {
-        format_percent(format!("{percent:.0}"))
+        numbers.percent(format!("{percent:.0}"))
     }
 }
 
@@ -74,9 +78,15 @@ mod tests {
         assert_eq!(age_label(3599), None);
         assert_eq!(age_label(3 * 3600), Some("3 h".into()));
         assert_eq!(age_label(50 * 3600), Some("2 j".into()));
-        assert_eq!(format_share(0.05), "< 0,1\u{202F}%");
-        assert_eq!(format_share(0.34), "0,3\u{202F}%");
-        assert_eq!(format_share(12.4), "12\u{202F}%");
+        let numbers = NumberFormat::default();
+        assert_eq!(format_share(0.05, &numbers), "< 0,1%");
+        assert_eq!(format_share(0.34, &numbers), "0,3%");
+        assert_eq!(format_share(12.4, &numbers), "12%");
+        let spaced = NumberFormat {
+            decimal_comma: false,
+            percent_space: true,
+        };
+        assert_eq!(format_share(0.34, &spaced), "0.3\u{202F}%");
         assert_eq!(group_thousands(4210), "4\u{202F}210");
         assert_eq!(group_thousands(999), "999");
         assert_eq!(group_thousands(1_234_567), "1\u{202F}234\u{202F}567");
@@ -87,7 +97,7 @@ mod tests {
             complete: true,
             entries: 2,
         };
-        assert_eq!(size_line(&stats), "850M");
+        assert_eq!(size_line(&stats, &numbers), "850M");
         assert_eq!(files_line(&stats), "1 fichier");
         let partial = Stats {
             files: 200_000,
@@ -95,7 +105,7 @@ mod tests {
             complete: false,
             ..stats
         };
-        assert_eq!(size_line(&partial), "≥ 850M · ≥ 0,8\u{202F}% du disque");
+        assert_eq!(size_line(&partial, &numbers), "≥ 850M · ≥ 0,8% du disque");
         assert_eq!(files_line(&partial), "≥ 200 000 fichiers");
     }
 }
