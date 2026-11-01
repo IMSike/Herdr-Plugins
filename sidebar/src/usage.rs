@@ -101,6 +101,9 @@ pub struct Table<'a> {
     by_pid: HashMap<u32, &'a Proc>,
     children: HashMap<u32, Vec<u32>>,
     previous: &'a Sample,
+    /// How far every start time moved since the previous sample, in seconds:
+    /// on Linux they follow a change of the wall clock. 0 otherwise.
+    shift: i64,
 }
 
 impl<'a> Table<'a> {
@@ -116,12 +119,20 @@ impl<'a> Table<'a> {
             by_pid,
             children,
             previous,
+            shift: clock_shift(procs, previous),
         }
     }
 
     /// When `pid` started, if it runs.
     pub fn start_time(&self, pid: u32) -> Option<u64> {
         self.by_pid.get(&pid).map(|p| p.start_time)
+    }
+
+    /// Whether a process started at `now` (as read now) is the one the
+    /// previous run saw start at `then`. A second either way: the system's
+    /// own correction of its clock can move start times by one.
+    pub fn same_start(&self, now: u64, then: u64) -> bool {
+        (now as i64 - then as i64 - self.shift).abs() <= 1
     }
 
     /// Usage of `root` and all its descendants.
@@ -163,11 +174,38 @@ impl<'a> Table<'a> {
 
     fn cpu_since_previous(&self, proc: &Proc) -> u64 {
         match self.previous.cpu.get(&proc.pid) {
-            Some(&(start, cpu)) if start == proc.start_time => proc.cpu_ms.saturating_sub(cpu),
+            Some(&(start, cpu))
+                if self.same_start(proc.start_time, start) && proc.cpu_ms >= cpu =>
+            {
+                proc.cpu_ms - cpu
+            }
             // Started since the previous sample: all of its CPU time is new.
             _ => proc.cpu_ms,
         }
     }
+}
+
+/// The move of start times that most processes still running share with
+/// the previous sample, when more than half of them do: one process given a
+/// reused pid does not make it.
+fn clock_shift(procs: &[Proc], previous: &Sample) -> i64 {
+    let mut counts: HashMap<i64, usize> = HashMap::new();
+    let mut matched = 0;
+    for p in procs {
+        if let Some(&(start, cpu)) = previous.cpu.get(&p.pid)
+            && p.cpu_ms >= cpu
+        {
+            matched += 1;
+            *counts
+                .entry(p.start_time as i64 - start as i64)
+                .or_default() += 1;
+        }
+    }
+    counts
+        .into_iter()
+        .max_by_key(|&(shift, n)| (n, std::cmp::Reverse(shift.abs())))
+        .filter(|&(_, n)| n * 2 > matched)
+        .map_or(0, |(shift, _)| shift)
 }
 
 fn is_shell(name: &str) -> bool {
@@ -176,22 +214,18 @@ fn is_shell(name: &str) -> bool {
     SHELLS.contains(&name)
 }
 
-/// A process tree's CPU share of the whole machine, in percent.
-pub fn cpu_share(cpu_ms: u64, elapsed_ms: u64, cores: usize) -> f64 {
-    if elapsed_ms == 0 || cores == 0 {
+/// A process tree's CPU share of the whole machine, in percent: its CPU
+/// time against `all_cores_ms`, the time of all cores together.
+pub fn cpu_share(cpu_ms: u64, all_cores_ms: u64) -> f64 {
+    if all_cores_ms == 0 {
         return 0.0;
     }
-    (cpu_ms as f64 * 100.0 / (elapsed_ms as f64 * cores as f64)).min(100.0)
+    (cpu_ms as f64 * 100.0 / all_cores_ms as f64).min(100.0)
 }
 
-/// A report's `seq`: the time `now`, never at or below the `last` one.
-pub fn next_seq(now: u64, last: Option<u64>) -> u64 {
-    last.map_or(now, |last| now.max(last + 1))
-}
-
-/// Rounded to the percent, to keep lines short: `0%`, `12%`.
+/// Rounded to the percent, to keep lines short: `0 %`, `12 %`.
 pub fn format_cpu(percent: f64) -> String {
-    format!("{percent:.0}%")
+    herdr_api::format_percent(format!("{percent:.0}"))
 }
 
 #[cfg(test)]
@@ -256,19 +290,30 @@ mod tests {
 
     #[test]
     fn formats() {
-        assert_eq!(cpu_share(500, 1000, 4), 12.5);
-        assert_eq!(cpu_share(1, 0, 4), 0.0);
-        assert_eq!(format_cpu(0.42), "0%");
-        assert_eq!(format_cpu(0.6), "1%");
-        assert_eq!(format_cpu(12.5), "12%");
+        assert_eq!(cpu_share(500, 4000), 12.5);
+        assert_eq!(cpu_share(1, 0), 0.0);
+        assert_eq!(format_cpu(0.42), "0\u{202F}%");
+        assert_eq!(format_cpu(0.6), "1\u{202F}%");
+        assert_eq!(format_cpu(12.5), "12\u{202F}%");
         assert!(is_shell("PowerShell.exe") && is_shell("bash") && !is_shell("node.exe"));
     }
 
     #[test]
-    fn seq_goes_on_when_the_clock_goes_back() {
-        assert_eq!(next_seq(5_000, None), 5_000);
-        assert_eq!(next_seq(5_000, Some(4_000)), 5_000);
-        assert_eq!(next_seq(5_000, Some(9_000)), 9_001);
+    fn follows_processes_across_a_clock_change() {
+        // Every start time moved 30 seconds: the same processes, not new ones.
+        let procs = vec![
+            proc(1, None, 130, 60, "a"),
+            proc(2, Some(1), 140, 70, "b"),
+            proc(3, Some(1), 150, 80, "c"),
+        ];
+        let previous = Sample {
+            at_ms: 0,
+            cpu: HashMap::from([(1, (100, 50)), (2, (110, 50)), (3, (120, 50))]),
+            ..Sample::default()
+        };
+        let table = Table::new(&procs, &previous);
+        assert_eq!(table.tree(1).cpu_ms, 10 + 20 + 30);
+        assert!(table.same_start(130, 100) && !table.same_start(130, 130));
     }
 
     #[test]

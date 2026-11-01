@@ -86,8 +86,8 @@ pub fn blocks(spaces: &[Space], agents: &[Agent]) -> Vec<Block> {
     blocks
 }
 
-/// The glyph also lets sidebar rules colour the line by state.
-pub fn status_glyph(status: &str) -> char {
+/// The glyph also lets sidebar rules color the line by state.
+fn status_glyph(status: &str) -> char {
     match status {
         "working" => '◐',
         "blocked" => '◆',

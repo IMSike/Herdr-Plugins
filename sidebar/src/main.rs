@@ -11,6 +11,7 @@
 //! - `show` prints the tokens without reporting them.
 
 mod machine;
+mod seq;
 mod snapshot;
 mod tokens;
 mod tree;
@@ -21,7 +22,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::{Map, Value, json};
 use sysinfo::{MemoryRefreshKind, ProcessRefreshKind, ProcessesToUpdate, System};
@@ -42,6 +43,10 @@ const STALE_AFTER: Duration = Duration::from_secs(60);
 /// Tokens vanish when no run refreshes them (Herdr closed the tab bar
 /// entry, or the plugin was removed).
 const TOKEN_TTL_MS: u64 = 20_000;
+/// A run still asking Herdr after this long stops: a slow Herdr is not
+/// sent more requests, and the tab bar entry (`timeout_seconds = 5`) is not
+/// held up.
+const RUN_DEADLINE: Duration = Duration::from_secs(4);
 
 fn main() -> ExitCode {
     let result = match std::env::args().nth(1).as_deref() {
@@ -104,11 +109,8 @@ fn take_lock(dir: &Path) -> io::Result<bool> {
         {
             Ok(_) => return Ok(true),
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                let stale = fs::metadata(&lock)
-                    .and_then(|m| m.modified())
-                    .ok()
-                    .and_then(|modified| modified.elapsed().ok())
-                    .is_some_and(|age| age > STALE_AFTER);
+                let stale =
+                    fs::metadata(&lock).is_ok_and(|m| herdr_api::is_older_than(&m, STALE_AFTER));
                 let taken = lock.with_extension(format!("{}.stale", std::process::id()));
                 if !stale || fs::rename(&lock, &taken).is_err() {
                     return Ok(false);
@@ -128,7 +130,7 @@ fn replace(dir: &Path, source: &Path, target: &Path) -> Result<(), String> {
     // (one still running cannot be removed on Windows: a later install will).
     herdr_api::remove_stale(dir, STALE_AFTER, |name| name.ends_with(".partial"));
     herdr_api::remove_stale(dir, Duration::ZERO, |name| name.ends_with(".old"));
-    if fs::read(target).ok() == Some(fs::read(source).map_err(|e| e.to_string())?) {
+    if is_same_file_content(source, target).map_err(|e| e.to_string())? {
         return Ok(());
     }
     // Named after this process: an install that took over a stale lock
@@ -149,6 +151,18 @@ fn replace(dir: &Path, source: &Path, target: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Whether `target` holds what `source` does; the sizes first, which spare
+/// reading both when they differ.
+fn is_same_file_content(source: &Path, target: &Path) -> io::Result<bool> {
+    let Ok(copy) = fs::metadata(target) else {
+        return Ok(false);
+    };
+    if copy.len() != fs::metadata(source)?.len() {
+        return Ok(false);
+    }
+    Ok(fs::read(target).ok() == Some(fs::read(source)?))
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
     /// Run by the tab bar entry: report, save the sample, print the totals.
@@ -160,6 +174,8 @@ enum Mode {
 }
 
 fn tick(mode: Mode) -> Result<(), String> {
+    let started = Instant::now();
+    let late = || mode != Mode::Show && started.elapsed() >= RUN_DEADLINE;
     let state_dir = match herdr_api::state_dir() {
         Ok(dir) => dir,
         // The tab bar entry gets no plugin context: it runs the copy that
@@ -190,10 +206,14 @@ fn tick(mode: Mode) -> Result<(), String> {
         Mode::Show => 0,
         _ => next_seq(&state_dir.join(SEQ_FILE)),
     };
+    // Past the deadline, the reports left are not sent: the run fails at
+    // the end, and the next one sends them all again.
     let send = |pane_id: &str, tokens: Map<String, Value>| match mode {
         Mode::Show => println!("{pane_id} : {}", Value::Object(tokens)),
+        _ if late() => {}
         _ => report(pane_id, tokens, seq),
     };
+    let too_slow = || Err("Herdr trop lent : passage interrompu".to_string());
 
     let snapshot: Snapshot = request_field("session.snapshot", json!({}), "snapshot")?;
     let agents = snapshot.agents();
@@ -211,26 +231,38 @@ fn tick(mode: Mode) -> Result<(), String> {
                 send(&block.pane_id, tokens);
             }
         }
-        return Ok(());
+        return if late() { too_slow() } else { Ok(()) };
     };
 
-    let saved = read_sample(&sample_path);
-    let known_shells = saved.as_ref().map(|s| s.shells.clone()).unwrap_or_default();
+    let mut saved = read_sample(&sample_path);
+    let known_shells = saved
+        .as_mut()
+        .map(|s| std::mem::take(&mut s.shells))
+        .unwrap_or_default();
     let previous = first.or_else(|| saved.filter(|s| s.is_usable(now)));
-    let elapsed = previous.as_ref().map(|s| now.saturating_sub(s.at_ms));
     let empty = Sample::default();
     let table = Table::new(&system.processes, previous.as_ref().unwrap_or(&empty));
-    let cores = machine::cores()
-        .or_else(|| std::thread::available_parallelism().ok().map(|n| n.get()))
-        .unwrap_or(1);
-    let cpu = |u: &Usage| elapsed.map(|e| format_cpu(cpu_share(u.cpu_ms, e, cores)));
+    // The time of all cores together since the previous run, from the
+    // system's CPU times, which a change of the wall clock does not move;
+    // the wall clock where the system gives none.
+    let all_cores_ms = previous.as_ref().map(|p| {
+        p.machine
+            .zip(system.cpu_times)
+            .and_then(|(before, after)| machine::all_cores_ms_between(before, after))
+            .unwrap_or_else(|| {
+                let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
+                now.saturating_sub(p.at_ms) * cores as u64
+            })
+    });
+    let cpu = |u: &Usage| all_cores_ms.map(|ms| format_cpu(cpu_share(u.cpu_ms, ms)));
 
     let mut shells: HashMap<String, Shell> = HashMap::new();
     let mut sums: Vec<(String, Usage)> = Vec::new();
     let mut total = Usage::default();
     let mut usages: Vec<(&str, Usage)> = Vec::new();
     for pane in &snapshot.panes {
-        let Some(shell) = shell_of(pane, known_shells.get(&pane.pane_id), &table) else {
+        let known = known_shells.get(&pane.pane_id);
+        let Some(shell) = shell_of(pane, known, &table, !late()) else {
             continue;
         };
         let usage = table.tree(shell.pid);
@@ -272,27 +304,30 @@ fn tick(mode: Mode) -> Result<(), String> {
         sample.shells = shells;
         write_sample(&sample_path, &sample);
     }
+    if late() {
+        return too_slow();
+    }
     Ok(())
 }
 
 /// The pane's shell: the one the last run found, while its terminal and its
-/// process are the same; otherwise Herdr is asked.
-fn shell_of(pane: &Pane, known: Option<&Shell>, table: &Table) -> Option<Shell> {
+/// process are the same; otherwise Herdr is asked, when `may_ask`.
+fn shell_of(pane: &Pane, known: Option<&Shell>, table: &Table, may_ask: bool) -> Option<Shell> {
     if let Some(known) = known
         && known.terminal_id == pane.terminal_id
-        && table.start_time(known.pid) == Some(known.start_time)
+        && let Some(start_time) = table.start_time(known.pid)
+        && table.same_start(start_time, known.start_time)
     {
-        return Some(known.clone());
+        // As read now: the next run compares with this one.
+        return Some(Shell {
+            start_time,
+            ..known.clone()
+        });
     }
-    let pid: u32 = request_field::<Value>(
-        "pane.process_info",
-        json!({ "pane_id": pane.pane_id }),
-        "process_info",
-    )
-    .ok()?
-    .get("shell_pid")?
-    .as_u64()
-    .and_then(|pid| u32::try_from(pid).ok())?;
+    if !may_ask {
+        return None;
+    }
+    let pid = herdr_api::process_info(&pane.pane_id).ok()?.shell_pid?;
     Some(Shell {
         terminal_id: pane.terminal_id.clone(),
         pid,
@@ -361,13 +396,12 @@ fn read_system() -> Result<Reading, String> {
     })
 }
 
-/// The `seq` of this run's reports: the time, or one more than the last
-/// run's when the clock was set back since.
+/// The `seq` of this run's reports, kept for the next run (see `seq::next`).
 fn next_seq(path: &Path) -> u64 {
     let last = fs::read_to_string(path)
         .ok()
         .and_then(|text| text.trim().parse().ok());
-    let seq = usage::next_seq(unix_millis(), last);
+    let seq = seq::next(unix_millis(), last, std::process::id());
     let _ = herdr_api::write_atomic(path, seq.to_string().as_bytes());
     seq
 }
