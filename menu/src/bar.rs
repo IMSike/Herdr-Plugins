@@ -55,37 +55,41 @@ const MESSAGE_FOR: Duration = Duration::from_secs(5);
 const FIGURES_TOP: u16 = 2;
 /// After the figures: a click measures them again (Nerd Font `nf-md-refresh`).
 const REFRESH: &str = "\u{F0450}";
-/// A bar just opened may not run its program yet: how long to wait for it.
-const STARTING: Duration = Duration::from_secs(2);
+/// A bar just opened may not run its program yet, nor one slowed down by an
+/// antivirus scanning a new binary: how long to wait for it.
+const STARTING: Duration = Duration::from_secs(5);
 
 fn label_is(pane: &Pane, label: &str) -> bool {
     pane.label.as_deref() == Some(label)
 }
 
-/// A bar whose program runs. Herdr restores a pane as a plain shell after a
-/// restart: that one keeps the label, not the program.
+/// Whether a bar runs its program. Herdr restores a pane as a plain shell
+/// after a restart: that one keeps the label, not the program. A pane Herdr
+/// tells nothing about counts as running: it is kept.
 fn is_live(pane: &Pane) -> bool {
-    herdr::call("pane.process_info", json!({ "pane_id": pane.pane_id }))
-        .ok()
-        .and_then(|r| {
-            let processes = r["process_info"]["foreground_processes"]
-                .as_array()?
-                .clone();
-            Some(
-                processes
-                    .iter()
-                    .any(|p| p["name"].as_str().is_some_and(crate::is_this_program)),
-            )
+    let Ok(result) = herdr_api::request("pane.process_info", json!({ "pane_id": pane.pane_id }))
+    else {
+        return true;
+    };
+    result["process_info"]["foreground_processes"]
+        .as_array()
+        .is_none_or(|processes| {
+            processes
+                .iter()
+                .any(|p| p["name"].as_str().is_some_and(crate::is_this_program))
         })
-        .unwrap_or(false)
 }
 
-/// `is_live`, or soon to be: a restored shell never starts the program.
-fn is_or_becomes_live(pane: &Pane) -> bool {
-    is_live(pane) || {
-        std::thread::sleep(STARTING);
-        is_live(pane)
+/// The bars among `bars` that do not run the program, and still do not
+/// after `STARTING`: a restored shell never starts it.
+fn dead(bars: Vec<Pane>) -> Vec<Pane> {
+    let deadline = Instant::now() + STARTING;
+    let mut dead: Vec<Pane> = bars.into_iter().filter(|p| !is_live(p)).collect();
+    while !dead.is_empty() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(500));
+        dead.retain(|p| !is_live(p));
     }
+    dead
 }
 
 /// Closes the tab's bar, or opens one above the tab's explorer. `false` when
@@ -119,10 +123,13 @@ pub fn on_pane_created() -> Result<(), String> {
         return Ok(());
     }
     let panes = herdr::tab_panes(&explorer.workspace_id, &explorer.tab_id)?;
-    for bar in panes.iter().filter(|p| label_is(p, LABEL)) {
-        if is_or_becomes_live(bar) {
-            return Ok(());
-        }
+    let bars: Vec<Pane> = panes.into_iter().filter(|p| label_is(p, LABEL)).collect();
+    let count = bars.len();
+    let dead = dead(bars);
+    if dead.len() < count {
+        return Ok(());
+    }
+    for bar in dead {
         let _ = herdr::close(&bar.pane_id);
     }
     open_above(&explorer)
@@ -147,10 +154,12 @@ pub fn on_pane_closed() -> Result<(), String> {
 /// Closes the bars Herdr restored as plain shells after a restart; the
 /// explorer reopens with a new bar.
 pub fn startup() -> Result<(), String> {
-    for pane in herdr::all_panes()? {
-        if label_is(&pane, LABEL) && !is_or_becomes_live(&pane) {
-            let _ = herdr::close(&pane.pane_id);
-        }
+    let bars = herdr::all_panes()?
+        .into_iter()
+        .filter(|p| label_is(p, LABEL))
+        .collect();
+    for bar in dead(bars) {
+        let _ = herdr::close(&bar.pane_id);
     }
     Ok(())
 }
@@ -201,7 +210,7 @@ fn open_above(explorer: &Pane) -> Result<(), String> {
     });
     let bar = herdr::open_plugin_pane("bar", options, &[])?
         .ok_or("le pane Tools n'a pas d'identifiant")?;
-    herdr::call(
+    herdr_api::request(
         "pane.swap",
         json!({ "source_pane_id": bar, "target_pane_id": explorer.pane_id }),
     )?;
@@ -210,7 +219,7 @@ fn open_above(explorer: &Pane) -> Result<(), String> {
     fit_rows(&bar, |height| height.saturating_sub(1));
     // The swap moves the focus to the bar: give it back.
     if let Some(focused) = focused {
-        let _ = herdr::call("pane.focus", json!({ "pane_id": focused }));
+        let _ = herdr_api::request("pane.focus", json!({ "pane_id": focused }));
     }
     Ok(())
 }
@@ -248,10 +257,11 @@ fn folders(me: &str) -> (Option<PathBuf>, Option<PathBuf>) {
     (explorer, terminal)
 }
 
-/// Runs the bar until it is closed or no longer has a place.
-pub fn run(entries: &[Entry]) -> Result<(), String> {
+/// Runs the bar until it is closed or no longer has a place. `error` says
+/// why `menu.toml` was ignored: it is shown first, in place of the figures.
+pub fn run(entries: &[Entry], error: Option<String>) -> Result<(), String> {
     let me = herdr_api::var(herdr_api::env::PANE_ID)?;
-    let result = show(&me, entries).map_err(|e| e.to_string());
+    let result = show(&me, entries, error).map_err(|e| e.to_string());
     let _ = herdr::close(&me);
     result
 }
@@ -260,6 +270,8 @@ pub fn run(entries: &[Entry]) -> Result<(), String> {
 enum Measure {
     Started,
     Done(Measured),
+    /// The figures could not be kept in the state folder.
+    Unsaved(String),
 }
 
 /// The bar's link to its measuring thread.
@@ -308,8 +320,11 @@ fn measure_in_background(root: PathBuf) -> Measurer {
                 stats::Limit::default()
             };
             let measured = Measured::now(&root, stats::measure(&root, limit));
-            if let Some(file) = &file {
-                stats::save(file, &measured);
+            if let Some(file) = &file
+                && let Err(e) = stats::save(file, &measured)
+                && send.send(Measure::Unsaved(e)).is_err()
+            {
+                return;
             }
             if send.send(Measure::Done(measured.clone())).is_err() {
                 return;
@@ -337,17 +352,17 @@ struct View<'a> {
     measuring: bool,
 }
 
-fn show(me: &str, entries: &[Entry]) -> io::Result<()> {
+fn show(me: &str, entries: &[Entry], error: Option<String>) -> io::Result<()> {
     let _screen = Screen::enter()?;
     let measurer = folders(me).0.map(measure_in_background);
     let mut measured_at = None;
     // When the error message gives its place back to the figures.
-    let mut message_until = Instant::now();
+    let mut message_until = Instant::now() + MESSAGE_FOR;
     let mut view = View {
         entries,
         hover: None,
         hover_figures: false,
-        message: None,
+        message: error,
         stats: None,
         age: None,
         measuring: false,
@@ -364,6 +379,10 @@ fn show(me: &str, entries: &[Entry]) -> io::Result<()> {
                     view.measuring = false;
                     view.stats = Some(measured.stats);
                     measured_at = Some(measured.at);
+                }
+                Measure::Unsaved(error) => {
+                    view.message = Some(format!("chiffres non enregistrés : {error}"));
+                    message_until = Instant::now() + MESSAGE_FOR;
                 }
             }
         }
@@ -526,7 +545,7 @@ fn launch(me: &str, entry: &Entry) -> Result<(), String> {
 }
 
 fn layout_of(pane: &str) -> Option<Layout> {
-    herdr::call("pane.layout", json!({ "pane_id": pane }))
+    herdr_api::request("pane.layout", json!({ "pane_id": pane }))
         .ok()
         .and_then(|r| serde_json::from_value(r["layout"].clone()).ok())
 }
@@ -561,7 +580,7 @@ fn fit_rows(me: &str, rows: impl Fn(u16) -> u16) {
         return;
     };
     let direction = if delta > 0.0 { "down" } else { "up" };
-    let _ = herdr::call(
+    let _ = herdr_api::request(
         "pane.resize",
         json!({ "pane_id": me, "direction": direction, "amount": delta.abs() }),
     );

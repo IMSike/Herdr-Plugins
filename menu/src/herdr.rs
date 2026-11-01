@@ -58,13 +58,8 @@ pub struct Pane {
     pub cwd: Option<PathBuf>,
 }
 
-/// Sends one request to the Herdr API and returns its `result`.
-pub fn call(method: &str, params: Value) -> Result<Value, String> {
-    herdr_api::request(method, params).map_err(String::from)
-}
-
 fn panes(params: Value) -> Result<Vec<Pane>, String> {
-    herdr_api::request_field("pane.list", params, "panes").map_err(String::from)
+    Ok(herdr_api::request_field("pane.list", params, "panes")?)
 }
 
 /// The panes of a workspace.
@@ -84,12 +79,16 @@ pub fn all_panes() -> Result<Vec<Pane>, String> {
 }
 
 pub fn pane(pane_id: &str) -> Result<Pane, String> {
-    herdr_api::request_field("pane.get", json!({ "pane_id": pane_id }), "pane")
-        .map_err(String::from)
+    Ok(herdr_api::request_field(
+        "pane.get",
+        json!({ "pane_id": pane_id }),
+        "pane",
+    )?)
 }
 
 pub fn close(pane_id: &str) -> Result<(), String> {
-    call("pane.close", json!({ "pane_id": pane_id })).map(|_| ())
+    herdr_api::request("pane.close", json!({ "pane_id": pane_id }))?;
+    Ok(())
 }
 
 /// Why a pane did not open.

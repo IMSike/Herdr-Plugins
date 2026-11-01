@@ -5,9 +5,10 @@ use crate::config::Entry;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-/// The command of `argv`, without a shell. On Windows a bare name also finds a
-/// batch file on `PATH` (`code` is `code.cmd`), which Rust runs with the right
-/// escaping when given its full path.
+/// The command of `argv`, without a shell. On Windows a bare name is looked
+/// up on `PATH` here: Rust's own search tries the system folders first (`bash`
+/// would be WSL's, not the Git Bash found on `PATH`), and a batch file (`code`
+/// is `code.cmd`) runs with the right escaping when given its full path.
 pub fn command(argv: &[String]) -> Result<Command, String> {
     let (name, args) = argv.split_first().ok_or("commande vide")?;
     let mut command = Command::new(program(name));
@@ -25,13 +26,10 @@ fn program(name: &str) -> std::ffi::OsString {
         return name.into();
     };
     for dir in std::env::split_paths(&path) {
-        if dir.join(format!("{name}.exe")).is_file() {
-            break;
-        }
-        for ext in ["cmd", "bat"] {
-            let script = dir.join(format!("{name}.{ext}"));
-            if script.is_file() {
-                return script.into_os_string();
+        for ext in ["exe", "cmd", "bat"] {
+            let file = dir.join(format!("{name}.{ext}"));
+            if file.is_file() {
+                return file.into_os_string();
             }
         }
     }

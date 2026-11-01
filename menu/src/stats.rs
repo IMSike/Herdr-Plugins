@@ -128,10 +128,10 @@ pub fn load(file: &Path, root: &Path) -> Option<Measured> {
     (normalized(&measured.root) == normalized(root)).then_some(measured)
 }
 
-pub fn save(file: &Path, measured: &Measured) {
-    if let Ok(json) = serde_json::to_vec(measured) {
-        let _ = herdr_api::write_atomic(file, &json);
-    }
+/// Keeps the figures for the other bars of the folder and the next ones.
+pub fn save(file: &Path, measured: &Measured) -> Result<(), String> {
+    let json = serde_json::to_vec(measured).map_err(|e| e.to_string())?;
+    herdr_api::write_atomic(file, &json).map_err(|e| e.to_string())
 }
 
 /// Walks the folder without following links; unreadable folders are skipped.
@@ -251,7 +251,7 @@ mod tests {
         let (a, b) = (Path::new("/work/a"), Path::new("/work/b"));
         assert_ne!(cache_file(&dir, a), cache_file(&dir, b));
         let measured = Measured::now(a, Stats::default());
-        save(&cache_file(&dir, a), &measured);
+        save(&cache_file(&dir, a), &measured).unwrap();
         let loaded = load(&cache_file(&dir, a), a);
         // Another folder never reads it, even under its file name.
         let other = load(&cache_file(&dir, a), b);

@@ -9,7 +9,7 @@ Starts a tool (lazygit, gh-dash, VS Code…) from one click or one key. In a tab
    lazygit  gh-dash  VS Code
 
      1.5G · 0,2 % du disque
-         3 552 fichiers
+         3 552 fichiers
 ```
 
 ## Installation
@@ -32,7 +32,7 @@ The icons are [Nerd Font](https://www.nerdfonts.com) glyphs: without a Nerd Font
 
 ## Use
 
-**With the explorer.** The `Tools` pane opens with the explorer, however it is opened (`prefix+f`, opening on its own in a new tab), and closes with it. Click an icon or its name, or type the entry's key while the pane has the focus; hovering shows the entry in yellow. A tool that cannot start shows why in red, in place of the figures, for 5 seconds. `prefix+space` closes the pane and opens it again; Escape, `q` or Ctrl+C in the pane closes it.
+**With the explorer.** The `Tools` pane opens with the explorer, however it is opened (`prefix+f`, opening on its own in a new tab), and closes with it. Click an icon or its name, or type the entry's key while the pane has the focus; hovering shows the entry in yellow. A tool that cannot start shows why in red, in place of the figures, for 5 seconds. `prefix+space` closes the pane and opens it again; Escape, `q` or Ctrl+C in the pane closes it. An entry's own key wins over `q`.
 
 Under the icons, the figures on the workspace folder (the explorer's folder):
 
@@ -82,9 +82,9 @@ The folder a tool starts in:
 | `workspace` | the explorer's folder | the workspace's folder |
 | `pane` | the folder of the tab's first terminal | the focused pane's folder |
 
-On Windows, a command found on `PATH` as a batch file (`code` is `code.cmd`) runs without naming its extension.
+On Windows, a command name is looked up on `PATH`, before the system folders (`bash` is the first one on `PATH`, Git Bash for instance, not WSL's), and a batch file (`code` is `code.cmd`) runs without naming its extension.
 
-A file that cannot be read or is invalid (unknown field, empty command, a key used twice) is ignored: the menu shows the built-in entries, and the popup menu shows the error above its help line. The `Tools` pane reads the file when it opens, the popup menu each time it opens; no reload is needed. A tool starts as the menu showed it, even when the file changed in between.
+A file that cannot be read or is invalid (unknown field, empty command, a key used twice) is ignored: the menu shows the built-in entries, and shows the error: the popup menu above its help line, the `Tools` pane in red in place of the figures for 5 seconds. The `Tools` pane reads the file when it opens, the popup menu each time it opens; no reload is needed. A tool starts as the menu showed it, even when the file changed in between.
 
 ## How it works, implications
 
@@ -95,7 +95,7 @@ A file that cannot be read or is invalid (unknown field, empty command, a key us
 - It asks for 5 rows, but Herdr never gives a side of a split less than a tenth of it: on a screen of fewer than 60 rows, it is taller. It takes its height back when the window is resized.
 - **While it is open, the explorer no longer keeps its width**: `<` and `>` do nothing and its width follows the window's in proportion. The explorer only looks for its width at the full height of its own pane; a change to it is proposed upstream.
 - The figures are measured in the background: the whole folder is read, which takes a moment on a large one (`node_modules`, build folders). The reading stops after 200,000 files and folders or 2 seconds, whichever comes first: the figures then start with `≥` (at least). A reading asked for with a click goes up to 5 million files and folders or 60 seconds.
-- The figures are kept in a file of the plugin's state folder, one per folder (its path and its figures): the panes of the same folder share them, and a pane that opens again shows them without reading the folder. They are measured again once they are older than:
+- The figures are kept in a file of the plugin's state folder, one per folder (its path and its figures; if it cannot be written, the pane says so in red for 5 seconds): the panes of the same folder share them, and a pane that opens again shows them without reading the folder. They are measured again once they are older than:
 
   | Files and folders read | Measured again after |
   | --- | --- |

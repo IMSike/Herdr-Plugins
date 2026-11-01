@@ -9,7 +9,7 @@ Lance un outil (lazygit, gh-dash, VS Code…) d'un clic ou d'une touche. Dans un
    lazygit  gh-dash  VS Code
 
      1.5G · 0,2 % du disque
-         3 552 fichiers
+         3 552 fichiers
 ```
 
 ## Installation
@@ -18,7 +18,7 @@ Lance un outil (lazygit, gh-dash, VS Code…) d'un clic ou d'une touche. Dans un
 herdr plugin install IMSike/Herdr-Plugins/menu
 ```
 
-Puis lier une touche à son action dans le `config.toml` de Herdr :
+Liez ensuite une touche à son action dans le `config.toml` de Herdr :
 
 ```toml
 [[keys.command]]
@@ -32,14 +32,14 @@ Les icônes sont des glyphes [Nerd Font](https://www.nerdfonts.com) : sans Nerd 
 
 ## Utilisation
 
-**Avec l'explorateur.** Le pane `Tools` s'ouvre avec l'explorateur, quelle que soit la façon dont il s'ouvre (`prefix+f`, ouverture automatique dans un nouvel onglet), et se ferme avec lui. Cliquer sur une icône ou sur son nom, ou taper la touche de l'entrée quand le pane a le focus ; le survol affiche l'entrée en jaune. Un outil qui ne peut pas démarrer affiche pourquoi en rouge, à la place des chiffres, pendant 5 secondes. `prefix+space` ferme le pane et le rouvre ; Échap, `q` ou Ctrl+C dans le pane le ferme.
+**Avec l'explorateur.** Le pane `Tools` s'ouvre avec l'explorateur, quelle que soit la façon dont il s'ouvre (`prefix+f`, ouverture automatique dans un nouvel onglet), et se ferme avec lui. Cliquez sur une icône ou sur son nom, ou tapez la touche de l'entrée quand le pane a le focus ; le survol affiche l'entrée en jaune. Un outil qui ne peut pas démarrer affiche pourquoi en rouge, à la place des chiffres, pendant 5 secondes. `prefix+space` ferme le pane et le rouvre ; Échap, `q` ou Ctrl+C dans le pane le ferme. La touche propre à une entrée l'emporte sur `q`.
 
 Sous les icônes, les chiffres du dossier du workspace (celui de l'explorateur) :
 
 - la taille totale de ses fichiers, tous fichiers compris (`.git` et dossiers de build aussi), et la part qu'elle représente de son disque. Un fichier lié plusieurs fois (liens durs, comme ceux de pnpm) compte à chaque fois, et un fichier cloud non téléchargé (OneDrive) compte pour sa taille entière ;
 - son nombre de fichiers, hors `.git`, l'âge des chiffres à partir d'une heure (`· 3 h`), et une icône : un clic sur les chiffres mesure à nouveau le dossier (`…` pendant la lecture).
 
-**Sans l'explorateur.** `prefix+space` ouvre le menu en popup, titré du nom du dossier du workspace. Choisir une entrée par sa touche, par les flèches (ou `j`/`k`) et Entrée, ou d'un clic. Échap, `q` ou Ctrl+C ferme le menu. La touche propre à une entrée l'emporte sur `j`, `k` et `q`.
+**Sans l'explorateur.** `prefix+space` ouvre le menu en popup, titré du nom du dossier du workspace. Choisissez une entrée par sa touche, par les flèches (ou `j`/`k`) et Entrée, ou d'un clic. Échap, `q` ou Ctrl+C ferme le menu. La touche propre à une entrée l'emporte sur `j`, `k` et `q`.
 
 Un outil en terminal démarre dans le dossier du workspace (ou celui d'un terminal, voir plus bas), dans un popup de 95 % du terminal. Quand il ne peut pas démarrer ou se termine en erreur, le popup affiche pourquoi et attend Entrée. Un programme qui a sa propre fenêtre (VS Code) démarre directement, sans popup, et continue de tourner quand le menu ou le pane `Tools` se ferme.
 
@@ -53,7 +53,7 @@ Sans configuration, le menu propose :
 | `g` | gh-dash | `gh dash` (l'extension [gh-dash](https://github.com/dlvhdr/gh-dash) de la CLI GitHub) |
 | `c` | VS Code | `code .` : le dossier du workspace dans VS Code |
 
-Pour choisir les vôtres, écrire `menu.toml` dans le dossier de configuration du plugin (`herdr plugin config-dir imsike.menu` l'affiche). Le fichier remplace les entrées intégrées :
+Pour choisir les vôtres, écrivez `menu.toml` dans le dossier de configuration du plugin (`herdr plugin config-dir imsike.menu` l'affiche). Le fichier remplace les entrées intégrées :
 
 ```toml
 [[entries]]
@@ -82,9 +82,9 @@ Le dossier où démarre un outil :
 | `workspace` | le dossier de l'explorateur | le dossier du workspace |
 | `pane` | le dossier du premier terminal de l'onglet | le dossier du pane actif |
 
-Sous Windows, une commande trouvée dans le `PATH` sous forme de fichier batch (`code` est `code.cmd`) se lance sans préciser son extension.
+Sous Windows, une commande est cherchée dans le `PATH`, avant les dossiers du système (`bash` est le premier du `PATH`, Git Bash par exemple, pas celui de WSL), et un fichier batch (`code` est `code.cmd`) se lance sans préciser son extension.
 
-Un fichier illisible ou invalide (champ inconnu, commande vide, touche utilisée deux fois) est ignoré : le menu affiche les entrées intégrées, et le menu en popup affiche l'erreur au-dessus de sa ligne d'aide. Le pane `Tools` lit le fichier à son ouverture, le menu en popup à chaque ouverture ; aucun rechargement n'est nécessaire. Un outil démarre tel que le menu l'affichait, même si le fichier a changé entre-temps.
+Un fichier illisible ou invalide (champ inconnu, commande vide, touche utilisée deux fois) est ignoré : le menu affiche les entrées intégrées, et affiche l'erreur : le menu en popup au-dessus de sa ligne d'aide, le pane `Tools` en rouge à la place des chiffres pendant 5 secondes. Le pane `Tools` lit le fichier à son ouverture, le menu en popup à chaque ouverture ; aucun rechargement n'est nécessaire. Un outil démarre tel que le menu l'affichait, même si le fichier a changé entre-temps.
 
 ## Fonctionnement, implications
 
@@ -95,7 +95,7 @@ Un fichier illisible ou invalide (champ inconnu, commande vide, touche utilisée
 - Il demande 5 lignes, mais Herdr ne donne jamais moins d'un dixième d'un split à chacun de ses côtés : sur un écran de moins de 60 lignes, il est plus haut. Il reprend sa hauteur quand la fenêtre change de taille.
 - **Tant qu'il est ouvert, l'explorateur ne garde plus sa largeur** : `<` et `>` ne font plus rien, et sa largeur suit celle de la fenêtre en proportion. L'explorateur ne cherche sa largeur que sur toute la hauteur de son propre pane ; une correction lui est proposée.
 - Les chiffres sont mesurés en arrière-plan : tout le dossier est lu, ce qui prend un moment sur un gros dossier (`node_modules`, dossiers de build). La lecture s'arrête après 200 000 fichiers et dossiers ou 2 secondes, au premier atteint : les chiffres commencent alors par `≥` (au moins). Une lecture demandée d'un clic va jusqu'à 5 millions de fichiers et dossiers ou 60 secondes.
-- Les chiffres sont gardés dans un fichier du dossier d'état du plugin, un par dossier (son chemin et ses chiffres) : les panes d'un même dossier les partagent, et un pane qui se rouvre les affiche sans relire le dossier. Ils sont mesurés à nouveau une fois plus vieux que :
+- Les chiffres sont gardés dans un fichier du dossier d'état du plugin, un par dossier (son chemin et ses chiffres ; s'il ne peut pas être écrit, le pane l'affiche en rouge pendant 5 secondes) : les panes d'un même dossier les partagent, et un pane qui se rouvre les affiche sans relire le dossier. Ils sont mesurés à nouveau une fois plus vieux que :
 
   | Fichiers et dossiers lus | Nouvelle mesure après |
   | --- | --- |
@@ -116,4 +116,4 @@ Les commandes tournent sous votre compte, avec votre environnement, comme tout p
 
 ## Désactiver
 
-Retirer la touche de `config.toml`, puis `herdr plugin disable imsike.menu` (ou `herdr plugin uninstall imsike.menu`) : les panes `Tools` se ferment avec leur explorateur ou au redémarrage suivant. `menu.toml` reste dans le dossier de configuration, et les fichiers des chiffres dans le dossier d'état, jusqu'à ce que vous les supprimiez.
+Retirez la touche de `config.toml`, puis `herdr plugin disable imsike.menu` (ou `herdr plugin uninstall imsike.menu`) : les panes `Tools` se ferment avec leur explorateur ou au redémarrage suivant. `menu.toml` reste dans le dossier de configuration, et les fichiers des chiffres dans le dossier d'état, jusqu'à ce que vous les supprimiez.

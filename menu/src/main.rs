@@ -47,7 +47,10 @@ fn main() -> ExitCode {
         Some("open") => open(),
         Some("menu") => menu(),
         Some("run") => run(),
-        Some("bar") => bar::run(&entries().0),
+        Some("bar") => {
+            let (entries, error) = entries();
+            bar::run(&entries, error)
+        }
         Some("startup") => bar::startup(),
         Some("pane-created") => bar::on_pane_created(),
         Some("pane-closed") => bar::on_pane_closed(),
@@ -253,7 +256,7 @@ fn run_entry() -> Result<(), String> {
     }
     let status = command
         .status()
-        .map_err(|e| format!("impossible de lancer « {} » : {e}", entry.command.join(" ")))?;
+        .map_err(|e| format!("impossible de lancer « {} » : {e}", entry.label))?;
     if status.success() {
         Ok(())
     } else {
