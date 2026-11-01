@@ -127,25 +127,33 @@ impl Default for Menu {
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 struct File {
-    #[serde(default)]
     entries: Vec<Entry>,
-    #[serde(default = "yes")]
     decimal_comma: bool,
-    #[serde(default)]
     percent_space: bool,
-    #[serde(default)]
     cpu_decimal: bool,
-    #[serde(default)]
     memory_unit: MemoryUnit,
-    #[serde(default)]
     memory_space: bool,
-    #[serde(default)]
     layout: Layout,
-    #[serde(default)]
     totals: TotalsStyle,
+}
+
+impl Default for File {
+    fn default() -> Self {
+        let numbers = NumberFormat::default();
+        Self {
+            entries: Vec::new(),
+            decimal_comma: numbers.decimal_comma,
+            percent_space: numbers.percent_space,
+            cpu_decimal: numbers.cpu_decimal,
+            memory_unit: numbers.memory_unit,
+            memory_space: numbers.memory_space,
+            layout: Layout::default(),
+            totals: TotalsStyle::default(),
+        }
+    }
 }
 
 /// Entries shown when the user has no `menu.toml`, or one without entries.
@@ -333,8 +341,23 @@ mod tests {
             .filter(|line| line.contains(" = "))
             .map(|line| format!("{line}\n"))
             .collect();
-        assert_eq!(settings.lines().count(), 7);
         assert_eq!(parse(&settings).unwrap(), Menu::default());
+        // A line for every setting.
+        let mut in_template: Vec<&str> = settings
+            .lines()
+            .filter_map(|line| line.split(" = ").next())
+            .collect();
+        in_template.sort_unstable();
+        let file = serde_json::to_value(File::default()).unwrap();
+        let mut keys: Vec<&str> = file
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .filter(|key| *key != "entries")
+            .collect();
+        keys.sort_unstable();
+        assert_eq!(in_template, keys);
     }
 
     #[test]
