@@ -31,9 +31,13 @@ jobs:
         run: cargo test --locked
 
   # The oldest Rust the workspace declares (rust-version), which a user's
-  # machine may have when Herdr builds a plugin on install.
+  # machine may have when Herdr builds a plugin on install; on both systems,
+  # since some code is built only on Windows.
   minimum-rust:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 

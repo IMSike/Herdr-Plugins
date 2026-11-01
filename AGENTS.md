@@ -39,7 +39,7 @@ Work in progress, to-do lists and verification reports live in `.maintainer/` (i
 
 ## Tests
 
-Before proposing a change (the [Plugins](.github/workflows/plugins.yml) workflow runs the same on Linux and Windows):
+Before proposing a change (the [Plugins](.github/workflows/validate.yml) workflow runs the same on Linux and Windows):
 
 ```sh
 cargo fmt --all --check
