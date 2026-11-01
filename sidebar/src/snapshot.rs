@@ -2,6 +2,7 @@
 //! request: workspaces, tabs and panes.
 
 use serde::Deserialize;
+use serde_json::{Map, Value};
 
 use crate::tree::{Agent, Space};
 
@@ -24,6 +25,9 @@ pub struct Pane {
     pub agent: Option<String>,
     #[serde(default)]
     pub agent_status: String,
+    /// The tokens the pane shows, as the plugin last reported them.
+    #[serde(default)]
+    pub tokens: Map<String, Value>,
 }
 
 #[derive(Deserialize)]

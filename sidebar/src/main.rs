@@ -188,7 +188,11 @@ fn tick(mode: Mode) -> Result<(), String> {
             if block.header.is_none() || !several(workspace_of(&block.pane_id)) {
                 tokens.insert("ws_stats".into(), Value::Null);
             }
-            send("pane.report_metadata", "pane_id", &block.pane_id, tokens);
+            // Most events move one agent at most: the others are not sent again.
+            let shown = snapshot.panes.iter().find(|p| p.pane_id == block.pane_id);
+            if shown.is_none_or(|pane| !tokens::unchanged(&tokens, &pane.tokens)) {
+                send("pane.report_metadata", "pane_id", &block.pane_id, tokens);
+            }
         }
         return Ok(());
     };

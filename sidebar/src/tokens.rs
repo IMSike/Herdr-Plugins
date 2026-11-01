@@ -84,6 +84,14 @@ pub fn tab_bar(
     )
 }
 
+/// Whether reporting `tokens` would change nothing to the `current` ones
+/// (a cleared token is an absent one).
+pub fn unchanged(tokens: &Map<String, Value>, current: &Map<String, Value>) -> bool {
+    tokens
+        .iter()
+        .all(|(key, value)| current.get(key).unwrap_or(&Value::Null) == value)
+}
+
 /// A token set to `value`, or cleared.
 fn optional(value: Option<String>) -> Value {
     value.map_or(Value::Null, Value::from)
@@ -132,6 +140,17 @@ mod tests {
         let first = agent(&block(None), Some((None, &usage)), None);
         assert!(!first.contains_key("cpu"));
         assert_eq!(first["stats"], "853M \u{F489} 2");
+    }
+
+    #[test]
+    fn tokens_already_shown_need_no_report() {
+        let tokens = layout(&block(None));
+        let mut current = tokens.clone();
+        current.remove("ws");
+        current.insert("ram".into(), "853M".into());
+        assert!(unchanged(&tokens, &current));
+        current.insert("line".into(), "└ ○ api".into());
+        assert!(!unchanged(&tokens, &current));
     }
 
     #[test]
