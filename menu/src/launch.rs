@@ -56,6 +56,16 @@ pub fn detach(entry: &Entry, cwd: Option<&Path>) -> Result<(), String> {
     // not the program it started.
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut command, 0);
+    // Nor does it end with the console of the bar's pane on Windows.
+    #[cfg(windows)]
+    {
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        std::os::windows::process::CommandExt::creation_flags(
+            &mut command,
+            DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+        );
+    }
     let mut child = command
         .spawn()
         .map_err(|e| format!("impossible de lancer « {} » : {e}", entry.label))?;

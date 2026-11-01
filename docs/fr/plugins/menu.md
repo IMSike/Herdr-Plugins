@@ -41,7 +41,7 @@ Sous les icônes, les chiffres du dossier du workspace (celui de l'explorateur) 
 
 **Sans l'explorateur.** `prefix+space` ouvre le menu en popup, titré du nom du dossier du workspace. Choisir une entrée par sa touche, par les flèches (ou `j`/`k`) et Entrée, ou d'un clic. Échap, `q` ou Ctrl+C ferme le menu. La touche propre à une entrée l'emporte sur `j`, `k` et `q`.
 
-Un outil en terminal démarre dans le dossier du workspace (ou celui d'un terminal, voir plus bas), dans un popup de 95 % du terminal. Quand il ne peut pas démarrer ou se termine en erreur, le popup affiche pourquoi et attend Entrée. Un programme qui a sa propre fenêtre (VS Code) démarre directement, sans popup.
+Un outil en terminal démarre dans le dossier du workspace (ou celui d'un terminal, voir plus bas), dans un popup de 95 % du terminal. Quand il ne peut pas démarrer ou se termine en erreur, le popup affiche pourquoi et attend Entrée. Un programme qui a sa propre fenêtre (VS Code) démarre directement, sans popup, et continue de tourner quand le menu ou le pane `Tools` se ferme.
 
 ## Entrées
 
