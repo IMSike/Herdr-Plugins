@@ -84,7 +84,8 @@ fn talk<S: io::Read + Write>(mut stream: S, line: &str) -> io::Result<String> {
 
 /// Neither a Unix socket's connect nor a named pipe opened as a file has a
 /// timeout: the whole exchange runs on a thread of its own, given up after
-/// `TIMEOUT` (the thread ends with the process, or when Herdr answers).
+/// `TIMEOUT` (on Windows the thread ends with the process, or when Herdr
+/// answers).
 fn exchange(path: String, line: String) -> io::Result<String> {
     let (sender, receiver) = std::sync::mpsc::channel();
     let deadline = Instant::now() + TIMEOUT;
@@ -96,9 +97,17 @@ fn exchange(path: String, line: String) -> io::Result<String> {
         .unwrap_or_else(|_| Err(io::Error::new(io::ErrorKind::TimedOut, "pas de réponse")))
 }
 
+/// The socket's own timeouts end the thread too when Herdr never answers: a
+/// long-running pane does not pile them up.
 #[cfg(unix)]
-fn connect(path: &str, _deadline: Instant) -> io::Result<std::os::unix::net::UnixStream> {
-    std::os::unix::net::UnixStream::connect(path)
+fn connect(path: &str, deadline: Instant) -> io::Result<std::os::unix::net::UnixStream> {
+    let stream = std::os::unix::net::UnixStream::connect(path)?;
+    let left = deadline
+        .saturating_duration_since(Instant::now())
+        .max(Duration::from_millis(1));
+    stream.set_read_timeout(Some(left))?;
+    stream.set_write_timeout(Some(left))?;
+    Ok(stream)
 }
 
 /// Several plugin runs at once can find every instance of the pipe busy:
