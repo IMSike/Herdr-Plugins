@@ -7,7 +7,7 @@
 
 Herdr exige une `version` dans chaque `herdr-plugin.toml`, mais ne s'en sert pas pour mettre à jour : `herdr plugin update` récupère de nouveau la référence enregistrée à l'installation (la branche par défaut, `main`, sauf si `--ref` a été donné), ignore le plugin quand le commit n'a pas changé, et sinon recompile et enregistre la nouvelle copie. Il n'y a pas de mise à jour automatique ; les panes en cours gardent leurs fichiers jusqu'à leur fin, les nouveaux lancements utilisent la nouvelle copie. Les plugins liés localement (`herdr plugin link`) ne sont jamais mis à jour par Herdr. `herdr plugin list` affiche le commit depuis lequel un plugin a été installé.
 
-Le dépôt est versionné comme OS-Setup et CC-Plugins : chaque push sur `main` reçoit un tag calculé d'après les messages de commit (`v0.0.0`, puis mineure pour un `feat`, correctif sinon). Ces dépôts ne font que poser un tag : leur workflow de release ne commite rien.
+Le dépôt est versionné comme OS-Setup et CC-Plugins : chaque push sur `main` reçoit un tag calculé d'après les messages de commit (`v0.0.0`, puis mineure pour un `feat`, correctif sinon). Leur workflow de release pose le tag et publie une release, sans rien commiter.
 
 Options étudiées :
 

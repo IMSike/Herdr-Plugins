@@ -23,7 +23,7 @@ herdr plugin install IMSike/Herdr-Plugins/<plugin>
 
 Building needs the Rust toolchain (`cargo`, Rust 1.88 or later), and on Windows the Visual Studio Build Tools with the C++ workload ([ADR 0001](docs/en/adr/0001-rust-cargo-workspace.md)).
 
-Updates are never automatic: `herdr plugin update` fetches the latest commit of `main` (each one is a release) for every plugin installed from GitHub, or `herdr plugin update <plugin-id>` of one ([ADR 0002](docs/en/adr/0002-plugin-versions.md)).
+Updates are never automatic: `herdr plugin update` fetches the latest commit of `main` (each push to `main` is a release) for every plugin installed from GitHub, or `herdr plugin update <plugin-id>` of one ([ADR 0002](docs/en/adr/0002-plugin-versions.md)).
 
 ## Documentation
 

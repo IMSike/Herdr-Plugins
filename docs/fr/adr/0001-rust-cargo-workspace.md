@@ -5,7 +5,7 @@
 
 ## Contexte
 
-Un plugin Herdr est un dossier avec un manifeste `herdr-plugin.toml` et des commandes argv que Herdr lance ; toute la CLI `herdr` et l'API socket (un named pipe sous Windows) forment son API. Le langage d'implémentation est libre. Les plugins prévus ici tournent à côté des agents (mise en page de la barre latérale rafraîchie sur événements, échantillonnage des processus) : leur propre consommation de mémoire et de CPU compte.
+Un plugin Herdr est un dossier avec un manifeste `herdr-plugin.toml` et des commandes argv que Herdr lance ; toute la CLI `herdr` et l'API socket (un named pipe sous Windows) forment son API. Le langage d'implémentation est libre. Les plugins prévus ici tournent à côté des agents (mise en page de la sidebar rafraîchie sur événements, échantillonnage des processus) : leur propre consommation de mémoire et de CPU compte.
 
 Herdr installe un plugin avec `herdr plugin install <owner>/<repo>[/<sous-dossier>]` : il clone tout le dépôt (superficiellement, branche par défaut sauf `--ref`), lance les commandes `[[build]]` du manifeste dans le dossier du plugin, puis l'enregistre. Un dépôt peut contenir plusieurs plugins, chacun installable seul ; la marketplace Herdr présente le dépôt comme une carte qui les liste. Il n'y a pas de fichier catalogue.
 

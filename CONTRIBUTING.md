@@ -15,7 +15,7 @@ cargo clippy --locked --all-targets -- -D warnings  # lints
 cargo test --locked                                 # the tests of every crate
 ```
 
-The [Plugins](.github/workflows/validate.yml) workflow runs the same checks on Linux and Windows for each push to `main` or `dev` and each pull request, and builds the workspace with Rust 1.88, the oldest version it declares (`rust-version`): raise both together.
+The [Plugins](.github/workflows/validate.yml) workflow runs the same checks on Linux and Windows for each push to `main` or `dev` and each pull request, and checks that the workspace compiles with Rust 1.88, the oldest version it declares (`rust-version`): raise both together.
 
 A plugin under development is linked rather than installed: `herdr plugin link <absolute path to the plugin folder>`. Linking runs no build step, so build it yourself first; `herdr plugin unlink <plugin-id>` removes it and leaves the files alone. Read [Adding a plugin](docs/en/adding-plugins.md) first.
 
@@ -72,7 +72,7 @@ Each push to `main` (direct or merged pull request) is tagged and released by th
 | anything else | patch: `0.1.0` → `0.1.1` |
 | maintainer's decision only | major: run the workflow manually with `major` |
 
-The first version is `v0.0.0`. There is no changelog for now. The workflow only tags: every `herdr-plugin.toml` keeps `version = "0.0.0"`, which Herdr requires but does not use ([ADR 0002](docs/en/adr/0002-plugin-versions.md)).
+The first version is `v0.0.0`. There is no changelog for now. The workflow commits nothing: every `herdr-plugin.toml` keeps `version = "0.0.0"`, which Herdr requires but does not use ([ADR 0002](docs/en/adr/0002-plugin-versions.md)).
 
 ## Pull requests
 
