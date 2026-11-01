@@ -88,7 +88,12 @@ impl Measured {
 
     /// Seconds until the figures need a new reading; 0 when they do now.
     pub fn due_in(&self) -> u64 {
-        (self.at + lifetime(&self.stats).as_secs()).saturating_sub(unix_now())
+        let now = unix_now();
+        // A time in the future (a clock set back) gives no lifetime.
+        if self.at > now {
+            return 0;
+        }
+        (self.at + lifetime(&self.stats).as_secs()).saturating_sub(now)
     }
 
     /// The more recent of two readings of the same folder.
