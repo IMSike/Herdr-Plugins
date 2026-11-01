@@ -6,18 +6,18 @@ pub mod files;
 mod store;
 
 use crate::config::{self, Layout, Menu, TotalsStyle};
-use crate::ui::{Screen, fit};
+use crate::ui::{Frame, Screen, fit};
 use crossterm::cursor::MoveTo;
 use crossterm::event::{
     self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
 };
 use crossterm::queue;
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
-use crossterm::terminal::{self, Clear, ClearType};
+use crossterm::terminal;
 use files::Files;
 use herdr_api::sidebar::{self, Thresholds, check_thresholds};
 use serde::Deserialize;
-use std::io::{self, Write};
+use std::io;
 use std::path::Path;
 use toml_edit::Value;
 
@@ -650,10 +650,9 @@ fn show(state: &mut State) -> io::Result<()> {
 fn draw(state: &State) -> io::Result<()> {
     let (width, height) = terminal::size()?;
     let width = usize::from(width);
-    let mut out = io::stdout();
+    let mut out = Frame::new()?;
     queue!(
         out,
-        Clear(ClearType::All),
         MoveTo(1, 0),
         SetAttribute(Attribute::Bold),
         Print("Réglages"),
@@ -731,7 +730,7 @@ fn draw(state: &State) -> io::Result<()> {
         Print(fit(help, width)),
         SetAttribute(Attribute::Reset)
     )?;
-    out.flush()
+    out.show()
 }
 
 #[cfg(test)]

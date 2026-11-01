@@ -7,7 +7,10 @@ use crossterm::event::{
     MouseButton, MouseEventKind,
 };
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
-use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{
+    self, BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate, EnterAlternateScreen,
+    LeaveAlternateScreen,
+};
 use crossterm::{execute, queue};
 use std::io::{self, Write};
 
@@ -24,6 +27,37 @@ impl Screen {
         terminal::enable_raw_mode()?;
         execute!(io::stdout(), EnterAlternateScreen, Hide, EnableMouseCapture)?;
         Ok(Screen)
+    }
+}
+
+/// A screen drawn in one write: a terminal never shows it cleared but not
+/// drawn again yet, which blinks.
+pub struct Frame(Vec<u8>);
+
+impl Frame {
+    /// A cleared screen.
+    pub fn new() -> io::Result<Self> {
+        let mut out = Vec::new();
+        queue!(out, BeginSynchronizedUpdate, Clear(ClearType::All))?;
+        Ok(Self(out))
+    }
+
+    /// Writes it to the terminal.
+    pub fn show(mut self) -> io::Result<()> {
+        queue!(self.0, EndSynchronizedUpdate)?;
+        let mut stdout = io::stdout().lock();
+        stdout.write_all(&self.0)?;
+        stdout.flush()
+    }
+}
+
+impl Write for Frame {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0.write(bytes)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
     }
 }
 
@@ -130,10 +164,10 @@ fn draw(
 ) -> io::Result<()> {
     let (width, height) = terminal::size()?;
     let width = usize::from(width);
-    let mut out = io::stdout();
-    queue!(out, Clear(ClearType::All), MoveTo(0, 0))?;
+    let mut out = Frame::new()?;
     queue!(
         out,
+        MoveTo(0, 0),
         SetAttribute(Attribute::Bold),
         Print(fit(&format!(" {title}"), width)),
         SetAttribute(Attribute::Reset)
@@ -167,7 +201,7 @@ fn draw(
         Print(fit(" touche, ↑↓ Entrée, clic · Échap", width)),
         SetAttribute(Attribute::Reset)
     )?;
-    out.flush()
+    out.show()
 }
 
 /// Cuts `text` to `width` characters.

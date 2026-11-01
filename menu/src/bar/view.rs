@@ -11,14 +11,14 @@ use crate::config::{self, Action, Entry, Layout as IconLayout, Menu, TotalsStyle
 use crate::herdr;
 use crate::settings::files;
 use crate::stats::{self, Measured, Stats};
-use crate::ui::{Screen, fit};
+use crate::ui::{Frame, Screen, fit};
 use crossterm::cursor::MoveTo;
 use crossterm::event::{
     self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
 };
 use crossterm::queue;
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
-use crossterm::terminal::{self, Clear, ClearType};
+use crossterm::terminal;
 use herdr_api::NumberFormat;
 use herdr_api::sidebar::{Gauge, Level, MACHINE_GLYPH, Totals};
 use std::io::{self, Write};
@@ -272,7 +272,7 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
         view.age =
             measured_at.and_then(|at| stats::age_label(stats::unix_now().saturating_sub(at)));
         let size = terminal::size()?;
-        if drawn.as_ref() != Some(&(view.clone(), size)) {
+        if drawn.as_ref().is_none_or(|(v, s)| *v != view || *s != size) {
             draw(&view)?;
             drawn = Some((view.clone(), size));
         }
@@ -411,10 +411,11 @@ fn launch(me: &str, entry: &Entry) -> Result<(), String> {
     crate::start(entry, cwd.as_deref(), Some(me))
 }
 
+/// Draws the whole page in one write: a terminal never shows it cleared
+/// but not drawn again yet (which blinks under the pointer).
 fn draw(view: &View) -> io::Result<()> {
     let (width, rows) = terminal::size()?;
-    let mut out = io::stdout();
-    queue!(out, Clear(ClearType::All))?;
+    let mut out = Frame::new()?;
     let cut = |text: &str| fit(text, usize::from(width));
     match view.page {
         Page::Tools => draw_tools(&mut out, view, width, rows)?,
@@ -494,7 +495,7 @@ fn draw(view: &View) -> io::Result<()> {
             ResetColor
         )?;
     }
-    out.flush()
+    out.show()
 }
 
 /// The icons, their names, and the totals of the sidebar under them.
@@ -633,6 +634,7 @@ fn draw_bars(
 /// the color its place takes in the gradient of the thresholds.
 fn draw_gauge(out: &mut impl Write, gauge: &Gauge, cells: usize) -> io::Result<()> {
     let filled = gauge.fill.unwrap_or(0.0).clamp(0.0, 1.0) * cells as f64;
+    let mut current = None;
     for cell in 0..cells {
         let covered = (filled - cell as f64).clamp(0.0, 1.0);
         let eighths = (covered * 8.0).round() as usize;
@@ -642,7 +644,11 @@ fn draw_gauge(out: &mut impl Write, gauge: &Gauge, cells: usize) -> io::Result<(
             8 => ('█', gradient(at, &gauge.thresholds)),
             n => (EIGHTHS[n - 1], gradient(at, &gauge.thresholds)),
         };
-        queue!(out, SetForegroundColor(color), Print(symbol))?;
+        if current != Some(color) {
+            queue!(out, SetForegroundColor(color))?;
+            current = Some(color);
+        }
+        queue!(out, Print(symbol))?;
     }
     queue!(out, ResetColor)
 }
