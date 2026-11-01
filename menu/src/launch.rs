@@ -37,16 +37,19 @@ pub fn find_on_path(name: &str) -> Option<PathBuf> {
     } else {
         &[""]
     };
-    std::env::split_paths(&std::env::var_os("PATH")?).find_map(|dir| {
-        extensions.iter().find_map(|ext| {
-            let file = if ext.is_empty() {
-                dir.join(name)
-            } else {
-                dir.join(format!("{name}.{ext}"))
-            };
-            file.is_file().then_some(file)
+    // An empty or relative entry would be looked up from the current folder.
+    std::env::split_paths(&std::env::var_os("PATH")?)
+        .filter(|dir| dir.is_absolute())
+        .find_map(|dir| {
+            extensions.iter().find_map(|ext| {
+                let file = if ext.is_empty() {
+                    dir.join(name)
+                } else {
+                    dir.join(format!("{name}.{ext}"))
+                };
+                file.is_file().then_some(file)
+            })
         })
-    })
 }
 
 /// Starts the entry without waiting for it: its output goes nowhere.
