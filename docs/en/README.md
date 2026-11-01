@@ -13,6 +13,7 @@
 
 | Page | Contents |
 |---|---|
+| [Adding a plugin](adding-plugins.md) | Layout, crate, manifest, code rules, trying it, tests and docs |
 | [Architecture decisions](adr/) | [0001](adr/0001-rust-cargo-workspace.md) Rust, one repository, one Cargo workspace · [0002](adr/0002-plugin-versions.md) plugin versions and updates · [0003](adr/0003-menu-bar-above-explorer.md) the menu as a pane above the file explorer |
 
 See also the [contributing guide](../../CONTRIBUTING.md).

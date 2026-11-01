@@ -17,7 +17,7 @@ cargo test                                # the tests of every crate
 
 The [Plugins](.github/workflows/plugins.yml) workflow runs the same checks on Linux and Windows for each push to `main` or `dev` and each pull request.
 
-A plugin under development is linked rather than installed: `herdr plugin link <absolute path to the plugin folder>`. Linking runs no build step, so build it yourself first; `herdr plugin unlink <plugin-id>` removes it and leaves the files alone.
+A plugin under development is linked rather than installed: `herdr plugin link <absolute path to the plugin folder>`. Linking runs no build step, so build it yourself first; `herdr plugin unlink <plugin-id>` removes it and leaves the files alone. Read [Adding a plugin](docs/en/adding-plugins.md) first.
 
 ## Principles
 

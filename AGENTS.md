@@ -10,6 +10,7 @@ Read before changing anything:
 
 - [Architecture decisions](docs/en/adr/): why Rust and one Cargo workspace, how versions and updates work.
 - [CONTRIBUTING.md](CONTRIBUTING.md): code conventions, commit messages, versions.
+- [Adding a plugin](docs/en/adding-plugins.md): layout, crate, manifest, trying it, docs.
 - Herdr's own documentation is the authority on the plugin API, not memory: `herdr --help`, `herdr api schema --json`, and the plugin guide (`https://herdr.dev/llms.txt` lists the pages for the running version).
 
 ## Hard rules
