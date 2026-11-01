@@ -30,11 +30,11 @@ use std::time::{Duration, Instant};
 use serde_json::{Map, Value, json};
 use sysinfo::{MemoryRefreshKind, ProcessRefreshKind, ProcessesToUpdate, System};
 
-use herdr_api::sidebar::Totals;
+use herdr_api::sidebar::{GIB, Level, Totals, TotalsLevels};
 use herdr_api::{request, request_field, unix_millis};
 use settings::Settings;
 use snapshot::{Pane, Snapshot};
-use usage::{Proc, Sample, Shell, Table, Usage, cpu_share, format_cpu};
+use usage::{Proc, Sample, Shell, Table, Usage, cpu_share};
 
 const SOURCE: &str = herdr_api::sidebar::ID;
 const SAMPLE_FILE: &str = "sample.json";
@@ -273,7 +273,13 @@ fn tick(mode: Mode) -> Result<(), String> {
                 now.saturating_sub(p.at_ms) * cores as u64
             })
     });
-    let cpu = |u: &Usage| all_cores_ms.map(|ms| format_cpu(cpu_share(u.cpu_ms, ms), &numbers));
+    let cpu = |u: &Usage| all_cores_ms.map(|ms| cpu_share(u.cpu_ms, ms));
+    let look = tokens::Look {
+        numbers,
+        levels: settings
+            .colors
+            .then_some((settings.cpu_levels, settings.memory_levels)),
+    };
 
     let mut shells: HashMap<String, Shell> = HashMap::new();
     let mut sums: Vec<(String, Usage)> = Vec::new();
@@ -299,7 +305,7 @@ fn tick(mode: Mode) -> Result<(), String> {
             sums.iter()
                 .find(|(id, _)| *id == block.workspace_id)
                 .map_or_else(String::new, |(_, u)| {
-                    tokens::figures(cpu(u), u, false, &numbers)
+                    tokens::figures(cpu(u), u, false, &look)
                 })
         });
         // An agent whose processes could not be read keeps its place in the
@@ -308,18 +314,29 @@ fn tick(mode: Mode) -> Result<(), String> {
             .iter()
             .find(|(id, _)| *id == block.pane_id)
             .map(|(_, u)| (cpu(u), u));
-        let tokens = tokens::agent(&block, usage, workspace, &numbers);
+        let tokens = tokens::agent(&block, usage, workspace, &look);
         send(&block.pane_id, tokens);
     }
 
+    let total_cpu = cpu(&total);
+    let machine_cpu = previous
+        .as_ref()
+        .and_then(|p| machine::cpu_percent(p.machine?, system.cpu_times?));
     let totals = Totals {
         at_ms: now,
-        cpu: all_cores_ms.map(|ms| cpu_share(total.cpu_ms, ms)),
+        cpu: total_cpu,
         memory: total.memory,
-        machine_cpu: previous
-            .as_ref()
-            .and_then(|p| machine::cpu_percent(p.machine?, system.cpu_times?)),
+        machine_cpu,
         machine_memory: system.used_memory,
+        levels: settings.colors.then(|| TotalsLevels {
+            cpu: total_cpu.map(|c| Level::of(c, &settings.cpu_levels)),
+            memory: Level::of(total.memory as f64 / GIB, &settings.memory_levels),
+            machine_cpu: machine_cpu.map(|c| Level::of(c, &settings.machine_cpu_levels)),
+            machine_memory: Level::of(
+                system.used_memory as f64 * 100.0 / system.total_memory.max(1) as f64,
+                &settings.machine_memory_levels,
+            ),
+        }),
     };
     if mode == Mode::Show || settings.tab_bar {
         println!("{}", totals.line(&numbers));
@@ -382,6 +399,7 @@ struct Reading {
     processes: Vec<Proc>,
     /// Memory in use on the whole machine.
     used_memory: u64,
+    total_memory: u64,
     cpu_times: Option<machine::CpuTimes>,
 }
 
@@ -420,6 +438,7 @@ fn read_system() -> Result<Reading, String> {
     Ok(Reading {
         processes,
         used_memory: system.used_memory(),
+        total_memory: system.total_memory(),
         cpu_times: machine::cpu_times(),
     })
 }

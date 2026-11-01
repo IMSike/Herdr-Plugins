@@ -3,6 +3,7 @@
 use serde_json::{Map, Value};
 
 use herdr_api::NumberFormat;
+use herdr_api::sidebar::{GIB, Level, Thresholds};
 
 use crate::tree::Block;
 use crate::usage::Usage;
@@ -10,6 +11,32 @@ use crate::usage::Usage;
 /// Nerd Font terminal glyph (nf-oct-terminal). Some terminals draw it two
 /// cells wide: the space after it keeps the count clear.
 const SHELL_GLYPH: char = '\u{F489}';
+
+/// How the figures are written: their format, and their thresholds when
+/// the colors are on.
+pub struct Look {
+    pub numbers: NumberFormat,
+    /// CPU (percent) and memory (GiB) thresholds.
+    pub levels: Option<(Thresholds, Thresholds)>,
+}
+
+impl Look {
+    /// The level of a CPU share, of a memory size, and of both: the higher.
+    fn level(&self, cpu: Option<f64>, memory: Option<u64>) -> Option<Level> {
+        let (cpu_levels, memory_levels) = self.levels.as_ref()?;
+        let cpu = cpu.map(|c| Level::of(c, cpu_levels));
+        let memory = memory.map(|m| Level::of(m as f64 / GIB, memory_levels));
+        cpu.max(memory)
+    }
+
+    /// `text` with the markers of `level`, for Herdr's color rules.
+    fn marked(&self, text: String, level: Option<Level>) -> String {
+        match level {
+            Some(level) => text + &level.marker(),
+            None => text,
+        }
+    }
+}
 
 /// The tokens that place a block in the tree.
 pub fn layout(block: &Block) -> Map<String, Value> {
@@ -25,17 +52,22 @@ pub fn layout(block: &Block) -> Map<String, Value> {
 /// `workspace` is the workspace's figures, on a header with several agents.
 pub fn agent(
     block: &Block,
-    usage: Option<(Option<String>, &Usage)>,
+    usage: Option<(Option<f64>, &Usage)>,
     workspace: Option<String>,
-    numbers: &NumberFormat,
+    look: &Look,
 ) -> Map<String, Value> {
     let mut tokens = layout(block);
     if let Some((cpu, usage)) = usage {
-        if let Some(cpu) = &cpu {
+        if let Some(cpu) = cpu {
             // Left out (not cleared) on the first run, which has no average yet.
-            tokens.insert("cpu".into(), cpu.clone().into());
+            let text = look.marked(look.numbers.cpu(cpu), look.level(Some(cpu), None));
+            tokens.insert("cpu".into(), text.into());
         }
-        tokens.insert("ram".into(), numbers.size(usage.memory).into());
+        let ram = look.marked(
+            look.numbers.size(usage.memory),
+            look.level(None, Some(usage.memory)),
+        );
+        tokens.insert("ram".into(), ram.into());
         let shells = match usage.shells {
             0 => None,
             1 => Some("1 shell".into()),
@@ -44,29 +76,22 @@ pub fn agent(
         tokens.insert("shells".into(), optional(shells));
         let count = (usage.shells > 0).then(|| format!("{SHELL_GLYPH} {}", usage.shells));
         tokens.insert("shell_count".into(), optional(count));
-        tokens.insert(
-            "usage".into(),
-            figures(cpu.clone(), usage, false, numbers).into(),
-        );
-        tokens.insert("stats".into(), figures(cpu, usage, true, numbers).into());
+        tokens.insert("usage".into(), figures(cpu, usage, false, look).into());
+        tokens.insert("stats".into(), figures(cpu, usage, true, look).into());
     }
     tokens.insert("ws_stats".into(), optional(workspace));
     tokens
 }
 
-/// `4% 853M  1`; the CPU share is missing on the first run.
-pub fn figures(
-    cpu: Option<String>,
-    usage: &Usage,
-    with_shells: bool,
-    numbers: &NumberFormat,
-) -> String {
-    let mut parts: Vec<String> = cpu.into_iter().collect();
-    parts.push(numbers.size(usage.memory));
+/// `4% 853M  1`; the CPU share is missing on the first run. With the
+/// colors, it carries the higher level of its CPU and memory.
+pub fn figures(cpu: Option<f64>, usage: &Usage, with_shells: bool, look: &Look) -> String {
+    let mut parts: Vec<String> = cpu.map(|c| look.numbers.cpu(c)).into_iter().collect();
+    parts.push(look.numbers.size(usage.memory));
     if with_shells && usage.shells > 0 {
         parts.push(format!("{SHELL_GLYPH} {}", usage.shells));
     }
-    parts.join(" ")
+    look.marked(parts.join(" "), look.level(cpu, Some(usage.memory)))
 }
 
 /// Whether reporting `tokens` would change nothing to the `current` ones
@@ -101,7 +126,10 @@ mod tests {
 
     #[test]
     fn an_agent_reports_its_figures_or_keeps_the_last_ones() {
-        let numbers = NumberFormat::default();
+        let numbers = Look {
+            numbers: NumberFormat::default(),
+            levels: None,
+        };
         let usage = Usage {
             cpu_ms: 0,
             memory: 853 * MB,
@@ -109,7 +137,7 @@ mod tests {
         };
         let tokens = agent(
             &block(Some("api")),
-            Some((Some("4%".into()), &usage)),
+            Some((Some(4.2), &usage)),
             Some("6% 1,2G".into()),
             &numbers,
         );
@@ -135,6 +163,25 @@ mod tests {
         let idle = Usage { shells: 0, ..usage };
         let none = agent(&block(None), Some((None, &idle)), None, &numbers);
         assert_eq!(none["shell_count"], Value::Null);
+    }
+
+    #[test]
+    fn colored_figures_carry_their_level() {
+        let look = Look {
+            numbers: NumberFormat::default(),
+            levels: Some(([10.0, 25.0, 50.0], [1.0, 2.0, 4.0])),
+        };
+        let usage = Usage {
+            cpu_ms: 0,
+            memory: 3 * 1024 * MB,
+            shells: 0,
+        };
+        let tokens = agent(&block(None), Some((Some(4.0), &usage)), None, &look);
+        // CPU green (one marker), memory orange (three): the pair is orange.
+        assert_eq!(tokens["cpu"], "4%\u{200B}");
+        assert_eq!(tokens["ram"], "3,0G\u{200B}\u{200B}\u{200B}");
+        assert_eq!(tokens["usage"], "4% 3,0G\u{200B}\u{200B}\u{200B}");
+        assert_eq!(tokens["shell_count"], Value::Null);
     }
 
     #[test]

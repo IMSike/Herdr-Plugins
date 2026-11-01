@@ -4,7 +4,8 @@
 
 use std::path::Path;
 
-use herdr_api::{NumberFormat, sidebar};
+use herdr_api::sidebar::{self, Thresholds, check_thresholds};
+use herdr_api::{MemoryUnit, NumberFormat};
 use serde::Deserialize;
 
 pub const FILE_NAME: &str = sidebar::SETTINGS_FILE;
@@ -16,6 +17,10 @@ pub struct Settings {
     pub decimal_comma: bool,
     /// `4 %` rather than `4%`.
     pub percent_space: bool,
+    /// `4,2%` rather than `4%`.
+    pub cpu_decimal: bool,
+    /// `853M`, `853 Mo` or `853 MB`.
+    pub memory_unit: MemoryUnit,
     /// How long a value lasts when no run refreshes it (Herdr closed the tab
     /// bar entry, or the plugin was removed).
     pub ttl_seconds: u64,
@@ -23,6 +28,17 @@ pub struct Settings {
     pub shells: Vec<String>,
     /// The totals in the tab bar too; the `Tools` pane shows them anyway.
     pub tab_bar: bool,
+    /// Marks each figure with its level, for Herdr's color rules and the
+    /// `Tools` pane.
+    pub colors: bool,
+    /// Thresholds of an agent's, a workspace's and Herdr's CPU (percent).
+    pub cpu_levels: Thresholds,
+    /// Thresholds of their memory (GiB).
+    pub memory_levels: Thresholds,
+    /// Thresholds of the machine's CPU (percent).
+    pub machine_cpu_levels: Thresholds,
+    /// Thresholds of the machine's memory in use (percent of its memory).
+    pub machine_memory_levels: Thresholds,
 }
 
 impl Default for Settings {
@@ -31,9 +47,16 @@ impl Default for Settings {
         Self {
             decimal_comma: numbers.decimal_comma,
             percent_space: numbers.percent_space,
+            cpu_decimal: numbers.cpu_decimal,
+            memory_unit: numbers.memory_unit,
             ttl_seconds: sidebar::TTL_SECONDS,
             shells: sidebar::SHELLS.iter().map(|s| s.to_string()).collect(),
             tab_bar: false,
+            colors: false,
+            cpu_levels: sidebar::CPU_LEVELS,
+            memory_levels: sidebar::MEMORY_LEVELS,
+            machine_cpu_levels: sidebar::MACHINE_CPU_LEVELS,
+            machine_memory_levels: sidebar::MACHINE_MEMORY_LEVELS,
         }
     }
 }
@@ -43,6 +66,8 @@ impl Settings {
         NumberFormat {
             decimal_comma: self.decimal_comma,
             percent_space: self.percent_space,
+            cpu_decimal: self.cpu_decimal,
+            memory_unit: self.memory_unit,
         }
     }
 
@@ -64,6 +89,14 @@ impl Settings {
         if settings.ttl_seconds == 0 {
             return Err("ttl_seconds doit valoir au moins 1".into());
         }
+        for (name, thresholds) in [
+            ("cpu_levels", &settings.cpu_levels),
+            ("memory_levels", &settings.memory_levels),
+            ("machine_cpu_levels", &settings.machine_cpu_levels),
+            ("machine_memory_levels", &settings.machine_memory_levels),
+        ] {
+            check_thresholds(thresholds).map_err(|e| format!("{name} : {e}"))?;
+        }
         Ok(settings)
     }
 }
@@ -81,6 +114,16 @@ mod tests {
         assert_eq!(Settings::parse("").unwrap(), Settings::default());
         assert!(Settings::parse("colour = 1").is_err());
         assert!(Settings::parse("ttl_seconds = 0").is_err());
+        let colored = Settings::parse(
+            "memory_unit = \"Mo\"
+cpu_levels = [5, 20.5, 60]
+",
+        )
+        .unwrap();
+        assert_eq!(colored.memory_unit, MemoryUnit::Mo);
+        assert_eq!(colored.cpu_levels, [5.0, 20.5, 60.0]);
+        assert!(Settings::parse("cpu_levels = [50, 25, 10]").is_err());
+        assert!(Settings::parse("memory_unit = \"Gb\"").is_err());
     }
 
     /// The menu's `Réglages` entry writes this template: uncommented, it

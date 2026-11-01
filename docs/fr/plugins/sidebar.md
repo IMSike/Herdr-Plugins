@@ -100,18 +100,46 @@ Pour vérifier les valeurs sans la sidebar, `herdr-sidebar show` (depuis le doss
 |---|---|---|
 | `decimal_comma` | `true` | `2,4G` (`true`) ou `2.4G` (`false`) |
 | `percent_space` | `false` | `4%` (`false`) ou `4 %` avec une espace fine insécable (`true`) |
+| `cpu_decimal` | `false` | `4%` (`false`) ou `4,2%` (`true`) |
+| `memory_unit` | `"M"` | `853M`, `2,4G` (`"M"`) ; `853 Mo`, `2,4 Go` (`"Mo"`) ; `853 MB`, `2,4 GB` (`"MB"`) ; `K`, `M` ou `G` selon la taille |
 | `ttl_seconds` | `20` | durée de vie d'une valeur quand aucun passage ne la rafraîchit ; au moins 1 |
 | `shells` | `["bash", "sh", "zsh", "fish", "dash", "nu", "pwsh", "powershell", "cmd"]` | noms des processus comptés comme shells (sans `.exe`, casse indifférente) |
 | `tab_bar` | `false` | affiche aussi les totaux dans la barre d'onglets (`true`) |
+| `colors` | `false` | couleurs par seuil, voir [plus bas](#couleurs-par-seuil) |
+| `cpu_levels`, `memory_levels`, `machine_cpu_levels`, `machine_memory_levels` | voir plus bas | leurs seuils |
 
 ```toml
 percent_space = true
 shells = ["bash", "pwsh", "nu"]
 ```
 
-Chaque passage lit le fichier : un changement apparaît au passage suivant. Un fichier illisible ou invalide (réglage inconnu, `ttl_seconds = 0`) est ignoré : les passages prennent les valeurs par défaut et disent pourquoi dans le journal du plugin (`herdr plugin log list --plugin imsike.sidebar`). Couleurs, ordre et disposition restent dans le `config.toml` de Herdr.
+Chaque passage lit le fichier : un changement apparaît au passage suivant. Un fichier illisible ou invalide (réglage inconnu, `ttl_seconds = 0`, seuils pas en ordre croissant) est ignoré : les passages prennent les valeurs par défaut et disent pourquoi dans le journal du plugin (`herdr plugin log list --plugin imsike.sidebar`). Couleurs, ordre et disposition restent dans le `config.toml` de Herdr.
 
 Herdr lance la commande de la barre d'onglets sans l'environnement du plugin, donc sans son dossier de configuration : `install` écrit le chemin du dossier dans `config-dir`, dans le dossier d'état, où les passages de la barre d'onglets le lisent. Tant qu'`install` n'a pas tourné une fois (au démarrage de Herdr, ou à la main), ces passages prennent les valeurs par défaut.
+
+## Couleurs par seuil
+
+Avec `colors = true`, chaque chiffre est vert, jaune, orange ou rouge selon trois seuils : au-dessus du premier (strictement) il est jaune, au-dessus du deuxième orange, au-dessus du troisième rouge.
+
+| Seuils | Par défaut | Pour |
+|---|---|---|
+| `cpu_levels` | `[10, 25, 50]` (% de la machine) | le CPU d'un agent, d'un workspace, et le total de Herdr |
+| `memory_levels` | `[1, 2, 4]` (Go) | leur mémoire |
+| `machine_cpu_levels` | `[50, 70, 90]` (%) | le CPU de la machine |
+| `machine_memory_levels` | `[60, 75, 90]` (% de sa mémoire) | la mémoire utilisée de la machine |
+
+Herdr ne colore un token que par les règles de son `config.toml`, et ses règles numériques (`gt`, `lt`) refusent une valeur avec unité (`4% 853M`). Le plugin termine donc chaque valeur colorée par un à quatre espaces de largeur nulle (U+200B) : un pour vert, quatre pour rouge. Herdr les reconnaît mais n'affiche rien. Des règles `contains`, la plus longue d'abord, donnent les couleurs ; ajoutez-les une fois aux tokens à colorer :
+
+```toml
+  [{ token = "$line", fg = "#bdae93" }, { token = "$usage", fg = "#665c54", rules = [
+    { contains = "\u200B\u200B\u200B\u200B", fg = "#fb4934" },
+    { contains = "\u200B\u200B\u200B", fg = "#fe8019" },
+    { contains = "\u200B\u200B", fg = "#fabd2f" },
+    { contains = "\u200B", fg = "#b8bb26" },
+  ] }],
+```
+
+Les marqueurs sont sur `$cpu` et `$ram` (chacun son niveau), `$usage`, `$stats` et `$ws_stats` (le plus haut niveau de leur CPU et de leur mémoire). Sans les règles, les valeurs s'affichent comme avant ; sans `colors = true`, elles ne portent aucun marqueur et les règles ne correspondent à rien. Le pane `Tools` du menu colore lui-même les totaux, d'après les niveaux que la sidebar écrit dans `totals.json`.
 
 ## Fonctionnement, implications
 
@@ -127,7 +155,7 @@ Herdr lance la commande de la barre d'onglets sans l'environnement du plugin, do
 - Le symbole `◐` remplace l'icône d'état de Herdr.
 - Le nom affiché est celui de l'onglet de l'agent : un onglet jamais renommé affiche son numéro, deux agents d'un même onglet portent le même nom. Un onglet renommé apparaît au passage suivant.
 - Herdr place lui-même ` · ` entre deux tokens d'une même ligne (`Général · 4% 853M ·  1`) ; il n'est pas réglable. `$stats` garde les chiffres en un seul token, sans lui.
-- Les valeurs portent leur unité, donc les règles de couleur numériques (`gt`, `lt`) ne s'y appliquent pas.
+- Les valeurs portent leur unité, donc les règles de couleur numériques (`gt`, `lt`) ne s'y appliquent pas : les couleurs par seuil passent par des marqueurs invisibles. Couleurs activées, une règle `equals` sur un token de chiffres ne correspond plus (les marqueurs font partie de la valeur).
 
 ## Désactiver
 

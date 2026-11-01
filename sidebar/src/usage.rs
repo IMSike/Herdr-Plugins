@@ -213,13 +213,9 @@ pub fn cpu_share(cpu_ms: u64, all_cores_ms: u64) -> f64 {
     (cpu_ms as f64 * 100.0 / all_cores_ms as f64).min(100.0)
 }
 
-pub use herdr_api::sidebar::format_cpu;
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use herdr_api::NumberFormat;
 
     fn shells() -> Vec<String> {
         crate::settings::Settings::default().shells
@@ -285,10 +281,6 @@ mod tests {
     fn formats() {
         assert_eq!(cpu_share(500, 4000), 12.5);
         assert_eq!(cpu_share(1, 0), 0.0);
-        let numbers = NumberFormat::default();
-        assert_eq!(format_cpu(0.42, &numbers), "0%");
-        assert_eq!(format_cpu(0.6, &numbers), "1%");
-        assert_eq!(format_cpu(12.5, &numbers), "12%");
         let (procs, shells, empty) = (Vec::new(), shells(), Sample::default());
         let table = Table::new(&procs, &empty, &shells);
         assert!(

@@ -8,6 +8,12 @@
 # 4 % plutôt que 4%.
 # percent_space = false
 
+# CPU avec une décimale : 4,2% plutôt que 4%.
+# cpu_decimal = false
+
+# Unités de la mémoire : "M" (853M, 2,4G), "Mo" (853 Mo, 2,4 Go) ou "MB" (853 MB).
+# memory_unit = "M"
+
 # Durée de vie d'une valeur, en secondes, quand plus aucun passage ne la
 # rafraîchit (plugin retiré, Herdr qui ne lance plus la commande).
 # ttl_seconds = 20
@@ -17,3 +23,17 @@
 
 # Totaux (panes, machine) aussi dans la barre d'onglets ; le pane Tools les affiche.
 # tab_bar = false
+
+# Couleurs par seuil : vert, jaune, orange, rouge. Chaque valeur porte son
+# niveau, que les règles du config.toml de Herdr colorent (voir la page du
+# plugin) ; le pane Tools colore ses totaux.
+# colors = false
+
+# Seuils (trois, croissants) des agents, des workspaces et du total de Herdr :
+# CPU en % de la machine, mémoire en Go.
+# cpu_levels = [10, 25, 50]
+# memory_levels = [1, 2, 4]
+
+# Seuils de la machine : CPU et mémoire utilisée, en %.
+# machine_cpu_levels = [50, 70, 90]
+# machine_memory_levels = [60, 75, 90]
