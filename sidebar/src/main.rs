@@ -25,7 +25,7 @@ use std::time::Duration;
 use serde_json::{Map, Value, json};
 use sysinfo::{MemoryRefreshKind, ProcessRefreshKind, ProcessesToUpdate, System};
 
-use herdr_api::{env, request, request_field, unix_millis};
+use herdr_api::{request, request_field, unix_millis};
 use snapshot::{Pane, Snapshot};
 use usage::{Proc, Sample, Shell, Table, Usage, cpu_share, format_cpu};
 
@@ -61,11 +61,10 @@ fn install() -> Result<(), String> {
     // The tab bar entry runs this copy: its path is the one to configure.
     println!("{}", copy_binary()?.display());
     // Agents follow the `order` token: each workspace's agents after its header.
-    let plugin = std::env::var(env::PLUGIN_ID).map_err(|_| format!("{} absent", env::PLUGIN_ID))?;
     request(
         "agent.view.set",
         json!({
-            "source": format!("plugin:{plugin}"),
+            "source": format!("plugin:{SOURCE}"),
             "label": "arbre",
             "sort": [{ "field": { "token": "order" }, "order": "asc" }],
         }),
@@ -76,7 +75,7 @@ fn install() -> Result<(), String> {
 /// Copies the running binary into the state folder, unless it is already
 /// there, and returns the copy's path.
 fn copy_binary() -> Result<PathBuf, String> {
-    let dir = herdr_api::state_dir().ok_or(format!("{} absent", env::STATE_DIR))?;
+    let dir = herdr_api::state_dir()?;
     let source = std::env::current_exe().map_err(|e| e.to_string())?;
     let target = dir.join(source.file_name().ok_or("binaire sans nom")?);
     if fs::read(&target).ok() == Some(fs::read(&source).map_err(|e| e.to_string())?) {
@@ -133,10 +132,10 @@ enum Mode {
 
 fn tick(mode: Mode) -> Result<(), String> {
     let state_dir = match herdr_api::state_dir() {
-        Some(dir) => dir,
+        Ok(dir) => dir,
         // The tab bar entry gets no plugin context: it runs the copy that
         // `install` put in the state folder.
-        None => std::env::current_exe()
+        Err(_) => std::env::current_exe()
             .map_err(|e| e.to_string())?
             .parent()
             .map(Path::to_path_buf)

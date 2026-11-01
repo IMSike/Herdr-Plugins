@@ -93,7 +93,7 @@ fn open() -> Result<(), String> {
         Ok(false) => {}
         Err(message) => eprintln!("herdr-menu : pane Tools impossible, menu en popup : {message}"),
     }
-    let state = herdr_api::state_dir().ok_or(format!("{} absent", herdr_api::env::STATE_DIR))?;
+    let state = herdr_api::state_dir()?;
     // What an action or a figures file killed midway left behind.
     herdr_api::remove_stale(&state, STALE_AFTER, |name| {
         name.starts_with("choice-") || name.ends_with(".partial")
@@ -204,9 +204,7 @@ fn write_choice(path: &Path, choice: Option<&Choice>) -> io::Result<()> {
 }
 
 fn menu() -> Result<(), String> {
-    let choice_file = std::env::var_os(CHOICE_ENV)
-        .map(PathBuf::from)
-        .ok_or(format!("{CHOICE_ENV} absent"))?;
+    let choice_file = PathBuf::from(herdr_api::var(CHOICE_ENV)?);
     // Tells the waiting action that the menu runs, and which process to watch.
     let _ = herdr_api::write_atomic(
         &pid_file(&choice_file),
@@ -246,7 +244,7 @@ fn run() -> Result<(), String> {
 /// Runs the entry the menu or the bar showed, not one read again from
 /// `menu.toml`, which may have changed since.
 fn run_entry() -> Result<(), String> {
-    let json = std::env::var(ENTRY_ENV).map_err(|_| format!("{ENTRY_ENV} absent"))?;
+    let json = herdr_api::var(ENTRY_ENV)?;
     let entry: Entry =
         serde_json::from_str(&json).map_err(|e| format!("{ENTRY_ENV} illisible : {e}"))?;
     let mut command = launch::command(&entry.command)?;

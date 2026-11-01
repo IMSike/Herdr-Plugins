@@ -250,8 +250,7 @@ fn folders(me: &str) -> (Option<PathBuf>, Option<PathBuf>) {
 
 /// Runs the bar until it is closed or no longer has a place.
 pub fn run(entries: &[Entry]) -> Result<(), String> {
-    let me = std::env::var(herdr_api::env::PANE_ID)
-        .map_err(|_| format!("{} absent", herdr_api::env::PANE_ID))?;
+    let me = herdr_api::var(herdr_api::env::PANE_ID)?;
     let result = show(&me, entries).map_err(|e| e.to_string());
     let _ = herdr::close(&me);
     result
@@ -277,7 +276,9 @@ struct Measurer {
 fn measure_in_background(root: PathBuf) -> Measurer {
     let (send, news) = mpsc::channel();
     let (ask, asked) = mpsc::channel::<()>();
-    let file = herdr_api::state_dir().map(|dir| stats::cache_file(&dir, &root));
+    let file = herdr_api::state_dir()
+        .ok()
+        .map(|dir| stats::cache_file(&dir, &root));
     std::thread::spawn(move || {
         let mut last: Option<Measured> = None;
         let mut manual = false;

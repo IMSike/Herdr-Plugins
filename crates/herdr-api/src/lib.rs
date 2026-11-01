@@ -20,9 +20,20 @@ pub mod env {
     pub const PANE_ID: &str = "HERDR_PANE_ID";
 }
 
-/// The plugin's state folder, when Herdr gives it.
-pub fn state_dir() -> Option<PathBuf> {
-    std::env::var_os(env::STATE_DIR).map(PathBuf::from)
+/// An environment variable Herdr or the plugin sets: its absence is an error.
+pub fn var(name: &str) -> Result<String, String> {
+    std::env::var(name).map_err(|_| absent(name))
+}
+
+/// The plugin's state folder.
+pub fn state_dir() -> Result<PathBuf, String> {
+    std::env::var_os(env::STATE_DIR)
+        .map(PathBuf::from)
+        .ok_or_else(|| absent(env::STATE_DIR))
+}
+
+fn absent(name: &str) -> String {
+    format!("{name} absent")
 }
 
 /// Milliseconds since the Unix epoch.

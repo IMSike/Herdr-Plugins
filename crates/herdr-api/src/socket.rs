@@ -44,7 +44,7 @@ fn failure(message: String) -> Error {
 
 /// Sends one request and returns its `result`.
 pub fn request(method: &str, params: Value) -> Result<Value, Error> {
-    let path = std::env::var(SOCKET_ENV).map_err(|_| failure(format!("{SOCKET_ENV} absent")))?;
+    let path = crate::var(SOCKET_ENV).map_err(failure)?;
     let line = json!({ "id": method, "method": method, "params": params }).to_string();
     let answer = exchange(path, line).map_err(|e| failure(format!("{method} : {e}")))?;
     let mut value: Value = serde_json::from_str(&answer)
@@ -97,8 +97,9 @@ fn exchange(path: String, line: String) -> io::Result<String> {
         .unwrap_or_else(|_| Err(io::Error::new(io::ErrorKind::TimedOut, "pas de réponse")))
 }
 
-/// The socket's own timeouts end the thread too when Herdr never answers: a
-/// long-running pane does not pile them up.
+/// Once connected, the socket's own timeouts end the thread too when Herdr
+/// never answers. The connect itself has none: it blocks while Herdr's
+/// backlog is full, and its thread ends with the process.
 #[cfg(unix)]
 fn connect(path: &str, deadline: Instant) -> io::Result<std::os::unix::net::UnixStream> {
     let stream = std::os::unix::net::UnixStream::connect(path)?;
