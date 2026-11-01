@@ -13,10 +13,9 @@ use crossterm::queue;
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use crossterm::terminal;
 use files::Files;
-use herdr_api::sidebar::{self, Thresholds, check_thresholds};
-use serde::Deserialize;
+use herdr_api::NumberFormat;
+use herdr_api::sidebar::{self, Settings, Thresholds, check_thresholds};
 use std::io;
-use std::path::Path;
 use toml_edit::Value;
 
 /// The `Tools` pane the screen was opened from, if any.
@@ -101,71 +100,22 @@ impl Levels {
     }
 }
 
-/// The sidebar's settings the screen shows; what `sidebar.toml` sets, the
-/// defaults for the rest.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(default)]
-struct SidebarValues {
-    ttl_seconds: u64,
-    shells: Vec<String>,
-    tab_bar: bool,
-    colors: bool,
-    cpu_levels: Thresholds,
-    memory_levels: Thresholds,
-    machine_cpu_levels: Thresholds,
-    machine_memory_levels: Thresholds,
-}
-
-impl Default for SidebarValues {
-    fn default() -> Self {
-        Self {
-            ttl_seconds: sidebar::TTL_SECONDS,
-            shells: sidebar::SHELLS.iter().map(|s| s.to_string()).collect(),
-            tab_bar: false,
-            colors: false,
-            cpu_levels: sidebar::CPU_LEVELS,
-            memory_levels: sidebar::MEMORY_LEVELS,
-            machine_cpu_levels: sidebar::MACHINE_CPU_LEVELS,
-            machine_memory_levels: sidebar::MACHINE_MEMORY_LEVELS,
-        }
-    }
-}
-
-impl SidebarValues {
-    /// The values of `path`, the defaults when it cannot be read (and why).
-    fn read(path: &Path) -> (Self, Option<String>) {
-        let text = match std::fs::read_to_string(path) {
-            Ok(text) => text,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return (Self::default(), None),
-            Err(e) => {
-                let error = format!("{} illisible : {e}", sidebar::SETTINGS_FILE);
-                return (Self::default(), Some(error));
-            }
-        };
-        match toml::from_str::<Self>(&text) {
-            Ok(values) => (values, None),
-            Err(e) => {
-                let error = format!("{} invalide : {}", sidebar::SETTINGS_FILE, e.message());
-                (Self::default(), Some(error))
-            }
+impl Levels {
+    fn of(self, settings: &Settings) -> &Thresholds {
+        match self {
+            Self::Cpu => &settings.cpu_levels,
+            Self::Memory => &settings.memory_levels,
+            Self::MachineCpu => &settings.machine_cpu_levels,
+            Self::MachineMemory => &settings.machine_memory_levels,
         }
     }
 
-    fn levels(&self, which: Levels) -> &Thresholds {
-        match which {
-            Levels::Cpu => &self.cpu_levels,
-            Levels::Memory => &self.memory_levels,
-            Levels::MachineCpu => &self.machine_cpu_levels,
-            Levels::MachineMemory => &self.machine_memory_levels,
-        }
-    }
-
-    fn levels_mut(&mut self, which: Levels) -> &mut Thresholds {
-        match which {
-            Levels::Cpu => &mut self.cpu_levels,
-            Levels::Memory => &mut self.memory_levels,
-            Levels::MachineCpu => &mut self.machine_cpu_levels,
-            Levels::MachineMemory => &mut self.machine_memory_levels,
+    fn of_mut(self, settings: &mut Settings) -> &mut Thresholds {
+        match self {
+            Self::Cpu => &mut settings.cpu_levels,
+            Self::Memory => &mut settings.memory_levels,
+            Self::MachineCpu => &mut settings.machine_cpu_levels,
+            Self::MachineMemory => &mut settings.machine_memory_levels,
         }
     }
 }
@@ -198,7 +148,7 @@ struct State {
     files: Files,
     menu: Menu,
     /// `None` when the sidebar is not installed.
-    sidebar: Option<SidebarValues>,
+    sidebar: Option<Settings>,
     selected: usize,
     /// The last thing done, or why it failed (in red).
     status: Option<(String, bool)>,
@@ -310,8 +260,7 @@ impl State {
                 match typed {
                     Some(text) => format!("{text}▏"),
                     None => sidebar.map_or_else(String::new, |s| {
-                        let values: Vec<String> =
-                            s.levels(which).iter().map(|v| number(*v)).collect();
+                        let values: Vec<String> = which.of(s).iter().map(|v| number(*v)).collect();
                         format!("{} {}", values.join(" · "), which.unit())
                     }),
                 },
@@ -339,48 +288,83 @@ impl State {
         }
     }
 
-    /// Writes a number format setting to both files.
-    fn set_both(&self, key: &str, value: Value) -> Result<String, String> {
+    /// Writes a number format setting to both files; the screen shows it
+    /// once `menu.toml` has it, even when `sidebar.toml` cannot be written.
+    fn set_number(
+        &mut self,
+        key: &str,
+        value: Value,
+        apply: impl FnOnce(&mut NumberFormat),
+    ) -> Result<String, String> {
         self.set_menu(key, value.clone())?;
-        self.set_sidebar(key, value)?;
+        apply(&mut self.menu.numbers);
+        self.set_sidebar(key, value).map_err(|e| {
+            format!(
+                "enregistré dans {}, pas dans {} : {e}",
+                config::FILE_NAME,
+                sidebar::SETTINGS_FILE
+            )
+        })?;
         let files: Vec<&str> = std::iter::once(config::FILE_NAME)
             .chain(self.sidebar.as_ref().map(|_| sidebar::SETTINGS_FILE))
             .collect();
         Ok(saved(&files))
     }
 
+    /// Turns a yes-or-no number format setting over.
+    fn toggle_number(
+        &mut self,
+        key: &str,
+        field: fn(&mut NumberFormat) -> &mut bool,
+    ) -> Result<String, String> {
+        let value = !*field(&mut self.menu.numbers);
+        self.set_number(key, value.into(), |n| *field(n) = value)
+    }
+
+    /// Writes a setting of `sidebar.toml`, then shows it; `None` when the
+    /// sidebar is not installed.
+    fn set_in_sidebar(
+        &mut self,
+        key: &str,
+        value: Value,
+        apply: impl FnOnce(&mut Settings),
+    ) -> Option<Result<String, String>> {
+        self.sidebar.as_ref()?;
+        Some(self.set_sidebar(key, value).map(|()| {
+            if let Some(s) = &mut self.sidebar {
+                apply(s);
+            }
+            saved(&[sidebar::SETTINGS_FILE])
+        }))
+    }
+
+    /// Turns a yes-or-no setting of `sidebar.toml` over.
+    fn toggle_sidebar(
+        &mut self,
+        key: &str,
+        field: fn(&mut Settings) -> &mut bool,
+    ) -> Option<Result<String, String>> {
+        let value = !*field(self.sidebar.as_mut()?);
+        self.set_in_sidebar(key, value.into(), |s| *field(s) = value)
+    }
+
     /// Changes `item` by one step (`forward` or back); `Some(true)` when the
     /// screen should close.
     fn change(&mut self, item: Item, forward: bool) -> Option<bool> {
         let result = match item {
-            Item::DecimalComma => {
-                let value = !self.menu.numbers.decimal_comma;
-                self.set_both("decimal_comma", value.into())
-                    .inspect(|_| self.menu.numbers.decimal_comma = value)
-            }
-            Item::PercentSpace => {
-                let value = !self.menu.numbers.percent_space;
-                self.set_both("percent_space", value.into())
-                    .inspect(|_| self.menu.numbers.percent_space = value)
-            }
-            Item::CpuDecimal => {
-                let value = !self.menu.numbers.cpu_decimal;
-                self.set_both("cpu_decimal", value.into())
-                    .inspect(|_| self.menu.numbers.cpu_decimal = value)
-            }
+            Item::DecimalComma => self.toggle_number("decimal_comma", |n| &mut n.decimal_comma),
+            Item::PercentSpace => self.toggle_number("percent_space", |n| &mut n.percent_space),
+            Item::CpuDecimal => self.toggle_number("cpu_decimal", |n| &mut n.cpu_decimal),
+            Item::MemorySpace => self.toggle_number("memory_space", |n| &mut n.memory_space),
             Item::MemoryUnit => {
                 let mut value = self.menu.numbers.memory_unit.next();
                 if !forward {
                     // Back: two steps forward among three.
                     value = value.next();
                 }
-                self.set_both("memory_unit", value.name().into())
-                    .inspect(|_| self.menu.numbers.memory_unit = value)
-            }
-            Item::MemorySpace => {
-                let value = !self.menu.numbers.memory_space;
-                self.set_both("memory_space", value.into())
-                    .inspect(|_| self.menu.numbers.memory_space = value)
+                self.set_number("memory_unit", value.name().into(), |n| {
+                    n.memory_unit = value
+                })
             }
             Item::Layout => {
                 let value = match self.menu.layout {
@@ -410,38 +394,18 @@ impl State {
                     current.saturating_sub(1) / TTL_STEP * TTL_STEP
                 }
                 .clamp(TTL_STEP, TTL_MAX);
-                self.set_sidebar("ttl_seconds", (value as i64).into())
-                    .map(|()| {
-                        if let Some(s) = &mut self.sidebar {
-                            s.ttl_seconds = value;
-                        }
-                        saved(&[sidebar::SETTINGS_FILE])
-                    })
+                self.set_in_sidebar("ttl_seconds", (value as i64).into(), |s| {
+                    s.ttl_seconds = value
+                })?
             }
-            Item::TabBar => {
-                let value = !self.sidebar.as_ref()?.tab_bar;
-                self.set_sidebar("tab_bar", value.into()).map(|()| {
-                    if let Some(s) = &mut self.sidebar {
-                        s.tab_bar = value;
-                    }
-                    saved(&[sidebar::SETTINGS_FILE])
-                })
-            }
-            Item::Colors => {
-                let value = !self.sidebar.as_ref()?.colors;
-                self.set_sidebar("colors", value.into()).map(|()| {
-                    if let Some(s) = &mut self.sidebar {
-                        s.colors = value;
-                    }
-                    saved(&[sidebar::SETTINGS_FILE])
-                })
-            }
+            Item::TabBar => self.toggle_sidebar("tab_bar", |s| &mut s.tab_bar)?,
+            Item::Colors => self.toggle_sidebar("colors", |s| &mut s.colors)?,
             Item::Shells => {
                 self.typing = Some(self.sidebar.as_ref()?.shells.join(", "));
                 return None;
             }
             Item::Levels(which) => {
-                let values = self.sidebar.as_ref()?.levels(which);
+                let values = which.of(self.sidebar.as_ref()?);
                 let text: Vec<String> = values.iter().map(|v| number(*v)).collect();
                 self.typing = Some(text.join(" "));
                 return None;
@@ -477,11 +441,8 @@ impl State {
             .map(str::to_string)
             .collect();
         let array: toml_edit::Array = shells.iter().map(String::as_str).collect();
-        self.set_sidebar("shells", array.into())?;
-        if let Some(s) = &mut self.sidebar {
-            s.shells = shells;
-        }
-        Ok(saved(&[sidebar::SETTINGS_FILE]))
+        self.set_in_sidebar("shells", array.into(), |s| s.shells = shells)
+            .unwrap_or_else(|| Ok(String::new()))
     }
 
     fn save_levels(&mut self, which: Levels, text: &str) -> Result<String, String> {
@@ -495,11 +456,8 @@ impl State {
                 array.push(value);
             }
         }
-        self.set_sidebar(which.key(), array.into())?;
-        if let Some(s) = &mut self.sidebar {
-            *s.levels_mut(which) = thresholds;
-        }
-        Ok(saved(&[sidebar::SETTINGS_FILE]))
+        self.set_in_sidebar(which.key(), array.into(), |s| *which.of_mut(s) = thresholds)
+            .unwrap_or_else(|| Ok(String::new()))
     }
 
     fn show(&mut self, result: Result<String, String>) {
@@ -527,10 +485,12 @@ pub fn run() -> Result<(), String> {
     let files = Files::find();
     let (menu, menu_error) = config::load(crate::config_dir().as_deref());
     let (sidebar, sidebar_error) = match &files.sidebar {
-        Some(path) => {
-            let (values, error) = SidebarValues::read(path);
-            (Some(values), error)
-        }
+        // Shown as the sidebar uses them: the defaults when it ignores the
+        // file, and why.
+        Some(path) => match Settings::read(path) {
+            Ok(settings) => (Some(settings), None),
+            Err(e) => (Some(Settings::default()), Some(e)),
+        },
         None => (None, None),
     };
     let mut state = State {
@@ -732,30 +692,6 @@ fn draw(state: &State) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn reads_the_sidebar_settings_with_their_defaults() {
-        let dir = std::env::temp_dir().join(format!("herdr-menu-settings-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join(sidebar::SETTINGS_FILE);
-        let (values, error) = SidebarValues::read(&path);
-        assert!(error.is_none());
-        assert_eq!(values, SidebarValues::default());
-        std::fs::write(
-            &path,
-            "ttl_seconds = 30\nshells = [\"bash\"]\ncpu_levels = [5, 10.5, 20]\nunknown = 1\n",
-        )
-        .unwrap();
-        let (values, error) = SidebarValues::read(&path);
-        assert!(error.is_none());
-        assert_eq!(
-            (values.ttl_seconds, values.shells),
-            (30, vec!["bash".into()])
-        );
-        assert_eq!(values.cpu_levels, [5.0, 10.5, 20.0]);
-        assert!(!values.tab_bar && !values.colors);
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
 
     #[test]
     fn thresholds_are_typed_with_spaces() {

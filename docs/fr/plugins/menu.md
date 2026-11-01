@@ -147,7 +147,7 @@ La fenêtre attend Entrée avant de se fermer, erreur comprise.
 | Ouvrir les fichiers de configuration… | ouvre les fichiers dans un éditeur, voir plus bas | |
 | Recharger la configuration de Herdr | recharge le `config.toml` de Herdr et dit si Herdr l'a accepté | |
 
-Les lignes Sidebar et Couleurs n'apparaissent que si le plugin [sidebar](sidebar.md) est installé. Un fichier est écrit en gardant ses commentaires et ses autres réglages : un réglage en commentaire y prend sa valeur à sa place. Le fichier d'un plugin qui n'existe pas encore est d'abord créé depuis son modèle, tous les réglages en commentaire à leur valeur par défaut.
+Les lignes Sidebar et Couleurs n'apparaissent que si le plugin [sidebar](sidebar.md) est installé. Quand la sidebar ignore son `sidebar.toml` (réglage inconnu, seuils pas en ordre…), l'écran dit pourquoi en rouge et affiche les valeurs par défaut, celles que la sidebar utilise. Un fichier est écrit en gardant ses commentaires et ses autres réglages : un réglage en commentaire y prend sa valeur à sa place. Le fichier d'un plugin qui n'existe pas encore est d'abord créé depuis son modèle, tous les réglages en commentaire à leur valeur par défaut.
 
 **Ouvrir les fichiers de configuration…** ouvre ensemble le `config.toml` de Herdr (le chemin que donne l'aide de Herdr, qui suit `HERDR_CONFIG_PATH`), `menu.toml`, et `sidebar.toml` quand la sidebar est installée. L'éditeur est `VISUAL`, sinon `EDITOR` (arguments permis) ; sans eux, sous Windows, VS Code quand il est dans le `PATH`, sinon le Bloc-notes, une fenêtre par fichier ; ailleurs `nano`, sinon `vi`. L'écran des réglages se ferme et Herdr reste libre d'utilisation :
 

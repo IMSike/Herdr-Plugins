@@ -147,7 +147,7 @@ The window waits for Enter before closing, an error included.
 | Ouvrir les fichiers de configuration… | opens the files in an editor, see below | |
 | Recharger la configuration de Herdr | reloads Herdr's `config.toml` and says whether Herdr accepted it | |
 
-The Sidebar and color lines only show when the [sidebar](sidebar.md) plugin is installed. A file is written with its comments and its other settings kept: a setting commented out in it takes its value in its place. A plugin's file that does not exist yet is first created from its template, every setting commented out at its default.
+The Sidebar and color lines only show when the [sidebar](sidebar.md) plugin is installed. When the sidebar ignores its `sidebar.toml` (unknown setting, thresholds out of order…), the screen says why in red and shows the defaults, the values the sidebar uses. A file is written with its comments and its other settings kept: a setting commented out in it takes its value in its place. A plugin's file that does not exist yet is first created from its template, every setting commented out at its default.
 
 **Ouvrir les fichiers de configuration…** opens, together, Herdr's `config.toml` (the path Herdr's help gives, which follows `HERDR_CONFIG_PATH`), `menu.toml`, and `sidebar.toml` when the sidebar is installed. The editor is `VISUAL`, else `EDITOR` (arguments allowed); without them, on Windows, VS Code when it is on `PATH`, else Notepad, one window per file; elsewhere `nano`, else `vi`. The settings screen closes and Herdr stays free to use:
 
