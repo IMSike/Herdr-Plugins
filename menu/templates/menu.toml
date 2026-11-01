@@ -34,7 +34,7 @@
 # key = "l"                 # touche qui ouvre l'entrée
 # label = "lazygit"
 # command = ["lazygit"]     # programme et arguments, sans shell
-# cwd = "workspace"         # ou "pane" : dossier du pane qui avait le focus
+# cwd = "workspace"         # ou "pane" : dossier du pane actif (depuis le pane Tools, du premier terminal de l'onglet)
 # icon = "󰊢"                # glyphe Nerd Font ; sa touche sans icône
 # popup = true              # false : programme qui ouvre sa propre fenêtre
 #
