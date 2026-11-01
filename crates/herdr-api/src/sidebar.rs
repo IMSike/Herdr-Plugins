@@ -39,7 +39,7 @@ pub const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
 /// The totals of the last run, in the sidebar's state folder.
 const TOTALS_FILE: &str = "totals.json";
 /// Nerd Font monitor glyph (nf-md-monitor), before the whole machine's figures.
-const MACHINE_GLYPH: char = '\u{F0379}';
+pub const MACHINE_GLYPH: char = '\u{F0379}';
 /// What a value carries for Herdr's color rules: one to four of them, by
 /// level. It has no width: Herdr matches it but draws nothing.
 pub const MARKER: char = '\u{200B}';
@@ -140,7 +140,9 @@ impl Totals {
             self.memory,
             levels.map(|l| l.memory),
         );
-        parts.push((format!(" · {MACHINE_GLYPH} "), None));
+        parts.push((" · ".to_string(), None));
+        parts.push((MACHINE_GLYPH.to_string(), None));
+        parts.push((" ".to_string(), None));
         parts.extend(figures(
             self.machine_cpu,
             levels.and_then(|l| l.machine_cpu),
