@@ -4,12 +4,46 @@ use crate::config::StartIn;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 /// How long a popup waits for the previous one to be torn down.
 const BUSY_FOR_AT_MOST: Duration = Duration::from_secs(3);
 /// How often it tries again meanwhile.
 const BUSY_RETRY_EVERY: Duration = Duration::from_millis(50);
+
+/// The `herdr` to run: the release Herdr calls current (an update moves it
+/// to the new one), else the one that runs this session, else `PATH`'s.
+pub fn binary() -> PathBuf {
+    let Some(running) = std::env::var_os(herdr_api::env::BIN_PATH).map(PathBuf::from) else {
+        return "herdr".into();
+    };
+    current_release(&running)
+        .filter(|c| c.is_file())
+        .unwrap_or(running)
+}
+
+/// `.../current/herdr.exe` for `.../releases/<version>/herdr.exe`; `None`
+/// for a binary laid out otherwise.
+fn current_release(running: &std::path::Path) -> Option<PathBuf> {
+    let releases = running.parent()?.parent()?;
+    if releases.file_name()? != "releases" {
+        return None;
+    }
+    Some(
+        releases
+            .parent()?
+            .join("current")
+            .join(running.file_name()?),
+    )
+}
+
+/// `herdr <args>`, without input.
+pub fn command(args: &[&str]) -> Command {
+    let mut command = Command::new(binary());
+    command.args(args).stdin(Stdio::null());
+    command
+}
 
 /// The part of `HERDR_PLUGIN_CONTEXT_JSON` the menu uses.
 #[derive(Debug, Default, Deserialize)]
@@ -177,6 +211,19 @@ pub fn open_plugin_pane(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finds_the_current_release_beside_the_running_one() {
+        let running = std::path::Path::new("/opt/herdr/releases/0.9.5/herdr");
+        assert_eq!(
+            current_release(running),
+            Some(PathBuf::from("/opt/herdr/current/herdr"))
+        );
+        assert_eq!(
+            current_release(std::path::Path::new("/home/u/shims/bin/herdr")),
+            None
+        );
+    }
 
     #[test]
     fn reads_both_folders_and_falls_back() {

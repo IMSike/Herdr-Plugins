@@ -6,7 +6,7 @@ use crate::{config, herdr, launch};
 use herdr_api::sidebar;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 /// What a new `menu.toml` holds: every setting, commented out.
 pub const MENU_TEMPLATE: &str = include_str!("../../templates/menu.toml");
@@ -71,17 +71,9 @@ impl Files {
     }
 }
 
-/// The `herdr` program: the one that runs this Herdr, else `PATH`'s.
-fn herdr_command(args: &[&str]) -> Command {
-    let program = std::env::var_os("HERDR_BIN_PATH").unwrap_or_else(|| "herdr".into());
-    let mut command = Command::new(program);
-    command.args(args).stdin(Stdio::null());
-    command
-}
-
 /// What `herdr <args>` prints, when it succeeds.
 fn herdr_output(args: &[&str]) -> Option<String> {
-    let output = herdr_command(args).output().ok()?;
+    let output = herdr::command(args).output().ok()?;
     output
         .status
         .success()
@@ -100,7 +92,7 @@ fn sidebar_config_dir() -> Option<PathBuf> {
 /// Herdr's `config.toml`: `HERDR_CONFIG_PATH`, else the path Herdr's help
 /// gives, else its usual place.
 fn herdr_config_path() -> PathBuf {
-    if let Some(path) = std::env::var_os("HERDR_CONFIG_PATH") {
+    if let Some(path) = std::env::var_os(herdr_api::env::CONFIG_PATH) {
         return path.into();
     }
     if let Some(help) = herdr_output(&["--help"])

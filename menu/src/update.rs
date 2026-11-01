@@ -4,15 +4,10 @@
 //! must restart to run the new version, a confirmation that says what stops.
 
 use crate::herdr;
+use herdr_api::env::INSIDE as INSIDE_HERDR;
 use serde_json::Value;
 use std::io::{self, Write};
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
-
-/// What Herdr sets in its panes, and `herdr update` refuses.
-const INSIDE_HERDR: &str = "HERDR_ENV";
-/// Set by Herdr in its panes: the `herdr` binary that runs this session.
-const BIN_PATH: &str = "HERDR_BIN_PATH";
 
 /// Opens the window that runs the update, and returns at once.
 pub fn open_window() -> Result<(), String> {
@@ -65,24 +60,8 @@ fn terminal_window(me: &std::path::Path) -> Result<Command, String> {
     Ok(command)
 }
 
-/// The `herdr` to run: the release Herdr calls current (an update moves it
-/// to the new one), else the one that runs this session, else `PATH`'s.
-fn herdr_binary() -> PathBuf {
-    let Some(running) = std::env::var_os(BIN_PATH).map(PathBuf::from) else {
-        return "herdr".into();
-    };
-    // `.../releases/<version>/herdr.exe` beside `.../current`.
-    let current = running
-        .parent()
-        .and_then(|release| release.parent())
-        .and_then(|releases| releases.parent())
-        .zip(running.file_name())
-        .map(|(packages, name)| packages.join("current").join(name));
-    current.filter(|c| c.is_file()).unwrap_or(running)
-}
-
 fn herdr(args: &[&str]) -> Command {
-    let mut command = Command::new(herdr_binary());
+    let mut command = Command::new(herdr::binary());
     command.args(args);
     command
 }
@@ -101,8 +80,7 @@ fn herdr_shown(args: &[&str]) -> Result<(), String> {
 
 /// `herdr status --json`.
 fn status() -> Result<Value, String> {
-    let output = herdr(&["status", "--json"])
-        .stdin(Stdio::null())
+    let output = herdr::command(&["status", "--json"])
         .output()
         .map_err(|e| format!("impossible de lancer « herdr status » : {e}"))?;
     serde_json::from_slice(&output.stdout).map_err(|e| format!("état de Herdr illisible : {e}"))
