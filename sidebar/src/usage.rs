@@ -38,6 +38,19 @@ pub struct Sample {
     /// The whole machine's CPU times, where the system gives them.
     #[serde(default)]
     pub machine: Option<crate::machine::CpuTimes>,
+    /// pane id -> its shell, so that the next run need not ask Herdr again.
+    #[serde(default)]
+    pub shells: HashMap<String, Shell>,
+}
+
+/// The shell process of a pane.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Shell {
+    /// The terminal the pane showed: another terminal runs another shell.
+    pub terminal_id: String,
+    pub pid: u32,
+    /// Tells the shell from a later process given the same pid.
+    pub start_time: u64,
 }
 
 impl Sample {
@@ -49,7 +62,7 @@ impl Sample {
         Self {
             at_ms,
             cpu,
-            machine: None,
+            ..Self::default()
         }
     }
 }
@@ -93,6 +106,11 @@ impl<'a> Table<'a> {
             children,
             previous,
         }
+    }
+
+    /// When `pid` started, if it runs.
+    pub fn start_time(&self, pid: u32) -> Option<u64> {
+        self.by_pid.get(&pid).map(|p| p.start_time)
     }
 
     /// Usage of `root` and all its descendants.
@@ -189,7 +207,7 @@ mod tests {
         let previous = Sample {
             at_ms: 0,
             cpu: HashMap::from([(1, (0, 40)), (2, (1, 300))]),
-            machine: None,
+            ..Sample::default()
         };
         let usage = Table::new(&procs, &previous).tree(1);
         assert_eq!(
@@ -208,7 +226,7 @@ mod tests {
         let previous = Sample {
             at_ms: 0,
             cpu: HashMap::from([(1, (0, 500))]),
-            machine: None,
+            ..Sample::default()
         };
         assert_eq!(Table::new(&procs, &previous).tree(1).cpu_ms, 20);
     }

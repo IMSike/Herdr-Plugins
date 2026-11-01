@@ -20,7 +20,8 @@ pub struct Space {
 pub struct Agent {
     pub pane_id: String,
     pub workspace_id: String,
-    pub tab_id: String,
+    /// Place of its tab in the tab bar: the tree follows it.
+    pub tab_number: u64,
     /// The agent's tab name.
     pub name: String,
     pub status: String,
@@ -42,7 +43,7 @@ pub fn blocks(spaces: &[Space], agents: &[Agent]) -> Vec<Block> {
         .filter_map(|agent| {
             let space = spaces.iter().find(|s| s.id == agent.workspace_id)?;
             Some((
-                order_key(space.number, &agent.tab_id, &agent.pane_id),
+                order_key(space.number, agent.tab_number, &agent.pane_id),
                 agent,
             ))
         })
@@ -90,14 +91,11 @@ pub fn status_glyph(status: &str) -> char {
     }
 }
 
-/// Sorts by workspace, then tab, then pane. Ids end with a counter
-/// (`w1:t3`, `w1:pB`) whose longer forms come later.
-fn order_key(workspace: u64, tab_id: &str, pane_id: &str) -> String {
-    let counter = |id: &str| {
-        let suffix = id.rsplit(':').next().unwrap_or(id);
-        format!("{suffix:0>8}")
-    };
-    format!("{workspace:04}{}{}", counter(tab_id), counter(pane_id))
+/// Sorts by workspace and tab, as the sidebar and the tab bar show them, then
+/// by pane. A pane id ends with a counter (`w1:pB`) whose longer forms come later.
+fn order_key(workspace: u64, tab: u64, pane_id: &str) -> String {
+    let counter = pane_id.rsplit(':').next().unwrap_or(pane_id);
+    format!("{workspace:04}{tab:04}{counter:0>8}")
 }
 
 #[cfg(test)]
@@ -112,11 +110,11 @@ mod tests {
         }
     }
 
-    fn agent(pane: &str, tab: &str, status: &str) -> Agent {
+    fn agent(pane: &str, tab: u64, status: &str) -> Agent {
         Agent {
             pane_id: pane.into(),
             workspace_id: pane.split(':').next().unwrap().into(),
-            tab_id: tab.into(),
+            tab_number: tab,
             name: "tab".into(),
             status: status.into(),
         }
@@ -126,10 +124,10 @@ mod tests {
     fn groups_agents_under_their_workspace_in_sidebar_order() {
         let spaces = [space("w1", "api", 2), space("w3", "CC", 1)];
         let agents = [
-            agent("w1:pD", "w1:t4", "idle"),
-            agent("w3:p1", "w3:t1", "done"),
-            agent("w1:p1", "w1:t1", "working"),
-            agent("w9:p1", "w9:t1", "idle"),
+            agent("w1:pD", 4, "idle"),
+            agent("w3:p1", 1, "done"),
+            agent("w1:p1", 1, "working"),
+            agent("w9:p1", 1, "idle"),
         ];
         let blocks = blocks(&spaces, &agents);
         let shown: Vec<_> = blocks
@@ -148,9 +146,12 @@ mod tests {
     }
 
     #[test]
-    fn longer_counters_sort_after_shorter_ones() {
-        assert!(order_key(1, "w1:t9", "w1:p1") < order_key(1, "w1:tA", "w1:p1"));
-        assert!(order_key(1, "w1:t9", "w1:pZ") < order_key(1, "w1:t10", "w1:p1"));
-        assert!(order_key(2, "w1:t1", "w1:p1") < order_key(10, "w1:t1", "w1:p1"));
+    fn sorts_by_place_then_pane_counter() {
+        // A tab moved before another one comes first, whatever its id.
+        assert!(order_key(1, 2, "w1:p1") < order_key(1, 10, "w1:p1"));
+        assert!(order_key(1, 1, "w1:pZ") < order_key(1, 2, "w1:p1"));
+        assert!(order_key(1, 1, "w1:p9") < order_key(1, 1, "w1:pA"));
+        assert!(order_key(1, 1, "w1:pZ") < order_key(1, 1, "w1:p10"));
+        assert!(order_key(2, 1, "w1:p1") < order_key(10, 1, "w1:p1"));
     }
 }

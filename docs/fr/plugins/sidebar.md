@@ -2,7 +2,7 @@
 
 [English](../../en/plugins/sidebar.md) · **Français**
 
-Transforme le panneau Agents de Herdr en arbre : les agents de chaque workspace listés sous son nom, avec CPU et mémoire par workspace et par agent, et le nombre de shells lancés par chaque agent. La barre d'onglets affiche le total de tous les panes, celui de la machine entière et l'heure. Le plugin ne fait que fournir les valeurs ; leur affichage se règle dans les lignes de sidebar du `config.toml` de Herdr.
+Transforme le panneau Agents de Herdr en arbre : les agents de chaque workspace listés sous son nom, avec CPU et mémoire par workspace et par agent, et le nombre de shells lancés par chaque agent. La barre d'onglets affiche le total de tous les panes et celui de la machine entière. Le plugin ne fait que fournir les valeurs ; leur affichage se règle dans les lignes de sidebar du `config.toml` de Herdr.
 
 ```
  agents                 arbre
@@ -13,7 +13,7 @@ web
 └ ○ 1 · 1% 562M
 ```
 
-Un clic sur la ligne d'un agent ouvre cet agent. Les workspaces s'ouvrent toujours depuis le panneau Spaces au-dessus, réduit à une ligne chacun (`api · main`) ; déplace la séparation entre les deux panneaux pour donner plus de place à l'arbre.
+Un clic sur la ligne d'un agent ouvre cet agent. Les workspaces s'ouvrent toujours depuis le panneau Spaces au-dessus, réduit à une ligne chacun (`api · main`) ; déplacez la séparation entre les deux panneaux pour donner plus de place à l'arbre.
 
 ## Installation
 
@@ -21,23 +21,25 @@ Un clic sur la ligne d'un agent ouvre cet agent. Les workspaces s'ouvrent toujou
 herdr plugin install IMSike/Herdr-Plugins/sidebar
 ```
 
-Au démarrage de Herdr, le plugin copie son binaire dans son dossier d'état et trie le panneau Agents dans l'ordre de l'arbre. Juste après l'avoir installé, mis à jour ou lié, fais-le une fois à la main (ou redémarre Herdr) :
+Au démarrage de Herdr, le plugin copie son binaire dans son dossier d'état et trie le panneau Agents dans l'ordre de l'arbre. Juste après l'avoir installé, mis à jour ou lié, faites-le une fois à la main (ou redémarrez Herdr) :
 
 ```sh
 herdr plugin action invoke imsike.sidebar.install
 ```
 
-Puis ajoute au `config.toml` de Herdr :
+Puis ajoutez au `config.toml` de Herdr :
 
 ```toml
 [ui]
 sidebar_width = 34
 sidebar_max_width = 40
-# Lance le plugin toutes les 5 secondes ; affiche aussi les totaux et l'heure à droite de la barre d'onglets.
+# Lance le plugin toutes les 5 secondes et affiche ses totaux à droite de la barre d'onglets, puis l'heure (entrée propre à Herdr).
 # Windows (le dossier d'état est sous %LOCALAPPDATA%) :
 tab_bar_right = [
   { type = "command", command = '"%LOCALAPPDATA%\herdr\plugins\imsike.sidebar\herdr-sidebar.exe" tick', interval_seconds = 5, timeout_seconds = 3 },
+  { type = "datetime", format = "%H:%M" },
 ]
+tab_bar_right_separator = " · "
 
 [ui.sidebar.agents]
 rows = [
@@ -80,7 +82,7 @@ Symboles d'état : `◐` au travail, `◆` bloqué, `●` terminé (pas encore v
 
 Tokens des workspaces (panneau Spaces) : `$cpu` et `$ram`.
 
-Barre d'onglets : `<cpu> <mémoire> · 󰍹 <cpu> <mémoire> · <heure>` (`6% 2.4G · 󰍹 35% 21.3G · 14:05`) : le total de tous les panes, puis celui de la machine entière (après l'icône écran Nerd Font), puis l'heure locale, mis à jour à chaque passage. Les chiffres de la machine comptent tous les processus, y compris ceux que le plugin ne peut pas lire (processus protégés, machines virtuelles) : sa part de CPU vient des temps CPU du système, sa mémoire est la mémoire utilisée (ce que le Gestionnaire des tâches affiche comme « En cours d'utilisation » sous Windows).
+Barre d'onglets : `<cpu> <mémoire> · 󰍹 <cpu> <mémoire>` (`6% 2.4G · 󰍹 35% 21.3G`) : le total de tous les panes, puis celui de la machine entière (après l'icône écran Nerd Font), mis à jour à chaque passage. L'heure qui suit (`· 14:05`) est l'entrée `datetime` propre à Herdr : elle reste affichée si le plugin échoue. Les chiffres de la machine comptent tous les processus, y compris ceux que le plugin ne peut pas lire (processus protégés, machines virtuelles) : sa part de CPU vient des temps CPU du système, sa mémoire est la mémoire utilisée (ce que le Gestionnaire des tâches affiche comme « En cours d'utilisation » sous Windows).
 
 - **CPU** : utilisé depuis le passage précédent, en part de la machine entière, arrondi au pourcent (`0%`, `12%` : moins de 0,5 % s'affiche `0%`) ; absent au premier passage, et quand le passage précédent date de moins d'une seconde.
 - **Mémoire** : working set sous Windows, mémoire résidente ailleurs (`850M`, `1.2G`).
@@ -91,9 +93,9 @@ Pour vérifier les valeurs sans la sidebar, `herdr-sidebar show` (depuis le doss
 
 ## Fonctionnement, implications
 
-- Herdr n'a pas de processus de plugin permanent : l'entrée de la barre d'onglets lance `herdr-sidebar tick` toutes les 5 secondes, et Herdr n'en démarre jamais un nouveau tant que le précédent tourne. Chaque passage lit tous les processus de la machine et demande à Herdr le processus de chaque pane ; il dure une fraction de seconde pour environ 25 ms de CPU, puis s'arrête.
+- Herdr n'a pas de processus de plugin permanent : l'entrée de la barre d'onglets lance `herdr-sidebar tick` toutes les 5 secondes, et Herdr n'en démarre jamais un nouveau tant que le précédent tourne. Chaque passage lit tous les processus de la machine, puis s'arrête au bout d'une fraction de seconde. Il ne demande à Herdr le processus shell d'un pane que la première fois, ou quand le pane affiche un autre terminal : les passages suivants le retrouvent dans `sample.json`.
 - Quand un agent apparaît ou change d'état, Herdr lance aussitôt le plugin tout comme le focus d'un pane, qui marque un agent terminé comme vu (événements `pane.agent_detected`, `pane.agent_status_changed`, `pane.focused`, `workspace.created`) : les états de l'arbre suivent sans attendre le passage suivant. Ces passages ne font que placer les agents dans l'arbre, sans lire les processus : les chiffres sont ceux du dernier passage, et un nouvel agent reçoit les siens au suivant. Un workspace renommé apparaît au passage suivant.
-- Le panneau Agents est trié par `$order` grâce à une vue d'agents de Herdr (nommée `arbre` dans l'en-tête du panneau), qui remplace le tri propre au panneau tant que le plugin est activé.
+- Le panneau Agents est trié par `$order` grâce à une vue d'agents de Herdr (nommée `arbre` dans l'en-tête du panneau), qui remplace le tri propre au panneau tant que le plugin est activé. L'arbre suit l'ordre des workspaces dans la sidebar et des onglets dans la barre d'onglets : un onglet déplacé prend sa nouvelle place au passage suivant.
 - La part de CPU se calcule par rapport au passage précédent, enregistré dans `sample.json` du dossier d'état.
 - Un agent dont les processus ne peuvent pas être lus reste dans l'arbre avec les chiffres du dernier passage, jusqu'à leur expiration.
 - Les valeurs expirent après 20 secondes. Si les passages s'arrêtent, les lignes de l'arbre disparaissent au lieu de rester figées, et les agents sont listés sans lignes.
@@ -105,4 +107,4 @@ Pour vérifier les valeurs sans la sidebar, `herdr-sidebar show` (depuis le doss
 
 ## Désactiver
 
-Retire l'entrée `tab_bar_right` et les tokens `$ws`, `$ws_stats`, `$line`, `$stats`, `$cpu`, `$ram` du `config.toml` et les lignes `[ui.sidebar.*]` (les lignes par défaut reviennent), puis `herdr plugin disable imsike.sidebar` (ou `herdr plugin uninstall imsike.sidebar`), ce qui rend aussi au panneau Agents son propre tri. Le binaire copié et `sample.json` restent dans le dossier d'état jusqu'à ce que tu les supprimes.
+Retirez l'entrée `command` de `tab_bar_right` et les tokens `$ws`, `$ws_stats`, `$line`, `$stats`, `$cpu`, `$ram` du `config.toml` et les lignes `[ui.sidebar.*]` (les lignes par défaut reviennent), puis `herdr plugin disable imsike.sidebar` (ou `herdr plugin uninstall imsike.sidebar`), ce qui rend aussi au panneau Agents son propre tri. Le binaire copié et `sample.json` restent dans le dossier d'état jusqu'à ce que vous les supprimiez.

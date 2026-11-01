@@ -2,7 +2,7 @@ id = "imsike.sidebar"
 name = "Sidebar"
 version = "0.0.0"
 min_herdr_version = "0.9.5"
-description = "A workspace → agents tree in the Agents panel, with CPU, memory and shell counts; the totals of all panes and of the machine, and the time, in the tab bar"
+description = "A workspace → agents tree in the Agents panel, with CPU, memory and shell counts; the totals of all panes and of the whole machine in the tab bar"
 platforms = ["linux", "windows"]
 
 [[build]]
