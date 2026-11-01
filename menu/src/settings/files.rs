@@ -145,7 +145,7 @@ fn editor() -> Editor {
         .map(|v| v.to_string_lossy().into_owned())
         .find(|v| !v.trim().is_empty());
     if let Some(editor) = configured {
-        return classify(editor.split_whitespace().map(str::to_string).collect());
+        return classify(split_command(&editor));
     }
     if cfg!(windows) {
         if launch::find_on_path("code").is_some() {
@@ -158,6 +158,36 @@ fn editor() -> Editor {
     } else {
         Editor::Terminal(vec!["vi".into()])
     }
+}
+
+/// A command line split into its words; double quotes keep spaces in one
+/// (`"C:\Program Files\Editor\editor.exe" --wait`).
+fn split_command(line: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let (mut quoted, mut started) = (false, false);
+    for c in line.chars() {
+        match c {
+            '"' => {
+                quoted = !quoted;
+                started = true;
+            }
+            c if c.is_whitespace() && !quoted => {
+                if started {
+                    words.push(std::mem::take(&mut word));
+                    started = false;
+                }
+            }
+            c => {
+                word.push(c);
+                started = true;
+            }
+        }
+    }
+    if started {
+        words.push(word);
+    }
+    words
 }
 
 fn classify(argv: Vec<String>) -> Editor {
@@ -277,6 +307,16 @@ pub fn opened_flag(state_dir: &Path, bar: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn splits_an_editor_command_with_quotes() {
+        assert_eq!(split_command("code --wait"), ["code", "--wait"]);
+        assert_eq!(
+            split_command(r#""C:\Program Files\Ed\ed.exe" -n  "" x"#),
+            [r"C:\Program Files\Ed\ed.exe", "-n", "", "x"]
+        );
+        assert!(split_command("  ").is_empty());
+    }
 
     #[test]
     fn tells_window_editors_from_terminal_ones() {
