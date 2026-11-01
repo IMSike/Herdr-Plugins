@@ -17,7 +17,7 @@ pub struct Context {
 
 impl Context {
     pub fn from_env() -> Self {
-        std::env::var("HERDR_PLUGIN_CONTEXT_JSON")
+        std::env::var(herdr_api::env::CONTEXT_JSON)
             .ok()
             .and_then(|json| serde_json::from_str(&json).ok())
             .unwrap_or_default()
@@ -25,11 +25,23 @@ impl Context {
 
     /// Folder a tool starts in, falling back to the other folder when one is unknown.
     pub fn cwd(&self, start_in: StartIn) -> Option<PathBuf> {
-        let (first, second) = match start_in {
-            StartIn::Workspace => (&self.workspace_cwd, &self.focused_pane_cwd),
-            StartIn::Pane => (&self.focused_pane_cwd, &self.workspace_cwd),
-        };
-        first.clone().or_else(|| second.clone())
+        start_folder(
+            start_in,
+            self.workspace_cwd.clone(),
+            self.focused_pane_cwd.clone(),
+        )
+    }
+}
+
+/// The workspace's folder or the pane's, as the entry asks, or else the other one.
+pub fn start_folder(
+    start_in: StartIn,
+    workspace: Option<PathBuf>,
+    pane: Option<PathBuf>,
+) -> Option<PathBuf> {
+    match start_in {
+        StartIn::Workspace => workspace.or(pane),
+        StartIn::Pane => pane.or(workspace),
     }
 }
 
@@ -52,8 +64,7 @@ pub fn call(method: &str, params: Value) -> Result<Value, String> {
 }
 
 fn panes(params: Value) -> Result<Vec<Pane>, String> {
-    let mut result = call("pane.list", params)?;
-    serde_json::from_value(result["panes"].take()).map_err(|e| format!("pane.list illisible : {e}"))
+    herdr_api::request_field("pane.list", params, "panes").map_err(String::from)
 }
 
 /// The panes of a workspace.
@@ -73,8 +84,8 @@ pub fn all_panes() -> Result<Vec<Pane>, String> {
 }
 
 pub fn pane(pane_id: &str) -> Result<Pane, String> {
-    let mut result = call("pane.get", json!({ "pane_id": pane_id }))?;
-    serde_json::from_value(result["pane"].take()).map_err(|e| format!("pane.get illisible : {e}"))
+    herdr_api::request_field("pane.get", json!({ "pane_id": pane_id }), "pane")
+        .map_err(String::from)
 }
 
 pub fn close(pane_id: &str) -> Result<(), String> {
@@ -129,7 +140,7 @@ pub fn open_plugin_pane(
     options: Value,
     env: &[(&str, &str)],
 ) -> Result<Option<String>, herdr_api::Error> {
-    let plugin = std::env::var("HERDR_PLUGIN_ID").unwrap_or_default();
+    let plugin = std::env::var(herdr_api::env::PLUGIN_ID).unwrap_or_default();
     let env: Map<String, Value> = env
         .iter()
         .map(|(k, v)| (k.to_string(), Value::from(*v)))

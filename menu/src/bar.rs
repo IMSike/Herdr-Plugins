@@ -14,7 +14,7 @@
 
 mod geometry;
 
-use crate::config::{Entry, StartIn};
+use crate::config::Entry;
 use crate::herdr::{self, Context, Pane};
 use crate::stats::{self, Measured, Stats};
 use crate::ui::Screen;
@@ -28,7 +28,7 @@ use crossterm::terminal::{self, Clear, ClearType};
 use geometry::{Layout, ROWS, centred, ratio_change, slot_at, slots};
 use serde_json::{Value, json};
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -145,7 +145,7 @@ pub fn startup() -> Result<(), String> {
 
 /// `data` of `HERDR_PLUGIN_EVENT_JSON`.
 fn event_data() -> Option<Value> {
-    let json = std::env::var("HERDR_PLUGIN_EVENT_JSON").ok()?;
+    let json = std::env::var(herdr_api::env::EVENT_JSON).ok()?;
     let event: Value = serde_json::from_str(&json).ok()?;
     Some(event.get("data").cloned().unwrap_or(event))
 }
@@ -281,7 +281,8 @@ fn folders(me: &str) -> (Option<PathBuf>, Option<PathBuf>) {
 
 /// Runs the bar until it is closed or no longer has a place.
 pub fn run(entries: &[Entry]) -> Result<(), String> {
-    let me = std::env::var("HERDR_PANE_ID").map_err(|_| "HERDR_PANE_ID absent".to_string())?;
+    let me = std::env::var(herdr_api::env::PANE_ID)
+        .map_err(|_| format!("{} absent", herdr_api::env::PANE_ID))?;
     let result = show(&me, entries).map_err(|e| e.to_string());
     let _ = herdr::close(&me);
     result
@@ -307,8 +308,7 @@ struct Measurer {
 fn measure_in_background(root: PathBuf) -> Measurer {
     let (send, news) = mpsc::channel();
     let (ask, asked) = mpsc::channel::<()>();
-    let file = std::env::var_os("HERDR_PLUGIN_STATE_DIR")
-        .map(|dir| stats::cache_file(Path::new(&dir), &root));
+    let file = herdr_api::state_dir().map(|dir| stats::cache_file(&dir, &root));
     std::thread::spawn(move || {
         let mut last: Option<Measured> = None;
         let mut manual = false;
@@ -546,10 +546,7 @@ fn draw(view: &View) -> io::Result<()> {
 /// Opens the entry's tool in the plugin's full-size popup, or on its own.
 fn launch(me: &str, entry: &Entry) -> Result<(), String> {
     let (explorer, terminal) = folders(me);
-    let cwd = match entry.cwd {
-        StartIn::Workspace => explorer.or(terminal),
-        StartIn::Pane => terminal.or(explorer),
-    };
+    let cwd = herdr::start_folder(entry.cwd, explorer, terminal);
     if !entry.popup {
         return crate::launch::detach(entry, cwd.as_deref());
     }

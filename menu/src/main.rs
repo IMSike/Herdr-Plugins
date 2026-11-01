@@ -63,7 +63,7 @@ fn main() -> ExitCode {
 }
 
 fn entries() -> (Vec<Entry>, Option<String>) {
-    let dir = std::env::var_os("HERDR_PLUGIN_CONFIG_DIR").map(PathBuf::from);
+    let dir = std::env::var_os(herdr_api::env::CONFIG_DIR).map(PathBuf::from);
     config::load(dir.as_deref())
 }
 

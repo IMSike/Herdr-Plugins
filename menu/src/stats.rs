@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 mod format;
 pub use format::{age_label, files_line, size_line};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Stats {
@@ -105,10 +105,9 @@ impl Measured {
     }
 }
 
+/// Seconds since the Unix epoch.
 pub fn unix_now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs())
+    herdr_api::unix_millis() / 1000
 }
 
 /// The file of `root`'s figures in `dir`, named by a hash of its path.
