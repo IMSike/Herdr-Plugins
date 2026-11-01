@@ -36,7 +36,7 @@ Les icônes sont des glyphes [Nerd Font](https://www.nerdfonts.com) : sans Nerd 
 
 Sous les icônes, les chiffres du dossier du workspace (celui de l'explorateur) :
 
-- sa taille sur le disque, tous fichiers compris (`.git` et dossiers de build aussi), et la part qu'il représente de son disque ;
+- la taille totale de ses fichiers, tous fichiers compris (`.git` et dossiers de build aussi), et la part qu'elle représente de son disque. Un fichier lié plusieurs fois (liens durs, comme ceux de pnpm) compte à chaque fois, et un fichier cloud non téléchargé (OneDrive) compte pour sa taille entière ;
 - son nombre de fichiers, hors `.git`, l'âge des chiffres à partir d'une heure (`· 3 h`), et une icône : un clic sur les chiffres mesure à nouveau le dossier (`…` pendant la lecture).
 
 **Sans l'explorateur.** `prefix+space` ouvre le menu en popup, titré du nom du dossier du workspace. Choisir une entrée par sa touche, par les flèches (ou `j`/`k`) et Entrée, ou d'un clic. Échap, `q` ou Ctrl+C ferme le menu. La touche propre à une entrée l'emporte sur `j`, `k` et `q`.

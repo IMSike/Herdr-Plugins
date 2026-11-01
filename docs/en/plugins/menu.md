@@ -36,7 +36,7 @@ The icons are [Nerd Font](https://www.nerdfonts.com) glyphs: without a Nerd Font
 
 Under the icons, the figures on the workspace folder (the explorer's folder):
 
-- its size on disk, every file included (`.git` and build folders too), and its share of the disk it is on;
+- the total size of its files, every file included (`.git` and build folders too), and its share of the disk it is on. A file linked several times (hard links, as pnpm makes) counts each time, and a cloud file not downloaded (OneDrive) counts at its full size;
 - its number of files, those of `.git` left out, how old the figures are from an hour on (`· 3 h`), and an icon: a click on the figures measures the folder again (`…` while it is read).
 
 **Without the explorer.** `prefix+space` opens the popup menu, titled with the workspace's folder name. Choose an entry with its key, with the arrows (or `j`/`k`) and Enter, or with a click. Escape, `q` or Ctrl+C closes the menu. An entry's own key wins over `j`, `k` and `q`.
