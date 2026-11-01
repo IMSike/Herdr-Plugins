@@ -11,12 +11,20 @@
 # CPU avec une décimale : 4,2% plutôt que 4%.
 # cpu_decimal = false
 
-# Unités de la mémoire : "M" (853M, 2,4G), "Mo" (853 Mo, 2,4 Go) ou "MB" (853 MB).
+# Unités de la mémoire : "M" (853M, 2,4G), "Mo" (853Mo, 2,4Go) ou "MB" (853MB).
 # memory_unit = "M"
+
+# Espace (fine, insécable) avant l'unité : 2,4 Go plutôt que 2,4Go.
+# memory_space = false
 
 # Icônes du pane Tools : "double" (deux lignes, avec les noms) ou "single"
 # (une ligne, le nom de l'icône survolée en dessous).
 # layout = "double"
+
+# Totaux CPU / mémoire du pane Tools : "line" (une ligne) ou "bars" (quatre
+# lignes : CPU, RAM, puis ceux de la machine, chacun avec une barre en dégradé
+# selon ses seuils, réglés dans sidebar.toml).
+# totals = "line"
 
 # Entrées du menu. Sans aucune entrée, le menu garde les siennes : lazygit (l),
 # gh-dash (g), VS Code (c), Disk (d), Update (u) et Settings (s).

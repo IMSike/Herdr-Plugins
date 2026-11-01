@@ -1,6 +1,7 @@
 # Réglages de la barre latérale (imsike.sidebar). Une ligne commentée garde sa
 # valeur par défaut. Chaque passage du plugin relit ce fichier.
-# Couleurs et ordre des valeurs : section [ui.sidebar] du config.toml de Herdr.
+# Couleurs et ordre des valeurs des agents : section [ui.sidebar] du config.toml
+# de Herdr.
 
 # 2,4G plutôt que 2.4G.
 # decimal_comma = true
@@ -11,8 +12,11 @@
 # CPU avec une décimale : 4,2% plutôt que 4%.
 # cpu_decimal = false
 
-# Unités de la mémoire : "M" (853M, 2,4G), "Mo" (853 Mo, 2,4 Go) ou "MB" (853 MB).
+# Unités de la mémoire : "M" (853M, 2,4G), "Mo" (853Mo, 2,4Go) ou "MB" (853MB).
 # memory_unit = "M"
+
+# Espace (fine, insécable) avant l'unité : 2,4 Go plutôt que 2,4Go.
+# memory_space = false
 
 # Durée de vie d'une valeur, en secondes, quand plus aucun passage ne la
 # rafraîchit (plugin retiré, Herdr qui ne lance plus la commande).
@@ -24,13 +28,12 @@
 # Totaux (panes, machine) aussi dans la barre d'onglets ; le pane Tools les affiche.
 # tab_bar = false
 
-# Couleurs par seuil : vert, jaune, orange, rouge. Chaque valeur porte son
-# niveau, que les règles du config.toml de Herdr colorent (voir la page du
-# plugin) ; le pane Tools colore ses totaux.
+# Couleurs par seuil (vert, jaune, orange, rouge) des totaux du pane Tools.
+# Les barres du pane Tools suivent ces seuils, couleurs ou non.
 # colors = false
 
-# Seuils (trois, croissants) des agents, des workspaces et du total de Herdr :
-# CPU en % de la machine, mémoire en Go.
+# Seuils (trois, croissants) du total des workspaces : CPU en % de la machine,
+# mémoire en Go.
 # cpu_levels = [10, 25, 50]
 # memory_levels = [1, 2, 4]
 

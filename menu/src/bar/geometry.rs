@@ -1,7 +1,7 @@
 //! Where the bar draws and what a click hits, and how far to move the split
 //! it tops to keep its height: arithmetic on sizes and Herdr's layout only.
 
-use crate::config::{Entry, Layout as IconLayout};
+use crate::config::{Entry, Layout as IconLayout, Menu, TotalsStyle};
 use serde::Deserialize;
 
 /// Narrowest column of one entry with its name under it.
@@ -11,12 +11,21 @@ const MAX_ICON_SLOT: u16 = 6;
 /// Smallest share Herdr gives a side of a split.
 const MIN_RATIO: f64 = 0.1;
 
-/// Rows the bar asks for: its icons, their names, and one row more (the
-/// totals of the sidebar).
-pub fn wanted_rows(layout: IconLayout) -> u16 {
-    match layout {
-        IconLayout::Single => 3,
-        IconLayout::Double => 5,
+/// Rows the bar asks for: its icons and their names, then the totals of
+/// the sidebar (one line, or four bars).
+pub fn wanted_rows(menu: &Menu) -> u16 {
+    let icons = match menu.layout {
+        IconLayout::Single => 2,
+        IconLayout::Double => 4,
+    };
+    icons + totals_rows(menu.totals)
+}
+
+/// Rows of the totals.
+pub fn totals_rows(style: TotalsStyle) -> u16 {
+    match style {
+        TotalsStyle::Line => 1,
+        TotalsStyle::Bars => 4,
     }
 }
 
@@ -167,6 +176,21 @@ pub fn ratio_change(layout: &Layout, me: &str, rows: u16, want: u16) -> Option<f
 mod tests {
     use super::*;
     use crate::config::StartIn;
+
+    #[test]
+    fn the_bar_asks_for_its_icons_and_totals() {
+        let rows = |layout, totals| {
+            wanted_rows(&Menu {
+                layout,
+                totals,
+                ..Menu::default()
+            })
+        };
+        assert_eq!(rows(IconLayout::Single, TotalsStyle::Line), 3);
+        assert_eq!(rows(IconLayout::Double, TotalsStyle::Line), 5);
+        assert_eq!(rows(IconLayout::Single, TotalsStyle::Bars), 6);
+        assert_eq!(rows(IconLayout::Double, TotalsStyle::Bars), 8);
+    }
 
     fn rect(x: u16, y: u16, width: u16, height: u16) -> Rect {
         Rect {

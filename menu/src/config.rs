@@ -42,6 +42,27 @@ pub enum Layout {
     Double,
 }
 
+/// How the `Tools` pane shows the sidebar's totals.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TotalsStyle {
+    /// One line: `6% 2,4G · 󰍹 35% 21,3G`.
+    #[default]
+    Line,
+    /// Four rows, each a bar and its value.
+    Bars,
+}
+
+impl TotalsStyle {
+    /// The name `menu.toml` gives it.
+    pub fn name(self) -> &'static str {
+        match self {
+            TotalsStyle::Line => "line",
+            TotalsStyle::Bars => "bars",
+        }
+    }
+}
+
 impl Layout {
     /// The name `menu.toml` gives it.
     pub fn name(self) -> &'static str {
@@ -92,6 +113,7 @@ pub struct Menu {
     /// How the `Tools` pane writes its figures.
     pub numbers: NumberFormat,
     pub layout: Layout,
+    pub totals: TotalsStyle,
 }
 
 impl Default for Menu {
@@ -100,6 +122,7 @@ impl Default for Menu {
             entries: defaults(),
             numbers: NumberFormat::default(),
             layout: Layout::default(),
+            totals: TotalsStyle::default(),
         }
     }
 }
@@ -118,7 +141,11 @@ struct File {
     #[serde(default)]
     memory_unit: MemoryUnit,
     #[serde(default)]
+    memory_space: bool,
+    #[serde(default)]
     layout: Layout,
+    #[serde(default)]
+    totals: TotalsStyle,
 }
 
 /// Entries shown when the user has no `menu.toml`, or one without entries.
@@ -184,8 +211,10 @@ pub fn parse(text: &str) -> Result<Menu, String> {
             percent_space: file.percent_space,
             cpu_decimal: file.cpu_decimal,
             memory_unit: file.memory_unit,
+            memory_space: file.memory_space,
         },
         layout: file.layout,
+        totals: file.totals,
     })
 }
 
@@ -304,7 +333,7 @@ mod tests {
             .filter(|line| line.contains(" = "))
             .map(|line| format!("{line}\n"))
             .collect();
-        assert_eq!(settings.lines().count(), 5);
+        assert_eq!(settings.lines().count(), 7);
         assert_eq!(parse(&settings).unwrap(), Menu::default());
     }
 

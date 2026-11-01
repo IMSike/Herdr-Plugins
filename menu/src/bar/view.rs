@@ -6,7 +6,7 @@ use super::{
     FIGURES_TOP, FIRST_FIT_AFTER, MESSAGE_FOR, OTHER_READING_CHECK_EVERY, REFRESH, SETTLE,
     WAKE_EVERY, fit_height, folders, has_its_place, my_tab,
 };
-use crate::config::{self, Action, Entry, Layout as IconLayout, Menu};
+use crate::config::{self, Action, Entry, Layout as IconLayout, Menu, TotalsStyle};
 use crate::herdr;
 use crate::settings::files;
 use crate::stats::{self, Measured, Stats};
@@ -18,7 +18,8 @@ use crossterm::event::{
 use crossterm::queue;
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use crossterm::terminal::{self, Clear, ClearType};
-use herdr_api::sidebar::{Level, MACHINE_GLYPH, Totals};
+use herdr_api::NumberFormat;
+use herdr_api::sidebar::{Gauge, Level, MACHINE_GLYPH, Thresholds, Totals};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -173,7 +174,7 @@ struct View {
     hover_figures: bool,
     /// A message, and its color, in place of the totals or the figures.
     message: Option<(String, Color)>,
-    totals: Option<Vec<(String, Option<Level>)>>,
+    totals: Option<Totals>,
     stats: Option<Stats>,
     /// How old the figures are, once old enough to say.
     age: Option<String>,
@@ -240,14 +241,13 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
                 .and_then(Totals::load)
                 .and_then(|t| {
                     let age = herdr_api::unix_millis().saturating_sub(t.at_ms);
-                    (age <= TOTALS_FOR_AT_MOST.as_millis() as u64)
-                        .then(|| t.parts(&view.menu.numbers))
+                    (age <= TOTALS_FOR_AT_MOST.as_millis() as u64).then_some(t)
                 });
             let changed = modified(menu_file.as_deref());
             if changed != menu_changed {
                 menu_changed = changed;
                 let (menu, error) = config::load(crate::config_dir().as_deref());
-                if menu.layout != view.menu.layout {
+                if (menu.layout, menu.totals) != (view.menu.layout, view.menu.totals) {
                     check_at = Some(Instant::now());
                 }
                 view.menu = menu;
@@ -285,7 +285,7 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
                 if tab.is_some_and(|tab| !has_its_place(&tab.iter().collect::<Vec<_>>())) {
                     return Ok(());
                 }
-                fit_height(me, wanted_rows(view.menu.layout));
+                fit_height(me, wanted_rows(&view.menu));
             }
             continue;
         }
@@ -544,19 +544,137 @@ fn draw_tools(out: &mut impl Write, view: &View, width: u16, rows: u16) -> io::R
         && let Some(totals) = &view.totals
     {
         let row = grid.rows();
-        let whole: String = totals.iter().map(|(text, _)| text.as_str()).collect();
-        if row < rows && whole.chars().count() <= usize::from(width) {
-            queue!(out, MoveTo(centered(0, width, &whole), row))?;
-            for (text, level) in totals {
-                let shown = text.chars().any(char::is_numeric) || text.contains(MACHINE_GLYPH);
-                draw_figure(out, text, *level, shown)?;
-            }
-        } else if row < rows {
-            let text = fit(&whole, usize::from(width));
-            queue!(out, MoveTo(centered(0, width, &text), row), Print(text))?;
+        match view.menu.totals {
+            TotalsStyle::Line => draw_line(out, totals, &view.menu.numbers, width, row, rows)?,
+            TotalsStyle::Bars => draw_bars(out, totals, &view.menu.numbers, width, row, rows)?,
         }
     }
     Ok(())
+}
+
+/// The totals on one line, centered.
+fn draw_line(
+    out: &mut impl Write,
+    totals: &Totals,
+    numbers: &NumberFormat,
+    width: u16,
+    row: u16,
+    rows: u16,
+) -> io::Result<()> {
+    if row >= rows {
+        return Ok(());
+    }
+    let parts = totals.parts(numbers);
+    let whole: String = parts.iter().map(|(text, _)| text.as_str()).collect();
+    if whole.chars().count() > usize::from(width) {
+        let text = fit(&whole, usize::from(width));
+        return queue!(out, MoveTo(centered(0, width, &text), row), Print(text));
+    }
+    queue!(out, MoveTo(centered(0, width, &whole), row))?;
+    for (text, level) in &parts {
+        let shown = text.chars().any(char::is_numeric) || text.contains(MACHINE_GLYPH);
+        draw_figure(out, text, *level, shown)?;
+    }
+    Ok(())
+}
+
+/// Partial blocks of a bar's last cell, by eighths.
+const EIGHTHS: [char; 7] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉'];
+
+/// The totals as four bars: `CPU :`, `RAM :`, then the machine's, each
+/// bar in a gradient through the colors of its thresholds, then its value.
+fn draw_bars(
+    out: &mut impl Write,
+    totals: &Totals,
+    numbers: &NumberFormat,
+    width: u16,
+    row: u16,
+    rows: u16,
+) -> io::Result<()> {
+    let gauges = totals.gauges(numbers);
+    let texts: Vec<String> = gauges
+        .iter()
+        .map(|g| g.text.clone().unwrap_or_else(|| "–".into()))
+        .collect();
+    let value_width = texts.iter().map(|t| t.chars().count()).max().unwrap_or(0);
+    // `CPU 󰍹 :`: the glyph keeps a space after it, a terminal may draw it
+    // over two cells.
+    const LABEL: usize = 7;
+    let bar = usize::from(width).saturating_sub(1 + LABEL + 1 + 1 + value_width + 1);
+    for ((y, gauge), text) in (row..rows).zip(&gauges).zip(&texts) {
+        let kind = if gauge.cpu { "CPU" } else { "RAM" };
+        let label = if gauge.machine {
+            format!("{kind} {MACHINE_GLYPH} :")
+        } else {
+            format!("{kind} :")
+        };
+        let pad = LABEL.saturating_sub(label.chars().count());
+        queue!(
+            out,
+            MoveTo(1, y),
+            SetAttribute(Attribute::Bold),
+            Print(&label),
+            SetAttribute(Attribute::Reset),
+            Print(" ".repeat(pad + 1))
+        )?;
+        if bar >= 3 {
+            draw_gauge(out, gauge, bar)?;
+            queue!(out, Print(" "))?;
+        }
+        let level = gauge.level(totals.colors);
+        let value = format!("{text:>value_width$}");
+        draw_figure(out, &value, level, true)?;
+    }
+    Ok(())
+}
+
+/// A bar of `cells` cells, filled as far as the gauge goes; each cell in
+/// the color its place takes in the gradient of the thresholds.
+fn draw_gauge(out: &mut impl Write, gauge: &Gauge, cells: usize) -> io::Result<()> {
+    let filled = gauge.fill.unwrap_or(0.0).clamp(0.0, 1.0) * cells as f64;
+    for cell in 0..cells {
+        let covered = (filled - cell as f64).clamp(0.0, 1.0);
+        let eighths = (covered * 8.0).round() as usize;
+        let at = (cell as f64 + 0.5) / cells as f64 * gauge.full;
+        let (symbol, color) = match eighths {
+            0 => ('░', Color::DarkGrey),
+            8 => ('█', gradient(at, &gauge.thresholds)),
+            n => (EIGHTHS[n - 1], gradient(at, &gauge.thresholds)),
+        };
+        queue!(out, SetForegroundColor(color), Print(symbol))?;
+    }
+    queue!(out, ResetColor)
+}
+
+/// The color of `value` between the thresholds: green at 0, yellow at the
+/// first, orange at the second, red from the third.
+fn gradient(value: f64, thresholds: &Thresholds) -> Color {
+    let stops = [
+        (0.0, Level::Green),
+        (thresholds[0], Level::Yellow),
+        (thresholds[1], Level::Orange),
+        (thresholds[2], Level::Red),
+    ];
+    let rgb = |level| level_rgb(level);
+    for pair in stops.windows(2) {
+        let ((from, low), (to, high)) = (pair[0], pair[1]);
+        if value <= to {
+            let t = if to > from {
+                ((value - from) / (to - from)).clamp(0.0, 1.0)
+            } else {
+                1.0
+            };
+            let (a, b) = (rgb(low), rgb(high));
+            let mix =
+                |x: u8, y: u8| (f64::from(x) + (f64::from(y) - f64::from(x)) * t).round() as u8;
+            return Color::Rgb {
+                r: mix(a.0, b.0),
+                g: mix(a.1, b.1),
+                b: mix(a.2, b.2),
+            };
+        }
+    }
+    level_color(Level::Red)
 }
 
 /// One piece of the totals: a figure in the color of its level (bold, in
@@ -585,13 +703,40 @@ fn draw_figure(
     )
 }
 
-/// The colors of the levels, those of the sidebar's example rules.
-fn level_color(level: Level) -> Color {
-    let (r, g, b) = match level {
+/// The colors of the levels (gruvbox).
+fn level_rgb(level: Level) -> (u8, u8, u8) {
+    match level {
         Level::Green => (0xb8, 0xbb, 0x26),
         Level::Yellow => (0xfa, 0xbd, 0x2f),
         Level::Orange => (0xfe, 0x80, 0x19),
         Level::Red => (0xfb, 0x49, 0x34),
-    };
+    }
+}
+
+fn level_color(level: Level) -> Color {
+    let (r, g, b) = level_rgb(level);
     Color::Rgb { r, g, b }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_gradient_goes_through_the_levels() {
+        let thresholds = [10.0, 25.0, 50.0];
+        assert_eq!(gradient(0.0, &thresholds), level_color(Level::Green));
+        assert_eq!(gradient(10.0, &thresholds), level_color(Level::Yellow));
+        assert_eq!(gradient(25.0, &thresholds), level_color(Level::Orange));
+        assert_eq!(gradient(80.0, &thresholds), level_color(Level::Red));
+        // Halfway between green and yellow.
+        assert_eq!(
+            gradient(5.0, &thresholds),
+            Color::Rgb {
+                r: 0xd9,
+                g: 0xbc,
+                b: 0x2b
+            }
+        );
+    }
 }

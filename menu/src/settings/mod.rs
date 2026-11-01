@@ -5,7 +5,7 @@
 pub mod files;
 mod store;
 
-use crate::config::{self, Layout, Menu};
+use crate::config::{self, Layout, Menu, TotalsStyle};
 use crate::ui::{Screen, fit};
 use crossterm::cursor::MoveTo;
 use crossterm::event::{
@@ -47,7 +47,9 @@ enum Item {
     PercentSpace,
     CpuDecimal,
     MemoryUnit,
+    MemorySpace,
     Layout,
+    Totals,
     Ttl,
     Shells,
     TabBar,
@@ -214,8 +216,10 @@ impl State {
             Row::Item(Item::PercentSpace),
             Row::Item(Item::CpuDecimal),
             Row::Item(Item::MemoryUnit),
+            Row::Item(Item::MemorySpace),
             Row::Header("Pane Tools"),
             Row::Item(Item::Layout),
+            Row::Item(Item::Totals),
         ];
         if self.sidebar.is_some() {
             rows.extend([
@@ -261,17 +265,29 @@ impl State {
             Item::MemoryUnit => (
                 "Unités de la mémoire",
                 match numbers.memory_unit {
-                    herdr_api::MemoryUnit::M => "853M, 2,4G",
-                    herdr_api::MemoryUnit::Mo => "853 Mo, 2,4 Go",
-                    herdr_api::MemoryUnit::MB => "853 MB, 2,4 GB",
+                    herdr_api::MemoryUnit::M => "M, G",
+                    herdr_api::MemoryUnit::Mo => "Mo, Go",
+                    herdr_api::MemoryUnit::MB => "MB, GB",
                 }
                 .into(),
+            ),
+            Item::MemorySpace => (
+                "Espace avant l'unité",
+                numbers.size(2_576_980_378).replace('\u{202F}', " "),
             ),
             Item::Layout => (
                 "Icônes",
                 match self.menu.layout {
                     Layout::Single => "une ligne, nom au survol",
                     Layout::Double => "deux lignes, avec les noms",
+                }
+                .into(),
+            ),
+            Item::Totals => (
+                "Totaux CPU / mémoire",
+                match self.menu.totals {
+                    TotalsStyle::Line => "une ligne",
+                    TotalsStyle::Bars => "barres",
                 }
                 .into(),
             ),
@@ -363,6 +379,11 @@ impl State {
                 self.set_both("memory_unit", value.name().into())
                     .inspect(|_| self.menu.numbers.memory_unit = value)
             }
+            Item::MemorySpace => {
+                let value = !self.menu.numbers.memory_space;
+                self.set_both("memory_space", value.into())
+                    .inspect(|_| self.menu.numbers.memory_space = value)
+            }
             Item::Layout => {
                 let value = match self.menu.layout {
                     Layout::Single => Layout::Double,
@@ -370,6 +391,16 @@ impl State {
                 };
                 self.set_menu("layout", value.name().into()).map(|()| {
                     self.menu.layout = value;
+                    saved(&[config::FILE_NAME])
+                })
+            }
+            Item::Totals => {
+                let value = match self.menu.totals {
+                    TotalsStyle::Line => TotalsStyle::Bars,
+                    TotalsStyle::Bars => TotalsStyle::Line,
+                };
+                self.set_menu("totals", value.name().into()).map(|()| {
+                    self.menu.totals = value;
                     saved(&[config::FILE_NAME])
                 })
             }

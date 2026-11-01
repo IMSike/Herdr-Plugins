@@ -36,10 +36,15 @@ The icons are [Nerd Font](https://www.nerdfonts.com) glyphs: without a Nerd Font
 
 The icons are laid out one of two ways, set by `layout` (see [Settings](#settings)):
 
-- `double` (default): two rows of icons, each with its name under it. The pane asks for 5 rows.
-- `single`: one row of icons; the row under it shows the name of the icon under the mouse, and nothing otherwise. The pane asks for 3 rows.
+- `double` (default): two rows of icons, each with its name under it.
+- `single`: one row of icons; the row under it shows the name of the icon under the mouse, and nothing otherwise.
 
-The last row shows the CPU and memory of Herdr's processes, then of the machine (`2% 3,1G · 󰍹 10% 22,4G`), as the [sidebar](sidebar.md) measures them, in bold; with the sidebar's threshold colors on (`colors = true` in `sidebar.toml`), each figure is green, yellow, orange or red as its [thresholds](sidebar.md#threshold-colors) set. Without the sidebar, or when its figures are more than 30 seconds old, the row stays empty.
+Under the icons, the CPU and memory of Herdr's processes, then of the machine, as the [sidebar](sidebar.md) measures them, in bold, shown one of two ways, set by `totals`:
+
+- `line` (default): one row, `2% 3,1G · 󰍹 10% 22,4G`.
+- `bars`: four rows, `CPU :`, `RAM :`, `CPU 󰍹 :`, `RAM 󰍹 :`, each with a bar as wide as the pane allows, then its value. A bar fills with the share of the machine (Herdr's memory: of the machine's memory), each cell in the color its place takes in a gradient from green to red through the [thresholds](sidebar.md#threshold-colors) of its figure. Herdr's CPU share is missing on the sidebar's first run: its bar stays empty, with `–`.
+
+With the sidebar's threshold colors on (`colors = true` in `sidebar.toml`), each figure is green, yellow, orange or red as its thresholds set. Without the sidebar, or when its figures are more than 30 seconds old, the rows stay empty. The pane asks for its icons' rows (2 or 4) plus its totals' (1 or 4).
 
 **Without the explorer.** `prefix+space` opens the popup menu, titled with the workspace's folder name. Choose an entry with its key, with the arrows (or `j`/`k`) and Enter, or with a click. Escape, `q` or Ctrl+C closes the menu. An entry's own key wins over `j`, `k` and `q`. The **Disk** entry belongs to the `Tools` pane only: the popup menu leaves it out.
 
@@ -105,8 +110,10 @@ At the top of `menu.toml`, before the entries; the settings screen changes them 
 | `decimal_comma` | `true` | `1,5G` (`true`) or `1.5G` (`false`) |
 | `percent_space` | `false` | `0,2%` (`false`) or `0,2 %` with a narrow no-break space (`true`) |
 | `cpu_decimal` | `false` | the CPU shares of the totals: `4%` (`false`) or `4,2%` (`true`) |
-| `memory_unit` | `"M"` | `853M`, `2,4G` (`"M"`); `853 Mo`, `2,4 Go` (`"Mo"`); `853 MB`, `2,4 GB` (`"MB"`); `K`, `M` or `G` as the size needs |
+| `memory_unit` | `"M"` | `853M`, `2,4G` (`"M"`); `853Mo`, `2,4Go` (`"Mo"`); `853MB`, `2,4GB` (`"MB"`); `K`, `M` or `G` as the size needs |
+| `memory_space` | `false` | `2,4Go` (`false`) or `2,4 Go` with a narrow no-break space before the unit (`true`) |
 | `layout` | `"double"` | the icons of the `Tools` pane: `"double"` (two rows, with their names) or `"single"` (one row, the name of the hovered icon under it) |
+| `totals` | `"line"` | the totals of the `Tools` pane: `"line"` (one row) or `"bars"` (four rows with bars), see [Use](#use) |
 
 ## Built-in entries
 
@@ -130,8 +137,8 @@ The window waits for Enter before closing, an error included.
 
 | Line | Effect | File |
 |---|---|---|
-| Virgule décimale, Espace avant %, CPU avec une décimale, Unités de la mémoire | `decimal_comma`, `percent_space`, `cpu_decimal`, `memory_unit` | `menu.toml` and `sidebar.toml` |
-| Icônes | `layout` | `menu.toml` |
+| Virgule décimale, Espace avant %, CPU avec une décimale, Unités de la mémoire, Espace avant l'unité | `decimal_comma`, `percent_space`, `cpu_decimal`, `memory_unit`, `memory_space` | `menu.toml` and `sidebar.toml` |
+| Icônes, Totaux CPU / mémoire | `layout`, `totals` | `menu.toml` |
 | Durée de vie des valeurs | `ttl_seconds`, by 5 seconds, from 5 to 600 | `sidebar.toml` |
 | Shells | `shells`: Enter to type them, separated by commas, Enter to save, Escape to cancel | `sidebar.toml` |
 | Totaux dans la barre d'onglets | `tab_bar` | `sidebar.toml` |

@@ -36,10 +36,15 @@ Les icônes sont des glyphes [Nerd Font](https://www.nerdfonts.com) : sans Nerd 
 
 Les icônes se disposent de deux façons, selon `layout` (voir [Réglages](#réglages)) :
 
-- `double` (par défaut) : deux lignes d'icônes, chacune avec son nom en dessous. Le pane demande 5 lignes.
-- `single` : une ligne d'icônes ; la ligne du dessous affiche le nom de l'icône sous la souris, et rien sinon. Le pane demande 3 lignes.
+- `double` (par défaut) : deux lignes d'icônes, chacune avec son nom en dessous.
+- `single` : une ligne d'icônes ; la ligne du dessous affiche le nom de l'icône sous la souris, et rien sinon.
 
-La dernière ligne affiche le CPU et la mémoire des processus de Herdr, puis de la machine (`2% 3,1G · 󰍹 10% 22,4G`), tels que la [sidebar](sidebar.md) les mesure, en gras ; avec les couleurs par seuil de la sidebar (`colors = true` dans `sidebar.toml`), chaque chiffre est vert, jaune, orange ou rouge selon ses [seuils](sidebar.md#couleurs-par-seuil). Sans la sidebar, ou quand ses chiffres ont plus de 30 secondes, la ligne reste vide.
+Sous les icônes, le CPU et la mémoire des processus de Herdr, puis de la machine, tels que la [sidebar](sidebar.md) les mesure, en gras, affichés de deux façons, selon `totals` :
+
+- `line` (par défaut) : une ligne, `2% 3,1G · 󰍹 10% 22,4G`.
+- `bars` : quatre lignes, `CPU :`, `RAM :`, `CPU 󰍹 :`, `RAM 󰍹 :`, chacune avec une barre aussi large que le pane le permet, puis sa valeur. Une barre se remplit de la part de la machine (mémoire de Herdr : de la mémoire de la machine), chaque case dans la couleur que prend sa place dans un dégradé du vert au rouge passant par les [seuils](sidebar.md#couleurs-par-seuil) de son chiffre. La part de CPU de Herdr manque au premier passage de la sidebar : sa barre reste vide, avec `–`.
+
+Avec les couleurs par seuil de la sidebar (`colors = true` dans `sidebar.toml`), chaque chiffre est vert, jaune, orange ou rouge selon ses seuils. Sans la sidebar, ou quand ses chiffres ont plus de 30 secondes, les lignes restent vides. Le pane demande les lignes de ses icônes (2 ou 4) plus celles de ses totaux (1 ou 4).
 
 **Sans l'explorateur.** `prefix+space` ouvre le menu en popup, titré du nom du dossier du workspace. Choisissez une entrée par sa touche, par les flèches (ou `j`/`k`) et Entrée, ou d'un clic. Échap, `q` ou Ctrl+C ferme le menu. La touche propre à une entrée l'emporte sur `j`, `k` et `q`. L'entrée **Disk** n'appartient qu'au pane `Tools` : le menu en popup l'omet.
 
@@ -105,8 +110,10 @@ En tête de `menu.toml`, avant les entrées ; l'écran des réglages les change 
 | `decimal_comma` | `true` | `1,5G` (`true`) ou `1.5G` (`false`) |
 | `percent_space` | `false` | `0,2%` (`false`) ou `0,2 %` avec une espace fine insécable (`true`) |
 | `cpu_decimal` | `false` | les parts de CPU des totaux : `4%` (`false`) ou `4,2%` (`true`) |
-| `memory_unit` | `"M"` | `853M`, `2,4G` (`"M"`) ; `853 Mo`, `2,4 Go` (`"Mo"`) ; `853 MB`, `2,4 GB` (`"MB"`) ; `K`, `M` ou `G` selon la taille |
+| `memory_unit` | `"M"` | `853M`, `2,4G` (`"M"`) ; `853Mo`, `2,4Go` (`"Mo"`) ; `853MB`, `2,4GB` (`"MB"`) ; `K`, `M` ou `G` selon la taille |
+| `memory_space` | `false` | `2,4Go` (`false`) ou `2,4 Go` avec une espace fine insécable avant l'unité (`true`) |
 | `layout` | `"double"` | les icônes du pane `Tools` : `"double"` (deux lignes, avec leurs noms) ou `"single"` (une ligne, le nom de l'icône survolée en dessous) |
+| `totals` | `"line"` | les totaux du pane `Tools` : `"line"` (une ligne) ou `"bars"` (quatre lignes avec barres), voir [Utilisation](#utilisation) |
 
 ## Entrées intégrées
 
@@ -130,8 +137,8 @@ La fenêtre attend Entrée avant de se fermer, erreur comprise.
 
 | Ligne | Effet | Fichier |
 |---|---|---|
-| Virgule décimale, Espace avant %, CPU avec une décimale, Unités de la mémoire | `decimal_comma`, `percent_space`, `cpu_decimal`, `memory_unit` | `menu.toml` et `sidebar.toml` |
-| Icônes | `layout` | `menu.toml` |
+| Virgule décimale, Espace avant %, CPU avec une décimale, Unités de la mémoire, Espace avant l'unité | `decimal_comma`, `percent_space`, `cpu_decimal`, `memory_unit`, `memory_space` | `menu.toml` et `sidebar.toml` |
+| Icônes, Totaux CPU / mémoire | `layout`, `totals` | `menu.toml` |
 | Durée de vie des valeurs | `ttl_seconds`, par pas de 5 secondes, de 5 à 600 | `sidebar.toml` |
 | Shells | `shells` : Entrée pour les taper, séparés par des virgules, Entrée pour enregistrer, Échap pour annuler | `sidebar.toml` |
 | Totaux dans la barre d'onglets | `tab_bar` | `sidebar.toml` |
