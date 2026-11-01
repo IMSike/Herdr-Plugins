@@ -147,6 +147,8 @@ fn pid_file(choice_file: &Path) -> PathBuf {
     PathBuf::from(name)
 }
 
+/// Whether the menu still runs under `pid`. The menu is this same program: a
+/// process of another program given the same pid since does not count.
 fn is_running(pid: u32) -> bool {
     use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
     let Ok(mut system) = System::new() else {
@@ -158,7 +160,19 @@ fn is_running(pid: u32) -> bool {
         true,
         ProcessRefreshKind::nothing(),
     );
-    system.process(pid).is_some()
+    let this = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()));
+    system.process(pid).is_some_and(|p| {
+        this.as_deref()
+            .is_none_or(|this| same_program(this, &p.name().to_string_lossy()))
+    })
+}
+
+/// Linux gives a process name of 15 characters at most.
+fn same_program(a: &str, b: &str) -> bool {
+    let short = |name: &str| name.to_lowercase().chars().take(15).collect::<String>();
+    short(a) == short(b)
 }
 
 /// Opens the `run` popup for the entry.
@@ -269,5 +283,11 @@ mod tests {
     #[test]
     fn this_process_runs() {
         assert!(is_running(std::process::id()));
+        assert!(same_program("herdr-menu.exe", "HERDR-MENU.EXE"));
+        assert!(same_program(
+            "herdr_menu-0123456789abcdef",
+            "herdr_menu-0123"
+        ));
+        assert!(!same_program("herdr-menu.exe", "notepad.exe"));
     }
 }
