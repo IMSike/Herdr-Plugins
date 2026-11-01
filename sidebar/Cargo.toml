@@ -12,4 +12,5 @@ publish.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 herdr-api.workspace = true
+toml.workspace = true
 sysinfo = { workspace = true, features = ["system"] }

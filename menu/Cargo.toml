@@ -13,5 +13,5 @@ crossterm = { version = "0.29", default-features = false, features = ["events", 
 serde.workspace = true
 serde_json.workspace = true
 herdr-api.workspace = true
-toml = { version = "1", default-features = false, features = ["parse", "serde", "std"] }
+toml.workspace = true
 sysinfo = { workspace = true, features = ["disk", "system"] }

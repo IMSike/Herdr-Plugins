@@ -109,24 +109,53 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     })
 }
 
-/// A size in binary units, short, with a decimal comma as in French:
-/// `512K`, `853M`, `2,4G`.
-pub fn format_size(bytes: u64) -> String {
-    const KIB: f64 = 1024.0;
-    let b = bytes as f64;
-    if b < KIB * KIB {
-        format!("{:.0}K", b / KIB)
-    } else if b < KIB * KIB * 1000.0 {
-        format!("{:.0}M", b / (KIB * KIB))
-    } else {
-        format!("{:.1}G", b / (KIB * KIB * KIB)).replace('.', ",")
+/// How the plugins write their figures, as their settings choose.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NumberFormat {
+    /// `2,4G` rather than `2.4G`.
+    pub decimal_comma: bool,
+    /// `4 %` (a narrow no-break space) rather than `4%`.
+    pub percent_space: bool,
+}
+
+impl Default for NumberFormat {
+    fn default() -> Self {
+        Self {
+            decimal_comma: true,
+            percent_space: false,
+        }
     }
 }
 
-/// A share in percent, French style: a narrow no-break space before `%`
-/// (`4 %`).
-pub fn format_percent(percent: impl std::fmt::Display) -> String {
-    format!("{percent}\u{202F}%")
+impl NumberFormat {
+    /// A number written with one decimal: `2,4`.
+    pub fn decimal(&self, value: f64) -> String {
+        let text = format!("{value:.1}");
+        if self.decimal_comma {
+            text.replace('.', ",")
+        } else {
+            text
+        }
+    }
+
+    /// A size in binary units, short: `512K`, `853M`, `2,4G`.
+    pub fn size(&self, bytes: u64) -> String {
+        const KIB: f64 = 1024.0;
+        let b = bytes as f64;
+        if b < KIB * KIB {
+            format!("{:.0}K", b / KIB)
+        } else if b < KIB * KIB * 1000.0 {
+            format!("{:.0}M", b / (KIB * KIB))
+        } else {
+            format!("{}G", self.decimal(b / (KIB * KIB * KIB)))
+        }
+    }
+
+    /// A share in percent: `4%`, or `4 %`.
+    pub fn percent(&self, value: impl std::fmt::Display) -> String {
+        let space = if self.percent_space { "\u{202F}" } else { "" };
+        format!("{value}{space}%")
+    }
 }
 
 #[cfg(test)]
@@ -135,10 +164,17 @@ mod tests {
 
     #[test]
     fn sizes_are_short() {
-        assert_eq!(format_size(512 * 1024), "512K");
-        assert_eq!(format_size(853 * 1024 * 1024), "853M");
-        assert_eq!(format_size(2_576_980_378), "2,4G");
-        assert_eq!(format_percent(4), "4\u{202F}%");
+        let french = NumberFormat::default();
+        assert_eq!(french.size(512 * 1024), "512K");
+        assert_eq!(french.size(853 * 1024 * 1024), "853M");
+        assert_eq!(french.size(2_576_980_378), "2,4G");
+        assert_eq!(french.percent(4), "4%");
+        let other = NumberFormat {
+            decimal_comma: false,
+            percent_space: true,
+        };
+        assert_eq!(other.size(2_576_980_378), "2.4G");
+        assert_eq!(other.percent(4), "4\u{202F}%");
     }
 
     #[test]
