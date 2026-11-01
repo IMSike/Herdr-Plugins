@@ -6,11 +6,11 @@ Turns Herdr's Agents panel into a tree: each workspace's agents listed under its
 
 ```
  agents                 arbre
-api · 6 % 1,2G
-├ ◐ Général · 4 % 853M  1
-└ ○ docs · 0 % 275M
+api · 6% 1,2G
+├ ◐ Général · 4% 853M ·  1
+└ ○ docs · 0% 275M
 web
-└ ○ 1 · 1 % 562M
+└ ○ 1 · 1% 562M
 ```
 
 Clicking an agent line opens that agent. Workspaces are still opened from the Spaces panel above, reduced to one line each (`api · main`); drag the divider between the two panels to give the tree more room.
@@ -48,7 +48,7 @@ rows = [
     { contains = "◆", fg = "#fb4934" },
     { contains = "◐", fg = "#fabd2f" },
     { contains = "●", fg = "#b8bb26" },
-  ] }, { token = "$stats", fg = "#665c54" }],
+  ] }, { token = "$usage", fg = "#665c54" }, { token = "$shell_count", fg = "#fabd2f" }],
 ]
 
 [ui.sidebar.spaces]
@@ -72,22 +72,44 @@ Agent tokens (Agents panel):
 | Token | Value |
 |---|---|
 | `$ws` | on the first agent of each workspace only: the workspace's name (`api`) |
-| `$ws_stats` | next to `$ws`, only when the workspace has more than one agent (otherwise the agent's figures already tell it): the workspace's CPU and memory (`6 % 1,2G`) |
+| `$ws_stats` | next to `$ws`, only when the workspace has more than one agent (otherwise the agent's figures already tell it): the workspace's CPU and memory (`6% 1,2G`) |
 | `$line` | tree branch (`├`, `└` for the last agent of the workspace), state and the name of the agent's tab (`├ ◐ Général`) |
-| `$stats` | the agent's CPU, memory and shells (`4 % 853M  1`) |
-| `$cpu`, `$ram`, `$shells` | the same figures on their own (`4 %`, `853M`, `1 shell`), to build other layouts |
+| `$usage` | the agent's CPU and memory (`4% 853M`) |
+| `$shell_count` | the agent's shells (` 1`), cleared when it has none. A token of its own takes a color of its own: a shell below an agent means the agent is at work, which the example colors like a working agent |
+| `$stats` | CPU, memory and shells in one token, one color (`4% 853M  1`) |
+| `$cpu`, `$ram`, `$shells` | the same figures on their own (`4%`, `853M`, `1 shell`), to build other layouts |
 | `$order` | the tree's sort key; not meant to be displayed |
 
 State glyphs: `◐` working, `◆` blocked, `●` done (finished, not seen yet), `○` idle, `·` unknown. The color rules above match these glyphs.
 
-Tab bar: `<cpu> <memory> · 󰍹 <cpu> <memory>` (`6 % 2,4G · 󰍹 35 % 21,3G`): the total of every pane, then the whole machine's (after the Nerd Font monitor icon), updated at each run. The time after them (`· 14:05`) is Herdr's own `datetime` entry: it stays when the plugin fails. The machine's figures count every process, those the plugin cannot read too (protected processes, virtual machines): its CPU share comes from the system's CPU times, its memory is the memory in use (what the Task Manager shows as "In use" on Windows).
+Tab bar: `<cpu> <memory> · 󰍹 <cpu> <memory>` (`6% 2,4G · 󰍹 35% 21,3G`): the total of every pane, then the whole machine's (after the Nerd Font monitor icon), updated at each run. The time after them (`· 14:05`) is Herdr's own `datetime` entry: it stays when the plugin fails. The machine's figures count every process, those the plugin cannot read too (protected processes, virtual machines): its CPU share comes from the system's CPU times, its memory is the memory in use (what the Task Manager shows as "In use" on Windows).
 
-- **CPU**: used since the previous run, as a share of the whole machine, rounded to the percent (`0 %`, `12 %`: below 0.5% shows `0 %`); missing on the first run, and when the previous run is less than a second or more than two minutes old.
+- **CPU**: used since the previous run, as a share of the whole machine, rounded to the percent (`0%`, `12%`: below 0.5% shows `0%`); missing on the first run, and when the previous run is less than a second or more than two minutes old.
 - **Memory**: working set on Windows, resident memory elsewhere (`850M`, `1,2G`).
 - An agent's figures cover its pane's whole process tree: the shell, the agent and everything they started. A workspace adds up all its panes, agents or not.
-- **Shells** (``, the Nerd Font terminal icon; without a Nerd Font it shows as a blank or a box): `bash`, `sh`, `zsh`, `fish`, `dash`, `nu`, `pwsh`, `powershell` or `cmd` processes below the agent. A shell started by another shell does not count again: Git Bash on Windows chains several `bash.exe` for one command, which count as one. Short commands appear only for an instant; long-running ones (a server, a watcher) stay visible.
+- **Shells** (``, the Nerd Font terminal icon; without a Nerd Font it shows as a blank or a box): `bash`, `sh`, `zsh`, `fish`, `dash`, `nu`, `pwsh`, `powershell` or `cmd` processes below the agent (the `shells` setting). A shell started by another shell does not count again: Git Bash on Windows chains several `bash.exe` for one command, which count as one. Short commands appear only for an instant; long-running ones (a server, a watcher) stay visible.
 
 To check the values without the sidebar, `herdr-sidebar show` (from the state folder) prints them, measured over one second, without reporting them.
+
+## Settings
+
+`sidebar.toml`, in the plugin's config folder (`herdr plugin config-dir imsike.sidebar` prints it), sets how the values are written. The menu's **Réglages** entry opens it, and first creates it with every setting commented out. A missing setting keeps its default:
+
+| Setting | Default | Effect |
+|---|---|---|
+| `decimal_comma` | `true` | `2,4G` (`true`) or `2.4G` (`false`) |
+| `percent_space` | `false` | `4%` (`false`) or `4 %` with a narrow no-break space (`true`) |
+| `ttl_seconds` | `20` | how long a value lasts when no run refreshes it; at least 1 |
+| `shells` | `["bash", "sh", "zsh", "fish", "dash", "nu", "pwsh", "powershell", "cmd"]` | process names counted as shells (without `.exe`, any case) |
+
+```toml
+percent_space = true
+shells = ["bash", "pwsh", "nu"]
+```
+
+Each run reads the file: a change shows at the next run. A file that cannot be read or is invalid (unknown setting, `ttl_seconds = 0`) is ignored: the runs use the defaults and say why in the plugin's log (`herdr plugin log list --plugin imsike.sidebar`). Colors, order and layout stay in Herdr's `config.toml`.
+
+Herdr runs the tab bar command without the plugin's environment, so without its config folder: `install` writes the folder's path in `config-dir`, in the state folder, where the tab bar runs read it. Until `install` has run once (at Herdr's start, or by hand), those runs use the defaults.
 
 ## How it works, implications
 
@@ -98,13 +120,13 @@ To check the values without the sidebar, `herdr-sidebar show` (from the state fo
 - Each report carries a sequence number, kept in `seq` in the state folder: when the clock is set back, the reports go on in order instead of being ignored by Herdr, and two runs started at the same moment do not share one.
 - A run still waiting for Herdr after 4 seconds stops asking it, and fails (the tab bar entry is empty until the next run): a slow Herdr is not sent more requests.
 - An agent whose processes cannot be read stays in the tree with the figures of the last run, until they expire.
-- Values expire after 20 seconds. If the runs stop, the tree lines disappear instead of going stale, and agents are listed without lines.
+- Values expire after 20 seconds (`ttl_seconds`). If the runs stop, the tree lines disappear instead of going stale, and agents are listed without lines.
 - Herdr indents a block's second row by two cells, so the first agent of a workspace (under its header) would sit further right than the others. The plugin pads the others' lines with two blank braille characters (U+2800), since Herdr strips ordinary spaces at the start of a value. A line longer than the sidebar is cut.
 - The `◐` glyph replaces Herdr's state icon.
 - The name shown is the agent's tab name: a tab never renamed shows its number, and two agents in one tab share a name. A renamed tab appears at the next run.
-- Herdr itself puts ` · ` between two tokens of a row (`Général · 4 % 853M`); it cannot be changed.
+- Herdr itself puts ` · ` between two tokens of a row (`Général · 4% 853M ·  1`); it cannot be changed. `$stats` keeps the figures in one token, without it.
 - The values carry their unit, so numeric color rules (`gt`, `lt`) do not apply to them.
 
 ## Turn it off
 
-Remove the `command` entry of `tab_bar_right` and the `$ws`, `$ws_stats`, `$line`, `$stats`, `$cpu`, `$ram`, `$shells` tokens from `config.toml` and the `[ui.sidebar.*]` rows (the default rows come back), then `herdr plugin disable imsike.sidebar` (or `herdr plugin uninstall imsike.sidebar`), which also gives the Agents panel its own sort back. The copied binary, `sample.json` and `seq` stay in the state folder until you delete them.
+Remove the `command` entry of `tab_bar_right` and the `$ws`, `$ws_stats`, `$line`, `$usage`, `$shell_count`, `$stats`, `$cpu`, `$ram`, `$shells` tokens from `config.toml` and the `[ui.sidebar.*]` rows (the default rows come back), then `herdr plugin disable imsike.sidebar` (or `herdr plugin uninstall imsike.sidebar`), which also gives the Agents panel its own sort back. The copied binary, `sample.json`, `seq` and `config-dir` stay in the state folder, and `sidebar.toml` in the config folder, until you delete them.

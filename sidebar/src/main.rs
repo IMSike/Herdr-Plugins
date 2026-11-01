@@ -12,6 +12,7 @@
 
 mod machine;
 mod seq;
+mod settings;
 mod snapshot;
 mod tokens;
 mod tree;
@@ -28,6 +29,7 @@ use serde_json::{Map, Value, json};
 use sysinfo::{MemoryRefreshKind, ProcessRefreshKind, ProcessesToUpdate, System};
 
 use herdr_api::{request, request_field, unix_millis};
+use settings::Settings;
 use snapshot::{Pane, Snapshot};
 use usage::{Proc, Sample, Shell, Table, Usage, cpu_share, format_cpu};
 
@@ -40,9 +42,9 @@ const SEQ_FILE: &str = "seq";
 const INSTALL_LOCK: &str = "install.lock";
 /// A file of the state folder left this long by a run killed midway is removed.
 const STALE_AFTER: Duration = Duration::from_secs(60);
-/// Tokens vanish when no run refreshes them (Herdr closed the tab bar
-/// entry, or the plugin was removed).
-const TOKEN_TTL_MS: u64 = 20_000;
+/// The plugin's config folder, as `install` found it: the tab bar entry
+/// runs without the plugin's variables.
+const CONFIG_DIR_FILE: &str = "config-dir";
 /// A run still asking Herdr after this long stops: a slow Herdr is not
 /// sent more requests, and the tab bar entry (`timeout_seconds = 5`) is not
 /// held up.
@@ -68,6 +70,10 @@ fn main() -> ExitCode {
 fn install() -> Result<(), String> {
     // The tab bar entry runs this copy: its path is the one to configure.
     println!("{}", copy_binary()?.display());
+    if let Ok(config) = herdr_api::var(herdr_api::env::CONFIG_DIR) {
+        let file = herdr_api::state_dir()?.join(CONFIG_DIR_FILE);
+        herdr_api::write_atomic(&file, config.as_bytes()).map_err(|e| e.to_string())?;
+    }
     // Agents follow the `order` token: each workspace's agents after its header.
     request(
         "agent.view.set",
@@ -187,6 +193,12 @@ fn tick(mode: Mode) -> Result<(), String> {
             .ok_or("dossier du binaire inconnu")?,
     };
     let sample_path = state_dir.join(SAMPLE_FILE);
+    let settings = Settings::load(config_dir(&state_dir).as_deref()).unwrap_or_else(|e| {
+        eprintln!("herdr-sidebar : {e}");
+        Settings::default()
+    });
+    let numbers = settings.numbers();
+    let ttl_ms = settings.ttl_seconds.saturating_mul(1000);
     // The processes first, the slow part: the session read after them, and
     // the reports, then describe the same moment. An event only moves the
     // tree: the figures stay as the last run measured them, which spares a
@@ -211,7 +223,7 @@ fn tick(mode: Mode) -> Result<(), String> {
     let send = |pane_id: &str, tokens: Map<String, Value>| match mode {
         Mode::Show => println!("{pane_id} : {}", Value::Object(tokens)),
         _ if late() => {}
-        _ => report(pane_id, tokens, seq),
+        _ => report(pane_id, tokens, seq, ttl_ms),
     };
     let too_slow = || Err("Herdr trop lent : passage interrompu".to_string());
 
@@ -241,7 +253,11 @@ fn tick(mode: Mode) -> Result<(), String> {
         .unwrap_or_default();
     let previous = first.or_else(|| saved.filter(|s| s.is_usable(now)));
     let empty = Sample::default();
-    let table = Table::new(&system.processes, previous.as_ref().unwrap_or(&empty));
+    let table = Table::new(
+        &system.processes,
+        previous.as_ref().unwrap_or(&empty),
+        &settings.shells,
+    );
     // The time of all cores together since the previous run, from the
     // system's CPU times, which a change of the wall clock does not move;
     // the wall clock where the system gives none.
@@ -254,7 +270,7 @@ fn tick(mode: Mode) -> Result<(), String> {
                 now.saturating_sub(p.at_ms) * cores as u64
             })
     });
-    let cpu = |u: &Usage| all_cores_ms.map(|ms| format_cpu(cpu_share(u.cpu_ms, ms)));
+    let cpu = |u: &Usage| all_cores_ms.map(|ms| format_cpu(cpu_share(u.cpu_ms, ms), &numbers));
 
     let mut shells: HashMap<String, Shell> = HashMap::new();
     let mut sums: Vec<(String, Usage)> = Vec::new();
@@ -279,7 +295,9 @@ fn tick(mode: Mode) -> Result<(), String> {
         let workspace = block.workspace_figures.then(|| {
             sums.iter()
                 .find(|(id, _)| *id == block.workspace_id)
-                .map_or_else(String::new, |(_, u)| tokens::figures(cpu(u), u, false))
+                .map_or_else(String::new, |(_, u)| {
+                    tokens::figures(cpu(u), u, false, &numbers)
+                })
         });
         // An agent whose processes could not be read keeps its place in the
         // tree, with the figures of the last run.
@@ -287,17 +305,23 @@ fn tick(mode: Mode) -> Result<(), String> {
             .iter()
             .find(|(id, _)| *id == block.pane_id)
             .map(|(_, u)| (cpu(u), u));
-        let tokens = tokens::agent(&block, usage, workspace);
+        let tokens = tokens::agent(&block, usage, workspace, &numbers);
         send(&block.pane_id, tokens);
     }
 
     let machine_cpu = previous
         .as_ref()
         .and_then(|p| machine::cpu_percent(p.machine?, system.cpu_times?))
-        .map(format_cpu);
+        .map(|percent| format_cpu(percent, &numbers));
     println!(
         "{}",
-        tokens::tab_bar(cpu(&total), &total, machine_cpu, system.used_memory)
+        tokens::tab_bar(
+            cpu(&total),
+            &total,
+            machine_cpu,
+            system.used_memory,
+            &numbers
+        )
     );
     if mode == Mode::Tick {
         let mut sample = system.sample(now);
@@ -336,12 +360,12 @@ fn shell_of(pane: &Pane, known: Option<&Shell>, table: &Table, may_ask: bool) ->
 }
 
 /// A failed report only loses one refresh: it is logged, never fatal.
-fn report(pane_id: &str, tokens: Map<String, Value>, seq: u64) {
+fn report(pane_id: &str, tokens: Map<String, Value>, seq: u64, ttl_ms: u64) {
     let params = json!({
         "pane_id": pane_id,
         "source": SOURCE,
         "tokens": tokens,
-        "ttl_ms": TOKEN_TTL_MS,
+        "ttl_ms": ttl_ms,
         "seq": seq,
     });
     if let Err(e) = request("pane.report_metadata", params) {
@@ -404,6 +428,17 @@ fn next_seq(path: &Path) -> u64 {
     let seq = seq::next(unix_millis(), last, std::process::id());
     let _ = herdr_api::write_atomic(path, seq.to_string().as_bytes());
     seq
+}
+
+/// The plugin's config folder: from Herdr in a hook or an action, from
+/// what `install` kept in the tab bar entry.
+fn config_dir(state_dir: &Path) -> Option<PathBuf> {
+    std::env::var_os(herdr_api::env::CONFIG_DIR)
+        .map(PathBuf::from)
+        .or_else(|| {
+            let text = fs::read_to_string(state_dir.join(CONFIG_DIR_FILE)).ok()?;
+            Some(PathBuf::from(text.trim()))
+        })
 }
 
 fn read_sample(path: &Path) -> Option<Sample> {

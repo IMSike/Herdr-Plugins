@@ -3,7 +3,7 @@
 
 use serde_json::{Map, Value};
 
-use herdr_api::format_size;
+use herdr_api::NumberFormat;
 
 use crate::tree::Block;
 use crate::usage::Usage;
@@ -30,56 +30,63 @@ pub fn agent(
     block: &Block,
     usage: Option<(Option<String>, &Usage)>,
     workspace: Option<String>,
+    numbers: &NumberFormat,
 ) -> Map<String, Value> {
     let mut tokens = layout(block);
     if let Some((cpu, usage)) = usage {
-        tokens.extend(figure_tokens(cpu.clone(), usage));
+        if let Some(cpu) = &cpu {
+            // Left out (not cleared) on the first run, which has no average yet.
+            tokens.insert("cpu".into(), cpu.clone().into());
+        }
+        tokens.insert("ram".into(), numbers.size(usage.memory).into());
         let shells = match usage.shells {
             0 => None,
             1 => Some("1 shell".into()),
             n => Some(format!("{n} shells")),
         };
         tokens.insert("shells".into(), optional(shells));
-        tokens.insert("stats".into(), figures(cpu, usage, true).into());
+        let count = (usage.shells > 0).then(|| format!("{SHELL_GLYPH} {}", usage.shells));
+        tokens.insert("shell_count".into(), optional(count));
+        tokens.insert(
+            "usage".into(),
+            figures(cpu.clone(), usage, false, numbers).into(),
+        );
+        tokens.insert("stats".into(), figures(cpu, usage, true, numbers).into());
     }
     tokens.insert("ws_stats".into(), optional(workspace));
     tokens
 }
 
-/// `cpu` is left out (not cleared) on the first run, which has no average yet.
-fn figure_tokens(cpu: Option<String>, usage: &Usage) -> Map<String, Value> {
-    let mut tokens = Map::new();
-    if let Some(cpu) = cpu {
-        tokens.insert("cpu".into(), cpu.into());
-    }
-    tokens.insert("ram".into(), format_size(usage.memory).into());
-    tokens
-}
-
-/// `4 % 853M  1`; the CPU share is missing on the first run.
-pub fn figures(cpu: Option<String>, usage: &Usage, with_shells: bool) -> String {
+/// `4% 853M  1`; the CPU share is missing on the first run.
+pub fn figures(
+    cpu: Option<String>,
+    usage: &Usage,
+    with_shells: bool,
+    numbers: &NumberFormat,
+) -> String {
     let mut parts: Vec<String> = cpu.into_iter().collect();
-    parts.push(format_size(usage.memory));
+    parts.push(numbers.size(usage.memory));
     if with_shells && usage.shells > 0 {
         parts.push(format!("{SHELL_GLYPH} {}", usage.shells));
     }
     parts.join(" ")
 }
 
-/// Every pane's total, then the whole machine's: `6 % 2,4G · 󰍹 35 % 21,3G`.
+/// Every pane's total, then the whole machine's: `6% 2,4G · 󰍹 35% 21,3G`.
 pub fn tab_bar(
     cpu: Option<String>,
     total: &Usage,
     machine_cpu: Option<String>,
     used_memory: u64,
+    numbers: &NumberFormat,
 ) -> String {
     let machine: Vec<String> = machine_cpu
         .into_iter()
-        .chain([format_size(used_memory)])
+        .chain([numbers.size(used_memory)])
         .collect();
     format!(
         "{} · {MACHINE_GLYPH} {}",
-        figures(cpu, total, false),
+        figures(cpu, total, false, numbers),
         machine.join(" ")
     )
 }
@@ -116,6 +123,7 @@ mod tests {
 
     #[test]
     fn an_agent_reports_its_figures_or_keeps_the_last_ones() {
+        let numbers = NumberFormat::default();
         let usage = Usage {
             cpu_ms: 0,
             memory: 853 * MB,
@@ -123,25 +131,32 @@ mod tests {
         };
         let tokens = agent(
             &block(Some("api")),
-            Some((Some("4\u{202F}%".into()), &usage)),
-            Some("6\u{202F}% 1,2G".into()),
+            Some((Some("4%".into()), &usage)),
+            Some("6% 1,2G".into()),
+            &numbers,
         );
         assert_eq!(tokens["ws"], "api");
-        assert_eq!(tokens["cpu"], "4\u{202F}%");
+        assert_eq!(tokens["cpu"], "4%");
         assert_eq!(tokens["ram"], "853M");
         assert_eq!(tokens["shells"], "2 shells");
-        assert_eq!(tokens["stats"], "4\u{202F}% 853M \u{F489} 2");
-        assert_eq!(tokens["ws_stats"], "6\u{202F}% 1,2G");
+        assert_eq!(tokens["shell_count"], "\u{F489} 2");
+        assert_eq!(tokens["usage"], "4% 853M");
+        assert_eq!(tokens["stats"], "4% 853M \u{F489} 2");
+        assert_eq!(tokens["ws_stats"], "6% 1,2G");
 
-        let unread = agent(&block(None), None, None);
+        let unread = agent(&block(None), None, None, &numbers);
         assert_eq!(unread["ws"], Value::Null);
         assert_eq!(unread["ws_stats"], Value::Null);
         assert!(!unread.contains_key("stats") && !unread.contains_key("ram"));
 
         // First run: no CPU share, and the token is left as it was.
-        let first = agent(&block(None), Some((None, &usage)), None);
+        let first = agent(&block(None), Some((None, &usage)), None, &numbers);
         assert!(!first.contains_key("cpu"));
         assert_eq!(first["stats"], "853M \u{F489} 2");
+
+        let idle = Usage { shells: 0, ..usage };
+        let none = agent(&block(None), Some((None, &idle)), None, &numbers);
+        assert_eq!(none["shell_count"], Value::Null);
     }
 
     #[test]
@@ -157,6 +172,7 @@ mod tests {
 
     #[test]
     fn the_tab_bar_shows_both_totals() {
+        let numbers = NumberFormat::default();
         let total = Usage {
             cpu_ms: 0,
             memory: 2 * 1024 * MB,
@@ -164,15 +180,16 @@ mod tests {
         };
         assert_eq!(
             tab_bar(
-                Some("6\u{202F}%".into()),
+                Some("6%".into()),
                 &total,
-                Some("35\u{202F}%".into()),
-                21 * 1024 * MB
+                Some("35%".into()),
+                21 * 1024 * MB,
+                &numbers
             ),
-            "6\u{202F}% 2,0G · \u{F0379} 35\u{202F}% 21,0G"
+            "6% 2,0G · \u{F0379} 35% 21,0G"
         );
         assert_eq!(
-            tab_bar(None, &total, None, 512 * MB),
+            tab_bar(None, &total, None, 512 * MB, &numbers),
             "2,0G · \u{F0379} 512M"
         );
     }

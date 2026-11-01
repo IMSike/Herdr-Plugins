@@ -2,20 +2,9 @@
 
 use std::collections::{HashMap, HashSet};
 
+use herdr_api::NumberFormat;
 use serde::{Deserialize, Serialize};
 
-/// Process names counted as shells (lowercase, without `.exe`).
-const SHELLS: &[&str] = &[
-    "bash",
-    "sh",
-    "zsh",
-    "fish",
-    "dash",
-    "nu",
-    "pwsh",
-    "powershell",
-    "cmd",
-];
 /// A previous sample older than this gives no meaningful CPU average.
 const MAX_SAMPLE_AGE_MS: u64 = 120_000;
 /// Nor does one younger than this: a few milliseconds of CPU time make the
@@ -101,13 +90,15 @@ pub struct Table<'a> {
     by_pid: HashMap<u32, &'a Proc>,
     children: HashMap<u32, Vec<u32>>,
     previous: &'a Sample,
+    /// Process names counted as shells (without `.exe`, any case).
+    shells: &'a [String],
     /// How far every start time moved since the previous sample, in seconds:
     /// on Linux they follow a change of the wall clock. 0 otherwise.
     shift: i64,
 }
 
 impl<'a> Table<'a> {
-    pub fn new(procs: &'a [Proc], previous: &'a Sample) -> Self {
+    pub fn new(procs: &'a [Proc], previous: &'a Sample, shells: &'a [String]) -> Self {
         let mut children: HashMap<u32, Vec<u32>> = HashMap::new();
         for p in procs {
             if let Some(parent) = p.parent.filter(|&parent| parent != p.pid) {
@@ -119,6 +110,7 @@ impl<'a> Table<'a> {
             by_pid,
             children,
             previous,
+            shells,
             shift: clock_shift(procs, previous),
         }
     }
@@ -156,7 +148,7 @@ impl<'a> Table<'a> {
             }
             usage.cpu_ms += self.cpu_since_previous(proc);
             usage.memory += proc.memory;
-            if pid != root && is_shell(&proc.name) && !self.parent_is_shell(proc) {
+            if pid != root && self.is_shell(&proc.name) && !self.parent_is_shell(proc) {
                 usage.shells += 1;
             }
             if let Some(kids) = self.children.get(&pid) {
@@ -169,7 +161,12 @@ impl<'a> Table<'a> {
     fn parent_is_shell(&self, proc: &Proc) -> bool {
         proc.parent
             .and_then(|p| self.by_pid.get(&p))
-            .is_some_and(|parent| is_shell(&parent.name))
+            .is_some_and(|parent| self.is_shell(&parent.name))
+    }
+
+    fn is_shell(&self, name: &str) -> bool {
+        let name = name.strip_suffix(".exe").unwrap_or(name);
+        self.shells.iter().any(|s| s.eq_ignore_ascii_case(name))
     }
 
     fn cpu_since_previous(&self, proc: &Proc) -> u64 {
@@ -208,12 +205,6 @@ fn clock_shift(procs: &[Proc], previous: &Sample) -> i64 {
         .map_or(0, |(shift, _)| shift)
 }
 
-fn is_shell(name: &str) -> bool {
-    let name = name.to_ascii_lowercase();
-    let name = name.strip_suffix(".exe").unwrap_or(&name);
-    SHELLS.contains(&name)
-}
-
 /// A process tree's CPU share of the whole machine, in percent: its CPU
 /// time against `all_cores_ms`, the time of all cores together.
 pub fn cpu_share(cpu_ms: u64, all_cores_ms: u64) -> f64 {
@@ -223,14 +214,18 @@ pub fn cpu_share(cpu_ms: u64, all_cores_ms: u64) -> f64 {
     (cpu_ms as f64 * 100.0 / all_cores_ms as f64).min(100.0)
 }
 
-/// Rounded to the percent, to keep lines short: `0 %`, `12 %`.
-pub fn format_cpu(percent: f64) -> String {
-    herdr_api::format_percent(format!("{percent:.0}"))
+/// Rounded to the percent, to keep lines short: `0%`, `12%`.
+pub fn format_cpu(percent: f64, numbers: &NumberFormat) -> String {
+    numbers.percent(format!("{percent:.0}"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn shells() -> Vec<String> {
+        crate::settings::Settings::default().shells
+    }
 
     fn proc(pid: u32, parent: Option<u32>, start: u64, cpu: u64, name: &str) -> Proc {
         Proc {
@@ -259,7 +254,7 @@ mod tests {
             cpu: HashMap::from([(1, (0, 40)), (2, (1, 300))]),
             ..Sample::default()
         };
-        let usage = Table::new(&procs, &previous).tree(1);
+        let usage = Table::new(&procs, &previous, &shells()).tree(1);
         assert_eq!(
             usage,
             Usage {
@@ -278,13 +273,13 @@ mod tests {
             cpu: HashMap::from([(1, (0, 500))]),
             ..Sample::default()
         };
-        assert_eq!(Table::new(&procs, &previous).tree(1).cpu_ms, 20);
+        assert_eq!(Table::new(&procs, &previous, &shells()).tree(1).cpu_ms, 20);
     }
 
     #[test]
     fn ignores_children_of_a_reused_parent_pid_and_cycles() {
         let procs = vec![proc(1, Some(2), 10, 0, "a"), proc(2, Some(1), 5, 0, "b")];
-        let usage = Table::new(&procs, &Sample::default()).tree(1);
+        let usage = Table::new(&procs, &Sample::default(), &shells()).tree(1);
         assert_eq!(usage.memory, 100);
     }
 
@@ -292,10 +287,17 @@ mod tests {
     fn formats() {
         assert_eq!(cpu_share(500, 4000), 12.5);
         assert_eq!(cpu_share(1, 0), 0.0);
-        assert_eq!(format_cpu(0.42), "0\u{202F}%");
-        assert_eq!(format_cpu(0.6), "1\u{202F}%");
-        assert_eq!(format_cpu(12.5), "12\u{202F}%");
-        assert!(is_shell("PowerShell.exe") && is_shell("bash") && !is_shell("node.exe"));
+        let numbers = NumberFormat::default();
+        assert_eq!(format_cpu(0.42, &numbers), "0%");
+        assert_eq!(format_cpu(0.6, &numbers), "1%");
+        assert_eq!(format_cpu(12.5, &numbers), "12%");
+        let (procs, shells, empty) = (Vec::new(), shells(), Sample::default());
+        let table = Table::new(&procs, &empty, &shells);
+        assert!(
+            table.is_shell("PowerShell.exe")
+                && table.is_shell("bash")
+                && !table.is_shell("node.exe")
+        );
     }
 
     #[test]
@@ -311,7 +313,8 @@ mod tests {
             cpu: HashMap::from([(1, (100, 50)), (2, (110, 50)), (3, (120, 50))]),
             ..Sample::default()
         };
-        let table = Table::new(&procs, &previous);
+        let shells = shells();
+        let table = Table::new(&procs, &previous, &shells);
         assert_eq!(table.tree(1).cpu_ms, 10 + 20 + 30);
         assert!(table.same_start(130, 100) && !table.same_start(130, 130));
     }
