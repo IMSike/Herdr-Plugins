@@ -38,6 +38,9 @@ pub(crate) const CWD_ENV: &str = "HERDR_MENU_CWD";
 const START_TIMEOUT: Duration = Duration::from_secs(10);
 /// How often the action checks that the menu is still running.
 const ALIVE_EVERY: Duration = Duration::from_secs(1);
+/// Files of the state folder left by a process killed midway are removed
+/// after this long: no menu stays open a day.
+const STALE_AFTER: Duration = Duration::from_secs(24 * 3600);
 
 fn main() -> ExitCode {
     let result = match std::env::args().nth(1).as_deref() {
@@ -90,9 +93,11 @@ fn open() -> Result<(), String> {
         Ok(false) => {}
         Err(message) => eprintln!("herdr-menu : barre impossible, menu en popup : {message}"),
     }
-    let state = std::env::var_os("HERDR_PLUGIN_STATE_DIR")
-        .map(PathBuf::from)
-        .ok_or("HERDR_PLUGIN_STATE_DIR absent")?;
+    let state = herdr_api::state_dir().ok_or(format!("{} absent", herdr_api::env::STATE_DIR))?;
+    // What an action or a figures file killed midway left behind.
+    herdr_api::remove_stale(&state, STALE_AFTER, |name| {
+        name.starts_with("choice-") || name.ends_with(".partial")
+    });
     let choice_file = state.join(format!("choice-{}", std::process::id()));
     let pid_file = pid_file(&choice_file);
     let _ = std::fs::remove_file(&choice_file);
