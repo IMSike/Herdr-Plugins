@@ -2,7 +2,7 @@
 
 [English](../en/adding-plugins.md) · **Français**
 
-Un plugin de ce dépôt est un crate Rust du workspace Cargo racine, dans son propre dossier avec son manifeste Herdr ([ADR 0001](adr/0001-rust-cargo-workspace.md)). Vérifiez d'abord que Herdr ne sait pas le faire seul (configuration, raccourcis natifs, popups, entrées de la barre d'onglets) : un plugin n'existe que pour ce qu'il ne sait pas faire.
+Un plugin de ce dépôt est une crate Rust du workspace Cargo racine, dans son propre dossier avec son manifeste Herdr ([ADR 0001](adr/0001-rust-cargo-workspace.md)). Vérifiez d'abord que Herdr ne sait pas le faire seul (configuration, raccourcis natifs, popups, entrées de la barre d'onglets) : un plugin n'existe que pour ce qu'il ne sait pas faire.
 
 ## Organisation
 
@@ -56,7 +56,7 @@ La liaison ne lance aucune étape de build : recompilez après chaque modificati
 
 ## Tests et documentation
 
-1. `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings` et `cargo test` passent à la racine.
+1. `cargo fmt --all --check`, `cargo clippy --locked --all-targets -- -D warnings` et `cargo test --locked` passent à la racine.
 2. Écrivez `docs/en/plugins/<nom>.md` et `docs/fr/plugins/<nom>.md` : chaque fonctionnalité, ce qu'elle affiche ou fait, ses implications, comment la désactiver.
 3. Ajoutez le plugin aux tableaux de `README.md`, `README.fr.md` et `docs/{en,fr}/README.md`.
 4. Un choix important fait l'objet d'un ADR dans `docs/{en,fr}/adr/`.

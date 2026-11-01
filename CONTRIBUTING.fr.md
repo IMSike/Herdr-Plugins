@@ -9,10 +9,10 @@ Prérequis : Git, [Herdr](https://herdr.dev), le toolchain Rust, 1.88 ou plus r�
 ```sh
 git clone https://github.com/IMSike/Herdr-Plugins.git
 cd Herdr-Plugins
-git config core.hooksPath .githooks       # vérifie les messages de commit en local
-cargo fmt --all --check                   # mise en forme
-cargo clippy --all-targets -- -D warnings # lints
-cargo test                                # les tests de chaque crate
+git config core.hooksPath .githooks                 # vérifie les messages de commit en local
+cargo fmt --all --check                             # mise en forme
+cargo clippy --locked --all-targets -- -D warnings  # lints
+cargo test --locked                                 # les tests de chaque crate
 ```
 
 Le workflow [Plugins](.github/workflows/plugins.yml) lance les mêmes vérifications sous Linux et Windows à chaque push sur `main` ou `dev` et pour chaque pull request, et compile le workspace avec Rust 1.88, la plus ancienne version qu'il déclare (`rust-version`) : relevez les deux ensemble.
@@ -77,7 +77,7 @@ La première version est `v0.0.0`. Pas de changelog pour l'instant. Le workflow 
 ## Pull requests
 
 1. Partir de `main`.
-2. `cargo fmt --check`, `cargo clippy` et `cargo test` passent, et le changement a été essayé avec le plugin lié dans Herdr.
+2. Les vérifications ci-dessus passent, et le changement a été essayé avec le plugin lié dans Herdr.
 3. Documentation à jour dans les deux langues.
 4. Titre conforme à la convention de commit (il devient le message de commit au squash merge).
 

@@ -43,8 +43,8 @@ Before proposing a change (the [Plugins](.github/workflows/plugins.yml) workflow
 
 ```sh
 cargo fmt --all --check
-cargo clippy --all-targets -- -D warnings
-cargo test
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
 ```
 
 ## Git

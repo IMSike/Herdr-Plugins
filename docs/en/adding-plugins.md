@@ -56,7 +56,7 @@ Linking runs no build step: build again after each change. A running pane keeps 
 
 ## Tests and documentation
 
-1. `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test` pass at the root.
+1. `cargo fmt --all --check`, `cargo clippy --locked --all-targets -- -D warnings` and `cargo test --locked` pass at the root.
 2. Write `docs/en/plugins/<name>.md` and `docs/fr/plugins/<name>.md`: each feature, what it shows or does, its implications, how to turn it off.
 3. Add the plugin to the tables of `README.md`, `README.fr.md` and `docs/{en,fr}/README.md`.
 4. A significant choice gets an ADR in `docs/{en,fr}/adr/`.
