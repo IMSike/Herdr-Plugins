@@ -1,7 +1,8 @@
 name: Plugins
 
 # Checks formatting, lints and runs the tests of every plugin of the Cargo
-# workspace, on Linux and Windows. See CONTRIBUTING.md.
+# workspace, on Linux and Windows, and builds it with the oldest Rust it
+# declares. See CONTRIBUTING.md.
 
 on:
   pull_request:
@@ -28,3 +29,16 @@ jobs:
 
       - name: Tests
         run: cargo test --locked
+
+  # The oldest Rust the workspace declares (rust-version), which a user's
+  # machine may have when Herdr builds a plugin on install.
+  minimum-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust 1.88
+        run: rustup toolchain install 1.88 --profile minimal
+
+      - name: Build
+        run: cargo +1.88 check --locked --all-targets
