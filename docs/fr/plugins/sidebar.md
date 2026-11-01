@@ -63,7 +63,7 @@ active_row_bg = "#4a4426"
 
 Les couleurs vont avec le thème gruvbox.
 
-Sous Linux, la commande pointe vers la copie du dossier d'état du plugin (`herdr-sidebar tick`, sans `.exe`) : `install` affiche son chemin, que montre `herdr plugin log list --plugin imsike.sidebar`.
+Sous Linux, faites pointer la commande vers la copie du dossier d'état du plugin (`herdr-sidebar tick`, sans `.exe`) : `install` affiche son chemin, que montre `herdr plugin log list --plugin imsike.sidebar`.
 
 ## Ce qui est affiché
 
@@ -94,7 +94,8 @@ Pour vérifier les valeurs sans la sidebar, `herdr-sidebar show` (depuis le doss
 - Herdr n'a pas de processus de plugin permanent : l'entrée de la barre d'onglets lance `herdr-sidebar tick` toutes les 5 secondes, et Herdr n'en démarre jamais un nouveau tant que le précédent tourne. Chaque passage lit tous les processus de la machine, puis s'arrête au bout d'une fraction de seconde. Il ne demande à Herdr le processus shell d'un pane que la première fois, ou quand le pane affiche un autre terminal : les passages suivants le retrouvent dans `sample.json`.
 - Quand un agent apparaît ou change d'état, Herdr lance aussitôt le plugin, tout comme un nouveau workspace (événements `pane.agent_detected`, `pane.agent_status_changed`, `workspace.created` ; voir un agent terminé le rend inactif, ce qui est un changement d'état) : les états de l'arbre suivent sans attendre le passage suivant. Ces passages ne font que placer les agents dans l'arbre, sans lire les processus, et n'envoient que les agents dont la place ou la ligne a changé : les chiffres sont ceux du dernier passage, et un nouvel agent reçoit les siens au suivant. Un workspace renommé apparaît au passage suivant.
 - Le panneau Agents est trié par `$order` grâce à une vue d'agents de Herdr (nommée `arbre` dans l'en-tête du panneau), qui remplace le tri propre au panneau tant que le plugin est activé. L'arbre suit l'ordre des workspaces dans la sidebar et des onglets dans la barre d'onglets : un onglet déplacé prend sa nouvelle place au passage suivant.
-- La part de CPU se calcule par rapport au passage précédent, enregistré dans `sample.json` du dossier d'état.
+- La part de CPU se calcule par rapport au passage précédent, enregistré dans `sample.json` du dossier d'état, en part de tous les cœurs de la machine (un quota de CPU donné à Herdr ne la change pas).
+- Chaque rapport porte un numéro d'ordre, gardé dans `seq` du dossier d'état : quand l'horloge recule, les rapports continuent dans l'ordre au lieu d'être ignorés par Herdr.
 - Un agent dont les processus ne peuvent pas être lus reste dans l'arbre avec les chiffres du dernier passage, jusqu'à leur expiration.
 - Les valeurs expirent après 20 secondes. Si les passages s'arrêtent, les lignes de l'arbre disparaissent au lieu de rester figées, et les agents sont listés sans lignes.
 - Herdr décale la deuxième ligne d'un bloc de deux cases : le premier agent d'un workspace (sous son en-tête) serait plus à droite que les autres. Le plugin complète la ligne des autres avec deux caractères braille vides (U+2800), car Herdr supprime les espaces ordinaires en début de valeur. Une ligne plus longue que la sidebar est coupée.
@@ -105,4 +106,4 @@ Pour vérifier les valeurs sans la sidebar, `herdr-sidebar show` (depuis le doss
 
 ## Désactiver
 
-Retirez l'entrée `command` de `tab_bar_right` et les tokens `$ws`, `$ws_stats`, `$line`, `$stats`, `$cpu`, `$ram`, `$shells` du `config.toml` et les lignes `[ui.sidebar.*]` (les lignes par défaut reviennent), puis `herdr plugin disable imsike.sidebar` (ou `herdr plugin uninstall imsike.sidebar`), ce qui rend aussi au panneau Agents son propre tri. Le binaire copié et `sample.json` restent dans le dossier d'état jusqu'à ce que vous les supprimiez.
+Retirez l'entrée `command` de `tab_bar_right` et les tokens `$ws`, `$ws_stats`, `$line`, `$stats`, `$cpu`, `$ram`, `$shells` du `config.toml` et les lignes `[ui.sidebar.*]` (les lignes par défaut reviennent), puis `herdr plugin disable imsike.sidebar` (ou `herdr plugin uninstall imsike.sidebar`), ce qui rend aussi au panneau Agents son propre tri. Le binaire copié, `sample.json` et `seq` restent dans le dossier d'état jusqu'à ce que vous les supprimiez.

@@ -31,9 +31,13 @@ pub struct Agent {
 #[derive(Debug, PartialEq)]
 pub struct Block {
     pub pane_id: String,
+    pub workspace_id: String,
     pub order: String,
     /// Only on the first agent of a workspace.
     pub header: Option<String>,
+    /// The header shows its workspace's figures: only when the workspace has
+    /// several agents, since a lone agent's figures already tell them.
+    pub workspace_figures: bool,
     pub line: String,
 }
 
@@ -68,7 +72,9 @@ pub fn blocks(spaces: &[Space], agents: &[Agent]) -> Vec<Block> {
         let pad = if header.is_some() { "" } else { INDENT };
         blocks.push(Block {
             pane_id: agent.pane_id.clone(),
+            workspace_id: agent.workspace_id.clone(),
             order: order.clone(),
+            workspace_figures: first && !last,
             header,
             line: format!(
                 "{pad}{branch} {} {}",
@@ -132,14 +138,21 @@ mod tests {
         let blocks = blocks(&spaces, &agents);
         let shown: Vec<_> = blocks
             .iter()
-            .map(|b| (b.pane_id.as_str(), b.header.as_deref(), b.line.as_str()))
+            .map(|b| {
+                (
+                    b.pane_id.as_str(),
+                    b.header.as_deref(),
+                    b.workspace_figures,
+                    b.line.as_str(),
+                )
+            })
             .collect();
         assert_eq!(
             shown,
             [
-                ("w3:p1", Some("CC"), "└ ● tab"),
-                ("w1:p1", Some("api"), "├ ◐ tab"),
-                ("w1:pD", None, "\u{2800}\u{2800}└ ○ tab"),
+                ("w3:p1", Some("CC"), false, "└ ● tab"),
+                ("w1:p1", Some("api"), true, "├ ◐ tab"),
+                ("w1:pD", None, false, "\u{2800}\u{2800}└ ○ tab"),
             ]
         );
         assert!(blocks.windows(2).all(|w| w[0].order < w[1].order));

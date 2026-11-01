@@ -17,6 +17,31 @@ pub fn cpu_percent(before: CpuTimes, after: CpuTimes) -> Option<f64> {
     (total > 0).then(|| (busy as f64 * 100.0 / total as f64).min(100.0))
 }
 
+/// The machine's logical CPUs, all of them: a CPU quota or an affinity
+/// given to this process does not change the share of the whole machine.
+#[cfg(target_os = "linux")]
+pub fn cores() -> Option<usize> {
+    count_cpus(&std::fs::read_to_string("/proc/stat").ok()?)
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn cores() -> Option<usize> {
+    None
+}
+
+/// The `cpu0`, `cpu1`… lines of `/proc/stat`.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn count_cpus(text: &str) -> Option<usize> {
+    let count = text
+        .lines()
+        .filter(|l| {
+            l.strip_prefix("cpu")
+                .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()))
+        })
+        .count();
+    (count > 0).then_some(count)
+}
+
 #[cfg(windows)]
 pub fn cpu_times() -> Option<CpuTimes> {
     #[repr(C)]
@@ -78,6 +103,8 @@ mod tests {
     #[test]
     fn reads_proc_stat() {
         let text = "cpu  100 0 50 800 50 0 0 0 0 0\ncpu0 1 2 3 4\n";
+        assert_eq!(count_cpus(text), Some(1));
+        assert_eq!(count_cpus("cpu  1 2 3\nintr 5\n"), None);
         assert_eq!(
             parse_proc_stat(text),
             Some(CpuTimes {

@@ -184,6 +184,11 @@ pub fn cpu_share(cpu_ms: u64, elapsed_ms: u64, cores: usize) -> f64 {
     (cpu_ms as f64 * 100.0 / (elapsed_ms as f64 * cores as f64)).min(100.0)
 }
 
+/// A report's `seq`: the time `now`, never at or below the `last` one.
+pub fn next_seq(now: u64, last: Option<u64>) -> u64 {
+    last.map_or(now, |last| now.max(last + 1))
+}
+
 /// Rounded to the percent, to keep lines short: `0%`, `12%`.
 pub fn format_cpu(percent: f64) -> String {
     format!("{percent:.0}%")
@@ -257,6 +262,13 @@ mod tests {
         assert_eq!(format_cpu(0.6), "1%");
         assert_eq!(format_cpu(12.5), "12%");
         assert!(is_shell("PowerShell.exe") && is_shell("bash") && !is_shell("node.exe"));
+    }
+
+    #[test]
+    fn seq_goes_on_when_the_clock_goes_back() {
+        assert_eq!(next_seq(5_000, None), 5_000);
+        assert_eq!(next_seq(5_000, Some(4_000)), 5_000);
+        assert_eq!(next_seq(5_000, Some(9_000)), 9_001);
     }
 
     #[test]

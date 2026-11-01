@@ -18,6 +18,7 @@ mod usage;
 
 use std::collections::HashMap;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
@@ -31,6 +32,8 @@ use usage::{Proc, Sample, Shell, Table, Usage, cpu_share, format_cpu};
 
 const SOURCE: &str = "imsike.sidebar";
 const SAMPLE_FILE: &str = "sample.json";
+/// The last report's `seq`: reports go on in order after the clock is set back.
+const SEQ_FILE: &str = "seq";
 /// Held by the install copying the binary: another one at the same time
 /// leaves the copy to it.
 const INSTALL_LOCK: &str = "install.lock";
@@ -78,33 +81,59 @@ fn copy_binary() -> Result<PathBuf, String> {
     let dir = herdr_api::state_dir()?;
     let source = std::env::current_exe().map_err(|e| e.to_string())?;
     let target = dir.join(source.file_name().ok_or("binaire sans nom")?);
-    if fs::read(&target).ok() == Some(fs::read(&source).map_err(|e| e.to_string())?) {
-        return Ok(target);
-    }
     // The startup hook and the action can run at once: the install that
     // takes the lock copies, the other one leaves the copy to it.
-    herdr_api::remove_stale(&dir, STALE_AFTER, |name| name == INSTALL_LOCK);
-    let lock = dir.join(INSTALL_LOCK);
-    if fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&lock)
-        .is_err()
-    {
+    if !take_lock(&dir).map_err(|e| format!("verrou impossible : {e}"))? {
         return Ok(target);
     }
     let replaced = replace(&dir, &source, &target);
-    let _ = fs::remove_file(&lock);
+    let _ = fs::remove_file(dir.join(INSTALL_LOCK));
     replaced.map(|()| target)
 }
 
-/// Puts a copy of `source` in place of `target`; the caller holds the lock.
+/// Takes the install lock; `false` when another install holds it. A lock
+/// older than `STALE_AFTER` was left by an install killed midway: it is
+/// taken over by renaming it, which only one install can do.
+fn take_lock(dir: &Path) -> io::Result<bool> {
+    let lock = dir.join(INSTALL_LOCK);
+    for _ in 0..2 {
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock)
+        {
+            Ok(_) => return Ok(true),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                let stale = fs::metadata(&lock)
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|modified| modified.elapsed().ok())
+                    .is_some_and(|age| age > STALE_AFTER);
+                let taken = lock.with_extension(format!("{}.stale", std::process::id()));
+                if !stale || fs::rename(&lock, &taken).is_err() {
+                    return Ok(false);
+                }
+                let _ = fs::remove_file(&taken);
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(false)
+}
+
+/// Puts a copy of `source` in place of `target`, unless it is the same
+/// already; the caller holds the lock.
 fn replace(dir: &Path, source: &Path, target: &Path) -> Result<(), String> {
     // What a run killed midway left, and the old copies no longer running
     // (one still running cannot be removed on Windows: a later install will).
     herdr_api::remove_stale(dir, STALE_AFTER, |name| name.ends_with(".partial"));
     herdr_api::remove_stale(dir, Duration::ZERO, |name| name.ends_with(".old"));
-    let partial = target.with_extension("partial");
+    if fs::read(target).ok() == Some(fs::read(source).map_err(|e| e.to_string())?) {
+        return Ok(());
+    }
+    // Named after this process: an install that took over a stale lock
+    // while another one still copied does not share its file.
+    let partial = target.with_extension(format!("{}.partial", std::process::id()));
     fs::copy(source, &partial).map_err(|e| e.to_string())?;
     // A running binary cannot be overwritten on Windows, but can be renamed.
     let old = target.with_extension(format!("{}.old", unix_millis()));
@@ -157,7 +186,10 @@ fn tick(mode: Mode) -> Result<(), String> {
         }
     };
     // Lets Herdr drop a report older than one already applied.
-    let seq = unix_millis();
+    let seq = match mode {
+        Mode::Show => 0,
+        _ => next_seq(&state_dir.join(SEQ_FILE)),
+    };
     let send = |pane_id: &str, tokens: Map<String, Value>| match mode {
         Mode::Show => println!("{pane_id} : {}", Value::Object(tokens)),
         _ => report(pane_id, tokens, seq),
@@ -166,25 +198,11 @@ fn tick(mode: Mode) -> Result<(), String> {
     let snapshot: Snapshot = request_field("session.snapshot", json!({}), "snapshot")?;
     let agents = snapshot.agents();
     let blocks = tree::blocks(&snapshot.spaces(), &agents);
-    let workspace_of = |pane_id: &str| {
-        agents
-            .iter()
-            .find(|a| a.pane_id == pane_id)
-            .map_or("", |a| a.workspace_id.as_str())
-    };
-    // A lone agent's figures already tell its workspace's.
-    let several = |workspace_id: &str| {
-        agents
-            .iter()
-            .filter(|a| a.workspace_id == workspace_id)
-            .nth(1)
-            .is_some()
-    };
 
     let Some((first, system, now)) = measured else {
         for block in blocks {
             let mut tokens = tokens::layout(&block);
-            if block.header.is_none() || !several(workspace_of(&block.pane_id)) {
+            if !block.workspace_figures {
                 tokens.insert("ws_stats".into(), Value::Null);
             }
             // Most events move one agent at most: the others are not sent again.
@@ -202,7 +220,9 @@ fn tick(mode: Mode) -> Result<(), String> {
     let elapsed = previous.as_ref().map(|s| now.saturating_sub(s.at_ms));
     let empty = Sample::default();
     let table = Table::new(&system.processes, previous.as_ref().unwrap_or(&empty));
-    let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
+    let cores = machine::cores()
+        .or_else(|| std::thread::available_parallelism().ok().map(|n| n.get()))
+        .unwrap_or(1);
     let cpu = |u: &Usage| elapsed.map(|e| format_cpu(cpu_share(u.cpu_ms, e, cores)));
 
     let mut shells: HashMap<String, Shell> = HashMap::new();
@@ -224,10 +244,9 @@ fn tick(mode: Mode) -> Result<(), String> {
     }
 
     for block in blocks {
-        let workspace_id = workspace_of(&block.pane_id);
-        let workspace = (block.header.is_some() && several(workspace_id)).then(|| {
+        let workspace = block.workspace_figures.then(|| {
             sums.iter()
-                .find(|(id, _)| id == workspace_id)
+                .find(|(id, _)| *id == block.workspace_id)
                 .map_or_else(String::new, |(_, u)| tokens::figures(cpu(u), u, false))
         });
         // An agent whose processes could not be read keeps its place in the
@@ -340,6 +359,17 @@ fn read_system() -> Result<Reading, String> {
         used_memory: system.used_memory(),
         cpu_times: machine::cpu_times(),
     })
+}
+
+/// The `seq` of this run's reports: the time, or one more than the last
+/// run's when the clock was set back since.
+fn next_seq(path: &Path) -> u64 {
+    let last = fs::read_to_string(path)
+        .ok()
+        .and_then(|text| text.trim().parse().ok());
+    let seq = usage::next_seq(unix_millis(), last);
+    let _ = herdr_api::write_atomic(path, seq.to_string().as_bytes());
+    seq
 }
 
 fn read_sample(path: &Path) -> Option<Sample> {

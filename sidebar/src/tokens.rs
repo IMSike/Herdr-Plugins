@@ -106,7 +106,9 @@ mod tests {
     fn block(header: Option<&str>) -> Block {
         Block {
             pane_id: "w1:p1".into(),
+            workspace_id: "w1".into(),
             order: "0001".into(),
+            workspace_figures: header.is_some(),
             header: header.map(str::to_string),
             line: "├ ○ api".into(),
         }
