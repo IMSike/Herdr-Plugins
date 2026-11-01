@@ -11,7 +11,7 @@ use std::process::Command;
 /// What a new `menu.toml` holds: every setting, commented out.
 pub const MENU_TEMPLATE: &str = include_str!("../../templates/menu.toml");
 /// What a new `sidebar.toml` holds.
-pub const SIDEBAR_TEMPLATE: &str = herdr_api::sidebar::TEMPLATE;
+pub const SIDEBAR_TEMPLATE: &str = sidebar::TEMPLATE;
 /// The editor (as JSON) and the files (as JSON) handed to the `edit` pane.
 const EDITOR_ENV: &str = "HERDR_MENU_EDITOR";
 const FILES_ENV: &str = "HERDR_MENU_FILES";
@@ -36,9 +36,9 @@ const WINDOW_EDITORS: &[&str] = &[
     "gvim",
 ];
 
-/// The settings files.
+/// The plugins' settings files; Herdr's is only looked for when the files
+/// are opened.
 pub struct Files {
-    pub herdr: PathBuf,
     /// `None` outside a plugin run (no config folder).
     pub menu: Option<PathBuf>,
     /// `None` when the sidebar is not installed.
@@ -48,7 +48,6 @@ pub struct Files {
 impl Files {
     pub fn find() -> Self {
         Self {
-            herdr: herdr_config_path(),
             menu: crate::config_dir().map(|dir| dir.join(config::FILE_NAME)),
             sidebar: sidebar_config_dir().map(|dir| dir.join(sidebar::SETTINGS_FILE)),
         }
@@ -57,7 +56,7 @@ impl Files {
     /// All of them, Herdr's first; the plugins' created from their template
     /// when missing.
     fn prepared(&self) -> Result<Vec<PathBuf>, String> {
-        let mut all = vec![self.herdr.clone()];
+        let mut all = vec![herdr_config_path()];
         for (file, template) in [
             (&self.menu, MENU_TEMPLATE),
             (&self.sidebar, SIDEBAR_TEMPLATE),
@@ -80,13 +79,13 @@ fn herdr_output(args: &[&str]) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-/// The sidebar's config folder, when it is installed.
+/// The sidebar's config folder, when it is installed: beside this plugin's,
+/// as Herdr names each plugin's folder after its id.
 fn sidebar_config_dir() -> Option<PathBuf> {
     if !herdr::has_plugin(sidebar::ID).unwrap_or(false) {
         return None;
     }
-    let dir = herdr_output(&["plugin", "config-dir", sidebar::ID])?;
-    Some(PathBuf::from(dir.trim()))
+    Some(crate::config_dir()?.parent()?.join(sidebar::ID))
 }
 
 /// Herdr's `config.toml`: `HERDR_CONFIG_PATH`, else the path Herdr's help
