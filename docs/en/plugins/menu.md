@@ -84,7 +84,7 @@ The folder a tool starts in:
 
 On Windows, a command found on `PATH` as a batch file (`code` is `code.cmd`) runs without naming its extension.
 
-A file that cannot be read or is invalid (unknown field, empty command, a key used twice) is ignored: the menu shows the built-in entries, and the popup menu shows the error on its bottom line. The `Tools` pane reads the file when it opens, the popup menu each time it opens; no reload is needed. A tool starts as the menu showed it, even when the file changed in between.
+A file that cannot be read or is invalid (unknown field, empty command, a key used twice) is ignored: the menu shows the built-in entries, and the popup menu shows the error above its help line. The `Tools` pane reads the file when it opens, the popup menu each time it opens; no reload is needed. A tool starts as the menu showed it, even when the file changed in between.
 
 ## How it works, implications
 

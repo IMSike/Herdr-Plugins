@@ -84,7 +84,7 @@ Le dossier où démarre un outil :
 
 Sous Windows, une commande trouvée dans le `PATH` sous forme de fichier batch (`code` est `code.cmd`) se lance sans préciser son extension.
 
-Un fichier illisible ou invalide (champ inconnu, commande vide, touche utilisée deux fois) est ignoré : le menu affiche les entrées intégrées, et le menu en popup affiche l'erreur sur sa dernière ligne. Le pane `Tools` lit le fichier à son ouverture, le menu en popup à chaque ouverture ; aucun rechargement n'est nécessaire. Un outil démarre tel que le menu l'affichait, même si le fichier a changé entre-temps.
+Un fichier illisible ou invalide (champ inconnu, commande vide, touche utilisée deux fois) est ignoré : le menu affiche les entrées intégrées, et le menu en popup affiche l'erreur au-dessus de sa ligne d'aide. Le pane `Tools` lit le fichier à son ouverture, le menu en popup à chaque ouverture ; aucun rechargement n'est nécessaire. Un outil démarre tel que le menu l'affichait, même si le fichier a changé entre-temps.
 
 ## Fonctionnement, implications
 
