@@ -12,8 +12,9 @@ A plugin of this repository is a Rust crate of the root Cargo workspace, in a fo
 ├── herdr-plugin.toml    Herdr manifest
 ├── README.md            short summary, linking to docs/{en,fr}/plugins/<name>.md
 └── src/
-    ├── main.rs          the subcommands Herdr runs, and the I/O
-    └── <module>.rs      pure logic (formatting, computations), without I/O, with its tests
+    ├── main.rs          the subcommands Herdr runs
+    └── <module>.rs      a feature with its I/O, or pure logic (formatting, computations)
+                         in a module of its own, without I/O, with its tests
 ```
 
 Add the folder to `members` in the root `Cargo.toml`. Code that several plugins need (requests to Herdr, its environment variables, atomic writes) lives in `crates/herdr-api`: depend on it with `herdr-api = { path = "../crates/herdr-api" }` rather than writing it again.

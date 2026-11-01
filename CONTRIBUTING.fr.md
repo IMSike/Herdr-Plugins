@@ -4,7 +4,7 @@
 
 ## Pour commencer
 
-Prérequis : Git, [Herdr](https://herdr.dev), le toolchain Rust, 1.88 ou plus récent ([rustup](https://rustup.rs)) et, sous Windows, les Build Tools de Visual Studio avec la charge de travail C++.
+Prérequis : Git, [Herdr](https://herdr.dev) 0.9.5 ou plus récent, le toolchain Rust, 1.88 ou plus récent ([rustup](https://rustup.rs)) et, sous Windows, les Build Tools de Visual Studio avec la charge de travail C++.
 
 ```sh
 git clone https://github.com/IMSike/Herdr-Plugins.git

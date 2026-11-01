@@ -4,7 +4,7 @@
 
 Des plugins [Herdr](https://herdr.dev) : ceux qu'[OS-Setup](https://github.com/IMSike/OS-Setup) propose d'installer, utilisables aussi seuls.
 
-> **Statut : début du projet.** Les textes affichés sont en français pour l'instant.
+> **Statut : début du projet.** Les plugins demandent Herdr 0.9.5 ou plus récent. Les textes affichés sont en français pour l'instant.
 
 ## Plugins
 

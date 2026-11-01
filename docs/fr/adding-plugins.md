@@ -12,8 +12,9 @@ Un plugin de ce dépôt est une crate Rust du workspace Cargo racine, dans son p
 ├── herdr-plugin.toml    manifeste Herdr
 ├── README.md            court résumé, avec un lien vers docs/{en,fr}/plugins/<nom>.md
 └── src/
-    ├── main.rs          les sous-commandes que lance Herdr, et les entrées-sorties
-    └── <module>.rs      la logique pure (mise en forme, calculs), sans I/O, avec ses tests
+    ├── main.rs          les sous-commandes que lance Herdr
+    └── <module>.rs      une fonctionnalité avec ses entrées-sorties, ou la logique pure
+                         (mise en forme, calculs) dans un module à part, sans I/O, avec ses tests
 ```
 
 Ajoutez le dossier à `members` dans le `Cargo.toml` racine. Le code utile à plusieurs plugins (requêtes à Herdr, ses variables d'environnement, écritures atomiques) se trouve dans `crates/herdr-api` : utilisez-le avec `herdr-api = { path = "../crates/herdr-api" }` plutôt que de le réécrire.
