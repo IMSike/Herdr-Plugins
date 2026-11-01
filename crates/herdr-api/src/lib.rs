@@ -1,6 +1,7 @@
 //! What the plugins of this repository share: requests to the Herdr API
 //! socket, and a few helpers.
 
+pub mod sidebar;
 mod socket;
 
 pub use socket::{Error, request, request_field};
