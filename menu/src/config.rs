@@ -1,7 +1,7 @@
 //! The menu's settings and entries: read from `menu.toml` in the plugin's
 //! config directory, or built in.
 
-use herdr_api::NumberFormat;
+use herdr_api::{MemoryUnit, NumberFormat};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -114,6 +114,10 @@ struct File {
     #[serde(default)]
     percent_space: bool,
     #[serde(default)]
+    cpu_decimal: bool,
+    #[serde(default)]
+    memory_unit: MemoryUnit,
+    #[serde(default)]
     layout: Layout,
 }
 
@@ -178,6 +182,8 @@ pub fn parse(text: &str) -> Result<Menu, String> {
         numbers: NumberFormat {
             decimal_comma: file.decimal_comma,
             percent_space: file.percent_space,
+            cpu_decimal: file.cpu_decimal,
+            memory_unit: file.memory_unit,
         },
         layout: file.layout,
     })
@@ -298,7 +304,7 @@ mod tests {
             .filter(|line| line.contains(" = "))
             .map(|line| format!("{line}\n"))
             .collect();
-        assert_eq!(settings.lines().count(), 3);
+        assert_eq!(settings.lines().count(), 5);
         assert_eq!(parse(&settings).unwrap(), Menu::default());
     }
 

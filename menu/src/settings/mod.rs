@@ -15,7 +15,8 @@ use crossterm::queue;
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use crossterm::terminal::{self, Clear, ClearType};
 use files::Files;
-use herdr_api::sidebar;
+use herdr_api::sidebar::{self, Thresholds, check_thresholds};
+use serde::Deserialize;
 use std::io::{self, Write};
 use std::path::Path;
 use toml_edit::Value;
@@ -24,6 +25,8 @@ use toml_edit::Value;
 pub const BAR_ENV: &str = "HERDR_MENU_BAR";
 /// First row of the list.
 const TOP: u16 = 2;
+/// Rows under the list: the status and the help.
+const BOTTOM: u16 = 2;
 /// Width of a setting's name, before its value.
 const NAME_WIDTH: usize = 34;
 /// A step of `ttl_seconds`, and its bounds.
@@ -42,61 +45,153 @@ enum Row {
 enum Item {
     DecimalComma,
     PercentSpace,
+    CpuDecimal,
+    MemoryUnit,
     Layout,
     Ttl,
     Shells,
     TabBar,
+    Colors,
+    Levels(Levels),
     OpenFiles,
     Reload,
 }
 
-/// The sidebar's settings the screen shows.
-#[derive(Debug, Clone, PartialEq)]
+/// One of the sidebar's sets of thresholds.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Levels {
+    Cpu,
+    Memory,
+    MachineCpu,
+    MachineMemory,
+}
+
+impl Levels {
+    const ALL: [Self; 4] = [
+        Self::Cpu,
+        Self::Memory,
+        Self::MachineCpu,
+        Self::MachineMemory,
+    ];
+
+    /// Its setting in `sidebar.toml`.
+    fn key(self) -> &'static str {
+        match self {
+            Self::Cpu => "cpu_levels",
+            Self::Memory => "memory_levels",
+            Self::MachineCpu => "machine_cpu_levels",
+            Self::MachineMemory => "machine_memory_levels",
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Cpu => "Seuils CPU (agents, Herdr)",
+            Self::Memory => "Seuils mémoire (agents, Herdr)",
+            Self::MachineCpu => "Seuils CPU (machine)",
+            Self::MachineMemory => "Seuils mémoire (machine)",
+        }
+    }
+
+    fn unit(self) -> &'static str {
+        match self {
+            Self::Memory => "Go",
+            _ => "%",
+        }
+    }
+}
+
+/// The sidebar's settings the screen shows; what `sidebar.toml` sets, the
+/// defaults for the rest.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default)]
 struct SidebarValues {
     ttl_seconds: u64,
     shells: Vec<String>,
     tab_bar: bool,
+    colors: bool,
+    cpu_levels: Thresholds,
+    memory_levels: Thresholds,
+    machine_cpu_levels: Thresholds,
+    machine_memory_levels: Thresholds,
 }
 
-impl SidebarValues {
-    /// What `sidebar.toml` sets, its defaults for the rest.
-    fn read(path: &Path) -> (Self, Option<String>) {
-        let mut values = Self {
+impl Default for SidebarValues {
+    fn default() -> Self {
+        Self {
             ttl_seconds: sidebar::TTL_SECONDS,
             shells: sidebar::SHELLS.iter().map(|s| s.to_string()).collect(),
             tab_bar: false,
-        };
+            colors: false,
+            cpu_levels: sidebar::CPU_LEVELS,
+            memory_levels: sidebar::MEMORY_LEVELS,
+            machine_cpu_levels: sidebar::MACHINE_CPU_LEVELS,
+            machine_memory_levels: sidebar::MACHINE_MEMORY_LEVELS,
+        }
+    }
+}
+
+impl SidebarValues {
+    /// The values of `path`, the defaults when it cannot be read (and why).
+    fn read(path: &Path) -> (Self, Option<String>) {
         let text = match std::fs::read_to_string(path) {
             Ok(text) => text,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return (values, None),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return (Self::default(), None),
             Err(e) => {
-                return (
-                    values,
-                    Some(format!("{} illisible : {e}", sidebar::SETTINGS_FILE)),
-                );
+                let error = format!("{} illisible : {e}", sidebar::SETTINGS_FILE);
+                return (Self::default(), Some(error));
             }
         };
-        let table: toml::Table = match toml::from_str(&text) {
-            Ok(table) => table,
+        match toml::from_str::<Self>(&text) {
+            Ok(values) => (values, None),
             Err(e) => {
                 let error = format!("{} invalide : {}", sidebar::SETTINGS_FILE, e.message());
-                return (values, Some(error));
+                (Self::default(), Some(error))
             }
-        };
-        if let Some(ttl) = table.get("ttl_seconds").and_then(toml::Value::as_integer) {
-            values.ttl_seconds = ttl.max(1) as u64;
         }
-        if let Some(shells) = table.get("shells").and_then(toml::Value::as_array) {
-            values.shells = shells
-                .iter()
-                .filter_map(|s| s.as_str().map(str::to_string))
-                .collect();
-        }
-        if let Some(tab_bar) = table.get("tab_bar").and_then(toml::Value::as_bool) {
-            values.tab_bar = tab_bar;
-        }
-        (values, None)
     }
+
+    fn levels(&self, which: Levels) -> &Thresholds {
+        match which {
+            Levels::Cpu => &self.cpu_levels,
+            Levels::Memory => &self.memory_levels,
+            Levels::MachineCpu => &self.machine_cpu_levels,
+            Levels::MachineMemory => &self.machine_memory_levels,
+        }
+    }
+
+    fn levels_mut(&mut self, which: Levels) -> &mut Thresholds {
+        match which {
+            Levels::Cpu => &mut self.cpu_levels,
+            Levels::Memory => &mut self.memory_levels,
+            Levels::MachineCpu => &mut self.machine_cpu_levels,
+            Levels::MachineMemory => &mut self.machine_memory_levels,
+        }
+    }
+}
+
+/// `10`, `2.5`: a threshold as it is typed and written.
+fn number(value: f64) -> String {
+    if value.fract() == 0.0 {
+        format!("{value:.0}")
+    } else {
+        value.to_string()
+    }
+}
+
+/// Three thresholds typed with spaces between them (`10 25 50`), a comma
+/// or a point before decimals.
+fn parse_levels(text: &str) -> Result<Thresholds, String> {
+    let values: Vec<f64> = text
+        .split_whitespace()
+        .map(|v| v.replace(',', ".").parse::<f64>())
+        .collect::<Result<_, _>>()
+        .map_err(|_| "seuils : des nombres séparés par des espaces")?;
+    let thresholds: Thresholds = values
+        .try_into()
+        .map_err(|_| "seuils : trois valeurs, séparées par des espaces")?;
+    check_thresholds(&thresholds)?;
+    Ok(thresholds)
 }
 
 struct State {
@@ -107,7 +202,7 @@ struct State {
     selected: usize,
     /// The last thing done, or why it failed (in red).
     status: Option<(String, bool)>,
-    /// The shells being typed.
+    /// The text being typed for the selected item (shells, thresholds).
     typing: Option<String>,
 }
 
@@ -117,6 +212,8 @@ impl State {
             Row::Header("Format des nombres"),
             Row::Item(Item::DecimalComma),
             Row::Item(Item::PercentSpace),
+            Row::Item(Item::CpuDecimal),
+            Row::Item(Item::MemoryUnit),
             Row::Header("Pane Tools"),
             Row::Item(Item::Layout),
         ];
@@ -126,7 +223,10 @@ impl State {
                 Row::Item(Item::Ttl),
                 Row::Item(Item::Shells),
                 Row::Item(Item::TabBar),
+                Row::Header("Couleurs par seuil (vert, jaune, orange, rouge)"),
+                Row::Item(Item::Colors),
             ]);
+            rows.extend(Levels::ALL.map(|l| Row::Item(Item::Levels(l))));
         }
         rows.extend([
             Row::Blank,
@@ -146,17 +246,26 @@ impl State {
             .collect()
     }
 
-    fn name_and_value(&self, item: Item) -> (&'static str, String) {
+    fn name_and_value(&self, item: Item, selected: bool) -> (&'static str, String) {
         let yes_no = |b: bool| if b { "oui" } else { "non" }.to_string();
         let sidebar = self.sidebar.as_ref();
+        let typed = self.typing.as_ref().filter(|_| selected);
+        let numbers = &self.menu.numbers;
         match item {
-            Item::DecimalComma => (
-                "Virgule décimale (2,4G)",
-                yes_no(self.menu.numbers.decimal_comma),
+            Item::DecimalComma => ("Virgule décimale (2,4G)", yes_no(numbers.decimal_comma)),
+            Item::PercentSpace => ("Espace avant % (4 %)", yes_no(numbers.percent_space)),
+            Item::CpuDecimal => (
+                "CPU avec une décimale",
+                if numbers.cpu_decimal { "4,2%" } else { "4%" }.into(),
             ),
-            Item::PercentSpace => (
-                "Espace avant % (4 %)",
-                yes_no(self.menu.numbers.percent_space),
+            Item::MemoryUnit => (
+                "Unités de la mémoire",
+                match numbers.memory_unit {
+                    herdr_api::MemoryUnit::M => "853M, 2,4G",
+                    herdr_api::MemoryUnit::Mo => "853 Mo, 2,4 Go",
+                    herdr_api::MemoryUnit::MB => "853 MB, 2,4 GB",
+                }
+                .into(),
             ),
             Item::Layout => (
                 "Icônes",
@@ -172,7 +281,7 @@ impl State {
             ),
             Item::Shells => (
                 "Shells",
-                match &self.typing {
+                match typed {
                     Some(text) => format!("{text}▏"),
                     None => sidebar.map_or_else(String::new, |s| s.shells.join(", ")),
                 },
@@ -180,6 +289,18 @@ impl State {
             Item::TabBar => (
                 "Totaux dans la barre d'onglets",
                 yes_no(sidebar.is_some_and(|s| s.tab_bar)),
+            ),
+            Item::Colors => ("Couleurs", yes_no(sidebar.is_some_and(|s| s.colors))),
+            Item::Levels(which) => (
+                which.name(),
+                match typed {
+                    Some(text) => format!("{text}▏"),
+                    None => sidebar.map_or_else(String::new, |s| {
+                        let values: Vec<String> =
+                            s.levels(which).iter().map(|v| number(*v)).collect();
+                        format!("{} {}", values.join(" · "), which.unit())
+                    }),
+                },
             ),
             Item::OpenFiles => ("Ouvrir les fichiers de configuration…", String::new()),
             Item::Reload => ("Recharger la configuration de Herdr", String::new()),
@@ -204,31 +325,43 @@ impl State {
         }
     }
 
+    /// Writes a number format setting to both files.
+    fn set_both(&self, key: &str, value: Value) -> Result<String, String> {
+        self.set_menu(key, value.clone())?;
+        self.set_sidebar(key, value)?;
+        let files: Vec<&str> = std::iter::once(config::FILE_NAME)
+            .chain(self.sidebar.as_ref().map(|_| sidebar::SETTINGS_FILE))
+            .collect();
+        Ok(saved(&files))
+    }
+
     /// Changes `item` by one step (`forward` or back); `Some(true)` when the
     /// screen should close.
     fn change(&mut self, item: Item, forward: bool) -> Option<bool> {
-        let saved = |files: &[&str]| format!("enregistré dans {}", files.join(" et "));
-        let both: Vec<&str> = std::iter::once(config::FILE_NAME)
-            .chain(self.sidebar.as_ref().map(|_| sidebar::SETTINGS_FILE))
-            .collect();
         let result = match item {
             Item::DecimalComma => {
                 let value = !self.menu.numbers.decimal_comma;
-                self.set_menu("decimal_comma", value.into())
-                    .and_then(|()| self.set_sidebar("decimal_comma", value.into()))
-                    .map(|()| {
-                        self.menu.numbers.decimal_comma = value;
-                        saved(&both)
-                    })
+                self.set_both("decimal_comma", value.into())
+                    .inspect(|_| self.menu.numbers.decimal_comma = value)
             }
             Item::PercentSpace => {
                 let value = !self.menu.numbers.percent_space;
-                self.set_menu("percent_space", value.into())
-                    .and_then(|()| self.set_sidebar("percent_space", value.into()))
-                    .map(|()| {
-                        self.menu.numbers.percent_space = value;
-                        saved(&both)
-                    })
+                self.set_both("percent_space", value.into())
+                    .inspect(|_| self.menu.numbers.percent_space = value)
+            }
+            Item::CpuDecimal => {
+                let value = !self.menu.numbers.cpu_decimal;
+                self.set_both("cpu_decimal", value.into())
+                    .inspect(|_| self.menu.numbers.cpu_decimal = value)
+            }
+            Item::MemoryUnit => {
+                let mut value = self.menu.numbers.memory_unit.next();
+                if !forward {
+                    // Back: two steps forward among three.
+                    value = value.next();
+                }
+                self.set_both("memory_unit", value.name().into())
+                    .inspect(|_| self.menu.numbers.memory_unit = value)
             }
             Item::Layout => {
                 let value = match self.menu.layout {
@@ -265,8 +398,23 @@ impl State {
                     saved(&[sidebar::SETTINGS_FILE])
                 })
             }
+            Item::Colors => {
+                let value = !self.sidebar.as_ref()?.colors;
+                self.set_sidebar("colors", value.into()).map(|()| {
+                    if let Some(s) = &mut self.sidebar {
+                        s.colors = value;
+                    }
+                    saved(&[sidebar::SETTINGS_FILE])
+                })
+            }
             Item::Shells => {
                 self.typing = Some(self.sidebar.as_ref()?.shells.join(", "));
+                return None;
+            }
+            Item::Levels(which) => {
+                let values = self.sidebar.as_ref()?.levels(which);
+                let text: Vec<String> = values.iter().map(|v| number(*v)).collect();
+                self.typing = Some(text.join(" "));
                 return None;
             }
             Item::OpenFiles => match files::open(&self.files) {
@@ -278,15 +426,21 @@ impl State {
             },
             Item::Reload => files::reload(),
         };
-        self.status = Some(match result {
-            Ok(message) => (message, false),
-            Err(e) => (e, true),
-        });
+        self.show(result);
         None
     }
 
-    /// Saves the shells typed.
-    fn save_shells(&mut self, text: &str) {
+    /// Saves what was typed for `item`.
+    fn save_typed(&mut self, item: Item, text: &str) {
+        let result = match item {
+            Item::Shells => self.save_shells(text),
+            Item::Levels(which) => self.save_levels(which, text),
+            _ => return,
+        };
+        self.show(result);
+    }
+
+    fn save_shells(&mut self, text: &str) -> Result<String, String> {
         let shells: Vec<String> = text
             .split([',', ' '])
             .map(str::trim)
@@ -294,16 +448,42 @@ impl State {
             .map(str::to_string)
             .collect();
         let array: toml_edit::Array = shells.iter().map(String::as_str).collect();
-        self.status = Some(match self.set_sidebar("shells", array.into()) {
-            Ok(()) => {
-                if let Some(s) = &mut self.sidebar {
-                    s.shells = shells;
-                }
-                (format!("enregistré dans {}", sidebar::SETTINGS_FILE), false)
+        self.set_sidebar("shells", array.into())?;
+        if let Some(s) = &mut self.sidebar {
+            s.shells = shells;
+        }
+        Ok(saved(&[sidebar::SETTINGS_FILE]))
+    }
+
+    fn save_levels(&mut self, which: Levels, text: &str) -> Result<String, String> {
+        let thresholds = parse_levels(text)?;
+        let mut array = toml_edit::Array::new();
+        for value in thresholds {
+            // Whole numbers as integers: `[10, 25, 50]`, not `[10.0, …]`.
+            if value.fract() == 0.0 {
+                array.push(value as i64);
+            } else {
+                array.push(value);
             }
+        }
+        self.set_sidebar(which.key(), array.into())?;
+        if let Some(s) = &mut self.sidebar {
+            *s.levels_mut(which) = thresholds;
+        }
+        Ok(saved(&[sidebar::SETTINGS_FILE]))
+    }
+
+    fn show(&mut self, result: Result<String, String>) {
+        self.status = Some(match result {
+            Ok(message) => (message, false),
             Err(e) => (e, true),
         });
     }
+}
+
+/// `enregistré dans menu.toml et sidebar.toml`.
+fn saved(files: &[&str]) -> String {
+    format!("enregistré dans {}", files.join(" et "))
 }
 
 /// The `Tools` pane the screen was opened from switches to its reload view.
@@ -335,6 +515,23 @@ pub fn run() -> Result<(), String> {
     show(&mut state).map_err(|e| e.to_string())
 }
 
+/// The first row of the list on screen: the selected item stays visible
+/// when the list is taller than the screen.
+fn scroll(state: &State, height: u16) -> usize {
+    let visible = usize::from(height.saturating_sub(TOP + BOTTOM)).max(1);
+    let items = state.items();
+    let selected = items[state.selected.min(items.len() - 1)];
+    let rows = state.rows();
+    let at = rows
+        .iter()
+        .position(|row| *row == Row::Item(selected))
+        .unwrap_or(0);
+    // Show the header above the first item, the end of the list at the end.
+    (at + 1)
+        .saturating_sub(visible)
+        .min(rows.len().saturating_sub(visible))
+}
+
 fn show(state: &mut State) -> io::Result<()> {
     let _screen = Screen::enter()?;
     loop {
@@ -350,7 +547,7 @@ fn show(state: &mut State) -> io::Result<()> {
                     KeyCode::Enter => {
                         let text = std::mem::take(text);
                         state.typing = None;
-                        state.save_shells(&text);
+                        state.save_typed(item, &text);
                     }
                     KeyCode::Esc => state.typing = None,
                     KeyCode::Backspace => {
@@ -383,9 +580,11 @@ fn show(state: &mut State) -> io::Result<()> {
                 _ => None,
             },
             Event::Mouse(mouse) => {
+                let (_, height) = terminal::size()?;
                 let rows = state.rows();
-                let hit = usize::from(mouse.row.wrapping_sub(TOP));
-                let item_at = rows.get(hit).and_then(|row| match row {
+                let in_list = mouse.row >= TOP && mouse.row < height.saturating_sub(BOTTOM);
+                let hit = usize::from(mouse.row.wrapping_sub(TOP)) + scroll(state, height);
+                let item_at = rows.get(hit).filter(|_| in_list).and_then(|row| match row {
                     Row::Item(item) => items.iter().position(|i| i == item),
                     _ => None,
                 });
@@ -397,6 +596,14 @@ fn show(state: &mut State) -> io::Result<()> {
                     (MouseEventKind::Down(MouseButton::Left), Some(i)) => {
                         state.selected = i;
                         state.change(items[i], true)
+                    }
+                    (MouseEventKind::ScrollDown, _) => {
+                        state.selected = (state.selected + 1).min(items.len() - 1);
+                        None
+                    }
+                    (MouseEventKind::ScrollUp, _) => {
+                        state.selected = state.selected.saturating_sub(1);
+                        None
                     }
                     _ => None,
                 }
@@ -423,12 +630,11 @@ fn draw(state: &State) -> io::Result<()> {
     )?;
     let items = state.items();
     let selected = items[state.selected.min(items.len() - 1)];
-    for (i, row) in state.rows().into_iter().enumerate() {
-        let y = TOP + i as u16;
-        if y + 2 >= height {
-            break;
-        }
-        match row {
+    let rows = state.rows();
+    let first = scroll(state, height);
+    let last = height.saturating_sub(BOTTOM);
+    for (y, row) in (TOP..last).zip(rows.iter().skip(first)) {
+        match *row {
             Row::Blank => {}
             Row::Header(title) => {
                 queue!(
@@ -440,7 +646,7 @@ fn draw(state: &State) -> io::Result<()> {
                 )?;
             }
             Row::Item(item) => {
-                let (name, value) = state.name_and_value(item);
+                let (name, value) = state.name_and_value(item, item == selected);
                 let marker = if item == selected { "›" } else { " " };
                 let line = format!(" {marker} {name:<NAME_WIDTH$}{value}");
                 if item == selected {
@@ -449,6 +655,26 @@ fn draw(state: &State) -> io::Result<()> {
                 queue!(out, MoveTo(0, y), Print(fit(&line, width)), ResetColor)?;
             }
         }
+    }
+    // Rows above or below the screen: a hint in the corner.
+    let more = (
+        first > 0,
+        first + usize::from(last.saturating_sub(TOP)) < rows.len(),
+    );
+    let arrows = match more {
+        (true, true) => "↑↓",
+        (true, false) => "↑",
+        (false, true) => "↓",
+        (false, false) => "",
+    };
+    if !arrows.is_empty() {
+        queue!(
+            out,
+            MoveTo(width.saturating_sub(3) as u16, 0),
+            SetForegroundColor(Color::DarkGrey),
+            Print(arrows),
+            ResetColor
+        )?;
     }
     if let Some((status, error)) = &state.status {
         let color = if *error { Color::Red } else { Color::Green };
@@ -460,10 +686,12 @@ fn draw(state: &State) -> io::Result<()> {
             ResetColor
         )?;
     }
-    let help = if state.typing.is_some() {
-        " noms séparés par des virgules · Entrée valider · Échap annuler"
-    } else {
-        " ↑↓ choisir · ←→ Entrée changer · Échap fermer"
+    let help = match (state.typing.is_some(), selected) {
+        (true, Item::Shells) => " noms séparés par des virgules · Entrée valider · Échap annuler",
+        (true, _) => {
+            " trois valeurs croissantes, séparées par des espaces · Entrée valider · Échap annuler"
+        }
+        (false, _) => " ↑↓ choisir · ←→ Entrée changer · Échap fermer",
     };
     queue!(
         out,
@@ -486,14 +714,31 @@ mod tests {
         let path = dir.join(sidebar::SETTINGS_FILE);
         let (values, error) = SidebarValues::read(&path);
         assert!(error.is_none());
-        assert_eq!(values.ttl_seconds, sidebar::TTL_SECONDS);
-        std::fs::write(&path, "ttl_seconds = 30\nshells = [\"bash\"]\n").unwrap();
-        let (values, _) = SidebarValues::read(&path);
+        assert_eq!(values, SidebarValues::default());
+        std::fs::write(
+            &path,
+            "ttl_seconds = 30\nshells = [\"bash\"]\ncpu_levels = [5, 10.5, 20]\nunknown = 1\n",
+        )
+        .unwrap();
+        let (values, error) = SidebarValues::read(&path);
+        assert!(error.is_none());
         assert_eq!(
             (values.ttl_seconds, values.shells),
             (30, vec!["bash".into()])
         );
-        assert!(!values.tab_bar);
+        assert_eq!(values.cpu_levels, [5.0, 10.5, 20.0]);
+        assert!(!values.tab_bar && !values.colors);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn thresholds_are_typed_with_spaces() {
+        assert_eq!(parse_levels("10 25 50"), Ok([10.0, 25.0, 50.0]));
+        assert_eq!(parse_levels(" 0,5  1 2.5 "), Ok([0.5, 1.0, 2.5]));
+        assert!(parse_levels("10 25").is_err());
+        assert!(parse_levels("10 x 50").is_err());
+        assert!(parse_levels("50 25 10").is_err());
+        assert_eq!(number(10.0), "10");
+        assert_eq!(number(2.5), "2.5");
     }
 }

@@ -39,7 +39,7 @@ Les icônes se disposent de deux façons, selon `layout` (voir [Réglages](#rég
 - `double` (par défaut) : deux lignes d'icônes, chacune avec son nom en dessous. Le pane demande 5 lignes.
 - `single` : une ligne d'icônes ; la ligne du dessous affiche le nom de l'icône sous la souris, et rien sinon. Le pane demande 3 lignes.
 
-La dernière ligne affiche le CPU et la mémoire des processus de Herdr, puis de la machine (`2% 3,1G · 󰍹 10% 22,4G`), tels que la [sidebar](sidebar.md) les mesure : sans la sidebar, ou quand ses chiffres ont plus de 30 secondes, la ligne reste vide.
+La dernière ligne affiche le CPU et la mémoire des processus de Herdr, puis de la machine (`2% 3,1G · 󰍹 10% 22,4G`), tels que la [sidebar](sidebar.md) les mesure, en gras ; avec les couleurs par seuil de la sidebar (`colors = true` dans `sidebar.toml`), chaque chiffre est vert, jaune, orange ou rouge selon ses [seuils](sidebar.md#couleurs-par-seuil). Sans la sidebar, ou quand ses chiffres ont plus de 30 secondes, la ligne reste vide.
 
 **Sans l'explorateur.** `prefix+space` ouvre le menu en popup, titré du nom du dossier du workspace. Choisissez une entrée par sa touche, par les flèches (ou `j`/`k`) et Entrée, ou d'un clic. Échap, `q` ou Ctrl+C ferme le menu. La touche propre à une entrée l'emporte sur `j`, `k` et `q`. L'entrée **Disk** n'appartient qu'au pane `Tools` : le menu en popup l'omet.
 
@@ -104,6 +104,8 @@ En tête de `menu.toml`, avant les entrées ; l'écran des réglages les change 
 |---|---|---|
 | `decimal_comma` | `true` | `1,5G` (`true`) ou `1.5G` (`false`) |
 | `percent_space` | `false` | `0,2%` (`false`) ou `0,2 %` avec une espace fine insécable (`true`) |
+| `cpu_decimal` | `false` | les parts de CPU des totaux : `4%` (`false`) ou `4,2%` (`true`) |
+| `memory_unit` | `"M"` | `853M`, `2,4G` (`"M"`) ; `853 Mo`, `2,4 Go` (`"Mo"`) ; `853 MB`, `2,4 GB` (`"MB"`) ; `K`, `M` ou `G` selon la taille |
 | `layout` | `"double"` | les icônes du pane `Tools` : `"double"` (deux lignes, avec leurs noms) ou `"single"` (une ligne, le nom de l'icône survolée en dessous) |
 
 ## Entrées intégrées
@@ -124,19 +126,21 @@ Le dossier n'est mesuré que pendant que cette page est affichée : revenir arr�
 
 La fenêtre attend Entrée avant de se fermer, erreur comprise.
 
-**Settings** (`s`) ouvre un écran de réglages dans un popup. Haut et bas (ou `j`/`k`) choisissent une ligne ; gauche et droite (ou `h`/`l`), Entrée ou Espace la changent, et chaque changement est enregistré aussitôt ; Échap ou `q` ferme l'écran.
+**Settings** (`s`) ouvre un écran de réglages dans un popup de 70 % de la largeur du terminal et 80 % de sa hauteur ; la liste défile quand elle ne tient pas (une flèche en haut à droite le signale). Haut et bas (ou `j`/`k`) choisissent une ligne ; gauche et droite (ou `h`/`l`), Entrée ou Espace la changent, et chaque changement est enregistré aussitôt ; Échap ou `q` ferme l'écran.
 
 | Ligne | Effet | Fichier |
 |---|---|---|
-| Virgule décimale, Espace avant % | `decimal_comma`, `percent_space` | `menu.toml` et `sidebar.toml` |
+| Virgule décimale, Espace avant %, CPU avec une décimale, Unités de la mémoire | `decimal_comma`, `percent_space`, `cpu_decimal`, `memory_unit` | `menu.toml` et `sidebar.toml` |
 | Icônes | `layout` | `menu.toml` |
 | Durée de vie des valeurs | `ttl_seconds`, par pas de 5 secondes, de 5 à 600 | `sidebar.toml` |
 | Shells | `shells` : Entrée pour les taper, séparés par des virgules, Entrée pour enregistrer, Échap pour annuler | `sidebar.toml` |
 | Totaux dans la barre d'onglets | `tab_bar` | `sidebar.toml` |
+| Couleurs | `colors` : les [couleurs par seuil](sidebar.md#couleurs-par-seuil) | `sidebar.toml` |
+| Seuils CPU, Seuils mémoire (agents, Herdr ; machine) | les quatre jeux de seuils : Entrée pour taper trois valeurs croissantes séparées par des espaces (`10 25 50`), Entrée pour enregistrer, Échap pour annuler | `sidebar.toml` |
 | Ouvrir les fichiers de configuration… | ouvre les fichiers dans un éditeur, voir plus bas | |
 | Recharger la configuration de Herdr | recharge le `config.toml` de Herdr et dit si Herdr l'a accepté | |
 
-Les lignes Sidebar n'apparaissent que si le plugin [sidebar](sidebar.md) est installé. Un fichier est écrit en gardant ses commentaires et ses autres réglages : un réglage en commentaire y prend sa valeur à sa place. Le fichier d'un plugin qui n'existe pas encore est d'abord créé depuis son modèle, tous les réglages en commentaire à leur valeur par défaut.
+Les lignes Sidebar et Couleurs n'apparaissent que si le plugin [sidebar](sidebar.md) est installé. Un fichier est écrit en gardant ses commentaires et ses autres réglages : un réglage en commentaire y prend sa valeur à sa place. Le fichier d'un plugin qui n'existe pas encore est d'abord créé depuis son modèle, tous les réglages en commentaire à leur valeur par défaut.
 
 **Ouvrir les fichiers de configuration…** ouvre ensemble le `config.toml` de Herdr (le chemin que donne l'aide de Herdr, qui suit `HERDR_CONFIG_PATH`), `menu.toml`, et `sidebar.toml` quand la sidebar est installée. L'éditeur est `VISUAL`, sinon `EDITOR` (arguments permis) ; sans eux, sous Windows, VS Code quand il est dans le `PATH`, sinon le Bloc-notes, une fenêtre par fichier ; ailleurs `nano`, sinon `vi`. L'écran des réglages se ferme et Herdr reste libre d'utilisation :
 

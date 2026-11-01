@@ -39,7 +39,7 @@ The icons are laid out one of two ways, set by `layout` (see [Settings](#setting
 - `double` (default): two rows of icons, each with its name under it. The pane asks for 5 rows.
 - `single`: one row of icons; the row under it shows the name of the icon under the mouse, and nothing otherwise. The pane asks for 3 rows.
 
-The last row shows the CPU and memory of Herdr's processes, then of the machine (`2% 3,1G · 󰍹 10% 22,4G`), as the [sidebar](sidebar.md) measures them: without the sidebar, or when its figures are more than 30 seconds old, the row stays empty.
+The last row shows the CPU and memory of Herdr's processes, then of the machine (`2% 3,1G · 󰍹 10% 22,4G`), as the [sidebar](sidebar.md) measures them, in bold; with the sidebar's threshold colors on (`colors = true` in `sidebar.toml`), each figure is green, yellow, orange or red as its [thresholds](sidebar.md#threshold-colors) set. Without the sidebar, or when its figures are more than 30 seconds old, the row stays empty.
 
 **Without the explorer.** `prefix+space` opens the popup menu, titled with the workspace's folder name. Choose an entry with its key, with the arrows (or `j`/`k`) and Enter, or with a click. Escape, `q` or Ctrl+C closes the menu. An entry's own key wins over `j`, `k` and `q`. The **Disk** entry belongs to the `Tools` pane only: the popup menu leaves it out.
 
@@ -104,6 +104,8 @@ At the top of `menu.toml`, before the entries; the settings screen changes them 
 |---|---|---|
 | `decimal_comma` | `true` | `1,5G` (`true`) or `1.5G` (`false`) |
 | `percent_space` | `false` | `0,2%` (`false`) or `0,2 %` with a narrow no-break space (`true`) |
+| `cpu_decimal` | `false` | the CPU shares of the totals: `4%` (`false`) or `4,2%` (`true`) |
+| `memory_unit` | `"M"` | `853M`, `2,4G` (`"M"`); `853 Mo`, `2,4 Go` (`"Mo"`); `853 MB`, `2,4 GB` (`"MB"`); `K`, `M` or `G` as the size needs |
 | `layout` | `"double"` | the icons of the `Tools` pane: `"double"` (two rows, with their names) or `"single"` (one row, the name of the hovered icon under it) |
 
 ## Built-in entries
@@ -124,19 +126,21 @@ The folder is only measured while this page is shown: going back stops the measu
 
 The window waits for Enter before closing, an error included.
 
-**Settings** (`s`) opens a settings screen in a popup. Up and down (or `j`/`k`) choose a line; left and right (or `h`/`l`), Enter or Space change it, and each change is saved at once; Escape or `q` closes the screen.
+**Settings** (`s`) opens a settings screen in a popup of 70% of the terminal's width and 80% of its height; the list scrolls when it does not fit (an arrow in the top right corner says so). Up and down (or `j`/`k`) choose a line; left and right (or `h`/`l`), Enter or Space change it, and each change is saved at once; Escape or `q` closes the screen.
 
 | Line | Effect | File |
 |---|---|---|
-| Virgule décimale, Espace avant % | `decimal_comma`, `percent_space` | `menu.toml` and `sidebar.toml` |
+| Virgule décimale, Espace avant %, CPU avec une décimale, Unités de la mémoire | `decimal_comma`, `percent_space`, `cpu_decimal`, `memory_unit` | `menu.toml` and `sidebar.toml` |
 | Icônes | `layout` | `menu.toml` |
 | Durée de vie des valeurs | `ttl_seconds`, by 5 seconds, from 5 to 600 | `sidebar.toml` |
 | Shells | `shells`: Enter to type them, separated by commas, Enter to save, Escape to cancel | `sidebar.toml` |
 | Totaux dans la barre d'onglets | `tab_bar` | `sidebar.toml` |
+| Couleurs | `colors`: the [threshold colors](sidebar.md#threshold-colors) | `sidebar.toml` |
+| Seuils CPU, Seuils mémoire (agents, Herdr; machine) | the four sets of thresholds: Enter to type three increasing values separated by spaces (`10 25 50`), Enter to save, Escape to cancel | `sidebar.toml` |
 | Ouvrir les fichiers de configuration… | opens the files in an editor, see below | |
 | Recharger la configuration de Herdr | reloads Herdr's `config.toml` and says whether Herdr accepted it | |
 
-The Sidebar lines only show when the [sidebar](sidebar.md) plugin is installed. A file is written with its comments and its other settings kept: a setting commented out in it takes its value in its place. A plugin's file that does not exist yet is first created from its template, every setting commented out at its default.
+The Sidebar and color lines only show when the [sidebar](sidebar.md) plugin is installed. A file is written with its comments and its other settings kept: a setting commented out in it takes its value in its place. A plugin's file that does not exist yet is first created from its template, every setting commented out at its default.
 
 **Ouvrir les fichiers de configuration…** opens, together, Herdr's `config.toml` (the path Herdr's help gives, which follows `HERDR_CONFIG_PATH`), `menu.toml`, and `sidebar.toml` when the sidebar is installed. The editor is `VISUAL`, else `EDITOR` (arguments allowed); without them, on Windows, VS Code when it is on `PATH`, else Notepad, one window per file; elsewhere `nano`, else `vi`. The settings screen closes and Herdr stays free to use:
 

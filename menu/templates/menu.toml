@@ -8,6 +8,12 @@
 # 4 % plutôt que 4%.
 # percent_space = false
 
+# CPU avec une décimale : 4,2% plutôt que 4%.
+# cpu_decimal = false
+
+# Unités de la mémoire : "M" (853M, 2,4G), "Mo" (853 Mo, 2,4 Go) ou "MB" (853 MB).
+# memory_unit = "M"
+
 # Icônes du pane Tools : "double" (deux lignes, avec les noms) ou "single"
 # (une ligne, le nom de l'icône survolée en dessous).
 # layout = "double"

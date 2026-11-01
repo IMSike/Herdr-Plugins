@@ -18,7 +18,7 @@ use crossterm::event::{
 use crossterm::queue;
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use crossterm::terminal::{self, Clear, ClearType};
-use herdr_api::sidebar::Totals;
+use herdr_api::sidebar::{Level, Totals};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -173,7 +173,7 @@ struct View {
     hover_figures: bool,
     /// A message, and its color, in place of the totals or the figures.
     message: Option<(String, Color)>,
-    totals: Option<String>,
+    totals: Option<Vec<(String, Option<Level>)>>,
     stats: Option<Stats>,
     /// How old the figures are, once old enough to say.
     age: Option<String>,
@@ -241,7 +241,7 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
                 .and_then(|t| {
                     let age = herdr_api::unix_millis().saturating_sub(t.at_ms);
                     (age <= TOTALS_FOR_AT_MOST.as_millis() as u64)
-                        .then(|| t.line(&view.menu.numbers))
+                        .then(|| t.parts(&view.menu.numbers))
                 });
             let changed = modified(menu_file.as_deref());
             if changed != menu_changed {
@@ -544,16 +544,52 @@ fn draw_tools(out: &mut impl Write, view: &View, width: u16, rows: u16) -> io::R
         && let Some(totals) = &view.totals
     {
         let row = grid.rows();
-        let text = fit(totals, usize::from(width));
-        if row < rows {
-            queue!(
-                out,
-                MoveTo(centered(0, width, &text), row),
-                SetForegroundColor(Color::DarkGrey),
-                Print(text),
-                ResetColor
-            )?;
+        let whole: String = totals.iter().map(|(text, _)| text.as_str()).collect();
+        if row < rows && whole.chars().count() <= usize::from(width) {
+            queue!(out, MoveTo(centered(0, width, &whole), row))?;
+            for (text, level) in totals {
+                draw_figure(out, text, *level, text.chars().any(char::is_numeric))?;
+            }
+        } else if row < rows {
+            let text = fit(&whole, usize::from(width));
+            queue!(out, MoveTo(centered(0, width, &text), row), Print(text))?;
         }
     }
     Ok(())
+}
+
+/// One piece of the totals: a figure in the color of its level (bold, in
+/// the terminal's color without the threshold colors), a separator in grey.
+fn draw_figure(
+    out: &mut impl Write,
+    text: &str,
+    level: Option<Level>,
+    figure: bool,
+) -> io::Result<()> {
+    let color = match (figure, level) {
+        (false, _) => Color::DarkGrey,
+        (true, None) => Color::Reset,
+        (true, Some(level)) => level_color(level),
+    };
+    if figure {
+        queue!(out, SetAttribute(Attribute::Bold))?;
+    }
+    queue!(
+        out,
+        SetForegroundColor(color),
+        Print(text),
+        ResetColor,
+        SetAttribute(Attribute::Reset)
+    )
+}
+
+/// The colors of the levels, those of the sidebar's example rules.
+fn level_color(level: Level) -> Color {
+    let (r, g, b) = match level {
+        Level::Green => (0xb8, 0xbb, 0x26),
+        Level::Yellow => (0xfa, 0xbd, 0x2f),
+        Level::Orange => (0xfe, 0x80, 0x19),
+        Level::Red => (0xfb, 0x49, 0x34),
+    };
+    Color::Rgb { r, g, b }
 }

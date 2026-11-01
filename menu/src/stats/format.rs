@@ -85,6 +85,7 @@ mod tests {
         let spaced = NumberFormat {
             decimal_comma: false,
             percent_space: true,
+            ..numbers
         };
         assert_eq!(format_share(0.34, &spaced), "0.3\u{202F}%");
         assert_eq!(group_thousands(4210), "4\u{202F}210");

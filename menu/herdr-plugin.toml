@@ -38,8 +38,8 @@ command = ["target/release/herdr-menu", "run"]
 id = "settings"
 title = "Settings"
 placement = "popup"
-width = 64
-height = 18
+width = "70%"
+height = "80%"
 command = ["target/release/herdr-menu", "settings"]
 
 # A terminal editor on the configuration files, opened by the settings screen.
