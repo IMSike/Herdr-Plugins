@@ -225,7 +225,7 @@ fn run_entry() -> Result<(), String> {
     let json = std::env::var(ENTRY_ENV).map_err(|_| format!("{ENTRY_ENV} absent"))?;
     let entry: Entry =
         serde_json::from_str(&json).map_err(|e| format!("{ENTRY_ENV} illisible : {e}"))?;
-    let mut command = launch::command(&entry.command);
+    let mut command = launch::command(&entry.command)?;
     if let Some(cwd) = std::env::var_os(CWD_ENV) {
         command.current_dir(cwd);
     }

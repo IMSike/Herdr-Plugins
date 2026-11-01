@@ -8,10 +8,11 @@ use std::process::{Command, Stdio};
 /// The command of `argv`, without a shell. On Windows a bare name also finds a
 /// batch file on `PATH` (`code` is `code.cmd`), which Rust runs with the right
 /// escaping when given its full path.
-pub fn command(argv: &[String]) -> Command {
-    let mut command = Command::new(program(&argv[0]));
-    command.args(&argv[1..]);
-    command
+pub fn command(argv: &[String]) -> Result<Command, String> {
+    let (name, args) = argv.split_first().ok_or("commande vide")?;
+    let mut command = Command::new(program(name));
+    command.args(args);
+    Ok(command)
 }
 
 #[cfg(windows)]
@@ -44,7 +45,7 @@ fn program(name: &str) -> std::ffi::OsString {
 
 /// Starts the entry without waiting for it: its output goes nowhere.
 pub fn detach(entry: &Entry, cwd: Option<&Path>) -> Result<(), String> {
-    let mut command = command(&entry.command);
+    let mut command = command(&entry.command)?;
     command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
