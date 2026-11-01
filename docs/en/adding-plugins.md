@@ -17,11 +17,11 @@ A plugin of this repository is a Rust crate of the root Cargo workspace, in a fo
                          in a module of its own, without I/O, with its tests
 ```
 
-Add the folder to `members` in the root `Cargo.toml`. Code that several plugins need (requests to Herdr, its environment variables, atomic writes) lives in `crates/herdr-api`: depend on it with `herdr-api = { path = "../crates/herdr-api" }` rather than writing it again.
+Add the folder to `members` in the root `Cargo.toml`. Code that several plugins need (requests to Herdr, its environment variables, atomic writes) lives in `crates/herdr-api`: depend on it with `herdr-api.workspace = true` rather than writing it again.
 
 ## Crate
 
-`Cargo.toml` takes `version`, `edition`, `rust-version`, `license`, `repository` and `publish` from the workspace (`version.workspace = true`…) and has a `description`. The binary is named `herdr-<name>`.
+`Cargo.toml` takes `version`, `edition`, `rust-version`, `license`, `repository` and `publish` from the workspace (`version.workspace = true`…) and has a `description`. A dependency several crates use (`serde`, `serde_json`, `sysinfo`) has its version in `[workspace.dependencies]` of the root `Cargo.toml`; a crate names it with `workspace = true` and its own `features`. The binary is named `herdr-<name>`.
 
 ## Manifest
 
