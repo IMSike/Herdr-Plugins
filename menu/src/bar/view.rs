@@ -21,7 +21,8 @@ use herdr_api::NumberFormat;
 use herdr_api::sidebar::{Gauge, Level, MACHINE_GLYPH, Totals};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant, SystemTime};
 
 /// What the measuring thread tells the bar.
@@ -37,15 +38,25 @@ struct Measurer {
     news: mpsc::Receiver<Measure>,
     /// A click on the figures: measure now.
     ask: mpsc::Sender<()>,
+    /// Set when the page closes: a reading under way stops.
+    stop: Arc<AtomicBool>,
+}
+
+impl Drop for Measurer {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+    }
 }
 
 /// Measures the folder in the background whenever its figures are due (see
 /// `stats::lifetime`) or asked for. Figures kept in the plugin's state folder,
 /// by this bar or another one of the folder, are shown without a reading.
-/// The thread ends with the bar.
+/// The thread ends with the page, a reading under way included.
 fn measure_in_background(root: PathBuf) -> Measurer {
     let (send, news) = mpsc::channel();
     let (ask, asked) = mpsc::channel::<()>();
+    let stop = Arc::new(AtomicBool::new(false));
+    let stopped = Arc::clone(&stop);
     let file = herdr_api::state_dir()
         .ok()
         .map(|dir| stats::cache_file(&dir, &root));
@@ -90,7 +101,11 @@ fn measure_in_background(root: PathBuf) -> Measurer {
             } else {
                 stats::Limit::default()
             };
-            let measured = Measured::now(&root, stats::measure(&root, limit));
+            let stats = stats::measure(&root, limit, &stopped);
+            if stopped.load(Ordering::Relaxed) {
+                return;
+            }
+            let measured = Measured::now(&root, stats);
             if let Some(file) = &file
                 && let Err(e) = stats::save(file, &measured)
                 && send.send(Measure::Unsaved(e)).is_err()
@@ -108,7 +123,7 @@ fn measure_in_background(root: PathBuf) -> Measurer {
             manual = clicked && !manual;
         }
     });
-    Measurer { news, ask }
+    Measurer { news, ask, stop }
 }
 
 /// What the bar shows.

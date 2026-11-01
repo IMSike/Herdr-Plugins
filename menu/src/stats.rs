@@ -6,6 +6,7 @@ mod format;
 pub use format::{age_label, files_line, size_line};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -182,7 +183,8 @@ pub fn save(file: &Path, measured: &Measured) -> Result<(), String> {
 }
 
 /// Walks the folder without following links; unreadable folders are skipped.
-pub fn measure(root: &Path, limit: Limit) -> Stats {
+/// Stops early, the figures incomplete, past the limit or once `stop` is set.
+pub fn measure(root: &Path, limit: Limit, stop: &AtomicBool) -> Stats {
     let mut stats = Stats {
         disk: disk_size(root),
         complete: true,
@@ -192,6 +194,10 @@ pub fn measure(root: &Path, limit: Limit) -> Stats {
     let mut entries_read = 0u64;
     let mut stack: Vec<(PathBuf, bool)> = vec![(root.to_path_buf(), false)];
     while let Some((dir, in_git)) = stack.pop() {
+        if Instant::now() >= deadline {
+            stats.complete = false;
+            return stats;
+        }
         let Ok(entries) = std::fs::read_dir(&dir) else {
             continue;
         };
@@ -199,6 +205,7 @@ pub fn measure(root: &Path, limit: Limit) -> Stats {
             entries_read += 1;
             stats.entries = entries_read;
             if entries_read > limit.entries
+                || stop.load(Ordering::Relaxed)
                 || (entries_read.is_multiple_of(1000) && Instant::now() >= deadline)
             {
                 stats.complete = false;
@@ -258,12 +265,13 @@ mod tests {
         std::fs::create_dir_all(root.join("src")).unwrap();
         std::fs::write(root.join("src/a.rs"), "12345").unwrap();
         std::fs::write(root.join(".git/objects/x"), "123").unwrap();
-        let stats = measure(&root, Limit::default());
+        let stats = measure(&root, Limit::default(), &AtomicBool::new(false));
         let small = Limit {
             entries: 2,
             ..Limit::default()
         };
-        let cut = measure(&root, small);
+        let cut = measure(&root, small, &AtomicBool::new(false));
+        let stopped = measure(&root, Limit::default(), &AtomicBool::new(true));
         let _ = std::fs::remove_dir_all(&root);
         // .git, objects, x, src, a.rs
         assert_eq!(
@@ -271,6 +279,7 @@ mod tests {
             (8, 1, true, 5)
         );
         assert!(!cut.complete);
+        assert!(!stopped.complete);
     }
 
     #[test]
