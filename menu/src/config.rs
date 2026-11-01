@@ -23,10 +23,33 @@ pub enum StartIn {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Action {
-    /// Updates Herdr, and restarts its server once confirmed.
-    UpdateHerdr,
-    /// Opens the settings files in an editor, then reloads Herdr's.
+    /// Updates Herdr in a terminal window of its own, outside Herdr.
+    Update,
+    /// Opens the settings screen.
     Settings,
+    /// Shows the figures on the workspace folder (the `Tools` pane only).
+    Disk,
+}
+
+/// How the `Tools` pane lays out its icons.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Layout {
+    /// One row of icons; the name of the one under the pointer below it.
+    Single,
+    /// Two rows of icons, each with its name below it.
+    #[default]
+    Double,
+}
+
+impl Layout {
+    /// The name `menu.toml` gives it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Layout::Single => "single",
+            Layout::Double => "double",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,11 +83,6 @@ impl Entry {
     pub fn icon(&self) -> String {
         self.icon.clone().unwrap_or_else(|| self.key.to_string())
     }
-
-    /// Whether the entry runs in the popup: an action always does.
-    pub fn in_popup(&self) -> bool {
-        self.popup || self.action.is_some()
-    }
 }
 
 /// What `menu.toml` sets.
@@ -73,6 +91,7 @@ pub struct Menu {
     pub entries: Vec<Entry>,
     /// How the `Tools` pane writes its figures.
     pub numbers: NumberFormat,
+    pub layout: Layout,
 }
 
 impl Default for Menu {
@@ -80,6 +99,7 @@ impl Default for Menu {
         Self {
             entries: defaults(),
             numbers: NumberFormat::default(),
+            layout: Layout::default(),
         }
     }
 }
@@ -93,6 +113,8 @@ struct File {
     decimal_comma: bool,
     #[serde(default)]
     percent_space: bool,
+    #[serde(default)]
+    layout: Layout,
 }
 
 /// Entries shown when the user has no `menu.toml`, or one without entries.
@@ -118,10 +140,12 @@ pub fn defaults() -> Vec<Entry> {
         entry('g', "gh-dash", &["gh", "dash"], "\u{F02A4}", true),
         // nf-md-microsoft_visual_studio_code
         entry('c', "VS Code", &["code", "."], "\u{F0A1E}", false),
+        // nf-md-harddisk
+        action('d', "Disk", Action::Disk, "\u{F02CA}"),
         // nf-md-update
-        action('u', "Herdr", Action::UpdateHerdr, "\u{F06B0}"),
+        action('u', "Update", Action::Update, "\u{F06B0}"),
         // nf-md-cog
-        action('s', "Réglages", Action::Settings, "\u{F0493}"),
+        action('s', "Settings", Action::Settings, "\u{F0493}"),
     ]
 }
 
@@ -155,6 +179,7 @@ pub fn parse(text: &str) -> Result<Menu, String> {
             decimal_comma: file.decimal_comma,
             percent_space: file.percent_space,
         },
+        layout: file.layout,
     })
 }
 
@@ -186,6 +211,7 @@ mod tests {
         let menu = parse(
             r#"
             percent_space = true
+            layout = "single"
 
             [[entries]]
             key = "l"
@@ -202,9 +228,8 @@ mod tests {
 
             [[entries]]
             key = "u"
-            label = "Herdr"
-            action = "update-herdr"
-            popup = false
+            label = "Update"
+            action = "update"
             "#,
         )
         .unwrap();
@@ -215,9 +240,9 @@ mod tests {
         assert_eq!(entries[0].icon(), "l");
         assert_eq!(entries[1].icon(), "X");
         assert!(entries[0].popup && !entries[1].popup);
-        assert_eq!(entries[2].action, Some(Action::UpdateHerdr));
-        assert!(entries[2].in_popup());
+        assert_eq!(entries[2].action, Some(Action::Update));
         assert!(menu.numbers.decimal_comma && menu.numbers.percent_space);
+        assert_eq!(menu.layout, Layout::Single);
     }
 
     #[test]
@@ -250,6 +275,7 @@ mod tests {
             )
             .is_err()
         );
+        assert!(parse("layout = \"triple\"").is_err());
     }
 
     #[test]
@@ -257,6 +283,23 @@ mod tests {
         let menu = parse("# Only comments.\ndecimal_comma = false\n").unwrap();
         assert_eq!(menu.entries, defaults());
         assert!(!menu.numbers.decimal_comma);
+        assert_eq!(menu.layout, Layout::Double);
+    }
+
+    #[test]
+    fn the_template_gives_the_defaults() {
+        let template = crate::settings::files::MENU_TEMPLATE;
+        assert_eq!(parse(template).unwrap(), Menu::default());
+        // Its commented settings, before the entries, are the default values.
+        let settings: String = template
+            .lines()
+            .take_while(|line| !line.contains("[[entries]]"))
+            .filter_map(|line| line.strip_prefix("# "))
+            .filter(|line| line.contains(" = "))
+            .map(|line| format!("{line}\n"))
+            .collect();
+        assert_eq!(settings.lines().count(), 3);
+        assert_eq!(parse(&settings).unwrap(), Menu::default());
     }
 
     #[test]

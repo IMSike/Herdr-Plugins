@@ -1,35 +1,100 @@
 //! Where the bar draws and what a click hits, and how far to move the split
 //! it tops to keep its height: arithmetic on sizes and Herdr's layout only.
 
-use crate::config::Entry;
+use crate::config::{Entry, Layout as IconLayout};
 use serde::Deserialize;
 
-/// Rows the bar asks for: icons, names, a gap and two lines of figures.
-pub const ROWS: u16 = 5;
-/// Narrowest column of one entry.
+/// Narrowest column of one entry with its name under it.
 const MIN_SLOT: u16 = 9;
+/// Widest column of one icon alone, on one row.
+const MAX_ICON_SLOT: u16 = 6;
 /// Smallest share Herdr gives a side of a split.
 const MIN_RATIO: f64 = 0.1;
 
-/// Columns of one entry and the column the first one starts at, centered.
-pub fn slots(width: u16, entries: &[Entry]) -> (u16, u16) {
-    let count = entries.len().max(1) as u16;
-    let longest = entries
-        .iter()
-        .map(|e| e.label.chars().count() as u16)
-        .max()
-        .unwrap_or(0);
-    let slot = (longest + 2).max(MIN_SLOT).min(width / count).max(1);
-    (slot, width.saturating_sub(slot * count) / 2)
+/// Rows the bar asks for: its icons, their names, and one row more (the
+/// totals of the sidebar).
+pub fn wanted_rows(layout: IconLayout) -> u16 {
+    match layout {
+        IconLayout::Single => 3,
+        IconLayout::Double => 5,
+    }
 }
 
-/// The entry under a click: its icon or its name.
-pub fn slot_at((slot, start): (u16, u16), count: usize, row: u16, column: u16) -> Option<usize> {
-    if row > 1 {
-        return None;
+/// Where the entries are drawn: one row of icons, or two rows of icons with
+/// their names, each row centered.
+pub struct Grid {
+    slot: u16,
+    per_row: usize,
+    count: usize,
+    width: u16,
+    layout: IconLayout,
+}
+
+impl Grid {
+    pub fn new(width: u16, entries: &[Entry], layout: IconLayout) -> Self {
+        let count = entries.len();
+        let (per_row, slot) = match layout {
+            IconLayout::Single => {
+                let per_row = count.max(1);
+                (per_row, (width / per_row as u16).clamp(1, MAX_ICON_SLOT))
+            }
+            IconLayout::Double => {
+                let per_row = count.div_ceil(2).max(1);
+                let longest = entries
+                    .iter()
+                    .map(|e| e.label.chars().count() as u16)
+                    .max()
+                    .unwrap_or(0);
+                let slot = (longest + 2).max(MIN_SLOT).min(width / per_row as u16);
+                (per_row, slot.max(1))
+            }
+        };
+        Self {
+            slot,
+            per_row,
+            count,
+            width,
+            layout,
+        }
     }
-    let index = usize::from(column.checked_sub(start)? / slot);
-    (index < count).then_some(index)
+
+    /// Columns of one entry.
+    pub fn slot(&self) -> u16 {
+        self.slot
+    }
+
+    /// Rows the entries take: each row of icons and the row of names under it.
+    pub fn rows(&self) -> u16 {
+        2 * self.count.div_ceil(self.per_row).max(1) as u16
+    }
+
+    /// The first column of entry `i`'s slot, and the row of its icon.
+    pub fn place(&self, i: usize) -> (u16, u16) {
+        let line = i / self.per_row;
+        let first = line * self.per_row;
+        let start = self.start(first);
+        (start + self.slot * (i - first) as u16, 2 * line as u16)
+    }
+
+    fn start(&self, first: usize) -> u16 {
+        let in_line = (self.count - first).min(self.per_row) as u16;
+        self.width.saturating_sub(self.slot * in_line) / 2
+    }
+
+    /// The entry under a click: its icon or its name (the row under it).
+    pub fn at(&self, row: u16, column: u16) -> Option<usize> {
+        let line = usize::from(row / 2);
+        if self.layout == IconLayout::Single && line > 0 {
+            return None;
+        }
+        let first = line * self.per_row;
+        if first >= self.count {
+            return None;
+        }
+        let index = usize::from(column.checked_sub(self.start(first))? / self.slot);
+        let in_line = (self.count - first).min(self.per_row);
+        (index < in_line).then_some(first + index)
+    }
 }
 
 /// The column `text` starts at, centered in `width` columns from `start`.
@@ -70,8 +135,8 @@ pub struct Layout {
 }
 
 /// How far to move the ratio of the split the bar tops, for its rows to be
-/// `ROWS`; `None` when it already has them or is not on top of a split.
-pub fn ratio_change(layout: &Layout, me: &str, rows: u16) -> Option<f64> {
+/// `want`; `None` when it already has them or is not on top of a split.
+pub fn ratio_change(layout: &Layout, me: &str, rows: u16, want: u16) -> Option<f64> {
     let rect = &layout.panes.iter().find(|p| p.pane_id == me)?.rect;
     // The innermost split the bar tops: the one `pane.resize` moves.
     let split = layout
@@ -87,7 +152,7 @@ pub fn ratio_change(layout: &Layout, me: &str, rows: u16) -> Option<f64> {
         .min_by_key(|s| s.rect.height)?;
     // What the pane takes beyond its terminal's rows: its border.
     let border = rect.height.saturating_sub(rows);
-    let want = ROWS + border;
+    let want = want + border;
     if rect.height == want {
         return None;
     }
@@ -124,25 +189,53 @@ mod tests {
         }
     }
 
-    #[test]
-    fn slots_are_centered_and_fit_the_width() {
-        let entries = [entry("lazygit"), entry("gh-dash"), entry("VS Code")];
-        // 3 slots of 9 in 38 columns: 5 columns on the left.
-        assert_eq!(slots(38, &entries), (9, 5));
-        // Too narrow: the slots share the width.
-        assert_eq!(slots(20, &entries), (6, 1));
-        assert_eq!(centered(5, 9, "lazygit"), 6);
+    fn entries() -> Vec<Entry> {
+        [
+            "lazygit", "gh-dash", "VS Code", "Disk", "Update", "Settings",
+        ]
+        .into_iter()
+        .map(entry)
+        .collect()
     }
 
     #[test]
-    fn clicks_map_to_slots() {
-        let geometry = (9, 5);
-        assert_eq!(slot_at(geometry, 3, 0, 5), Some(0));
-        assert_eq!(slot_at(geometry, 3, 1, 14), Some(1));
-        assert_eq!(slot_at(geometry, 3, 0, 31), Some(2));
-        assert_eq!(slot_at(geometry, 3, 0, 4), None);
-        assert_eq!(slot_at(geometry, 3, 0, 32), None);
-        assert_eq!(slot_at(geometry, 3, 2, 10), None);
+    fn two_rows_of_entries_are_centered() {
+        let grid = Grid::new(40, &entries(), IconLayout::Double);
+        // "Settings" and a column on each side: 3 slots of 10 in 40 columns.
+        assert_eq!(grid.slot(), 10);
+        assert_eq!(grid.rows(), 4);
+        assert_eq!(grid.place(0), (5, 0));
+        assert_eq!(grid.place(5), (25, 2));
+        assert_eq!(centered(5, 10, "lazygit"), 6);
+        // An odd count, and slots of 9 without "Settings": the last row is
+        // centered on its own.
+        let five = &entries()[..5];
+        assert_eq!(Grid::new(40, five, IconLayout::Double).place(3), (11, 2));
+    }
+
+    #[test]
+    fn one_row_of_icons_fits_the_width() {
+        let grid = Grid::new(40, &entries(), IconLayout::Single);
+        assert_eq!(grid.slot(), MAX_ICON_SLOT);
+        assert_eq!(grid.rows(), 2);
+        assert_eq!(grid.place(1), (8, 0));
+        // Too narrow: the slots share the width.
+        assert_eq!(Grid::new(18, &entries(), IconLayout::Single).slot(), 3);
+    }
+
+    #[test]
+    fn clicks_map_to_entries() {
+        let grid = Grid::new(40, &entries(), IconLayout::Double);
+        assert_eq!(grid.at(0, 5), Some(0));
+        assert_eq!(grid.at(1, 16), Some(1));
+        assert_eq!(grid.at(3, 34), Some(5));
+        assert_eq!(grid.at(0, 4), None);
+        assert_eq!(grid.at(2, 35), None);
+        assert_eq!(grid.at(4, 10), None);
+        let single = Grid::new(40, &entries(), IconLayout::Single);
+        assert_eq!(single.at(0, 8), Some(1));
+        assert_eq!(single.at(2, 8), None);
+        assert_eq!(single.at(0, 38), None);
     }
 
     #[test]
@@ -167,15 +260,15 @@ mod tests {
             focused_pane_id: None,
         };
         // 29 rows inside 30: a border of 1, so 6 rows in all.
-        let delta = ratio_change(&layout, "bar", 29).unwrap();
+        let delta = ratio_change(&layout, "bar", 29, 5).unwrap();
         assert!((delta - (6.25 / 50.0 - 0.6)).abs() < 1e-9);
-        assert_eq!(ratio_change(&layout, "explorer", 19), None);
+        assert_eq!(ratio_change(&layout, "explorer", 19, 5), None);
         // Taller than it asks for, but already at Herdr's smallest share.
         let mut low = layout;
         low.splits[0].ratio = MIN_RATIO;
         low.splits[0].rect.height = 60;
         low.panes[0].rect.height = 6;
-        assert_eq!(ratio_change(&low, "bar", 5), None);
+        assert_eq!(ratio_change(&low, "bar", 5, 5), None);
     }
 
     #[test]
@@ -202,7 +295,7 @@ mod tests {
             zoomed: false,
             focused_pane_id: None,
         };
-        let delta = ratio_change(&layout, "bar", 19).unwrap();
+        let delta = ratio_change(&layout, "bar", 19, 5).unwrap();
         assert!((delta - (6.25 / 40.0 - 0.5)).abs() < 1e-9);
     }
 }

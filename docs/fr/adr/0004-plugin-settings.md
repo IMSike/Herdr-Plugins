@@ -21,13 +21,16 @@ Options étudiées :
 
 Chaque plugin lit son propre fichier TOML dans son dossier de configuration : `menu.toml` (les réglages en tête, puis les entrées), `sidebar.toml`. Un fichier ou un réglage absent garde sa valeur par défaut ; un réglage inconnu fait ignorer le fichier, avec la raison affichée (menu) ou journalisée (sidebar). L'action `install` de la sidebar écrit le chemin de son dossier de configuration dans son dossier d'état pour les passages de la barre d'onglets.
 
-L'entrée intégrée **Réglages** du menu ouvre le `config.toml` de Herdr, `menu.toml` et, quand la sidebar est installée, `sidebar.toml` dans l'éditeur de l'utilisateur, en créant d'abord le fichier d'un plugin à partir d'un modèle commenté ; à la fermeture de l'éditeur, elle vérifie les fichiers et recharge la configuration de Herdr. Aucun plugin n'écrit le `config.toml` de Herdr.
+L'entrée intégrée **Settings** du menu ouvre un écran de réglages (TUI) dans un popup, pour les quelques réglages des plugins (format des nombres, disposition des icônes, réglages de la sidebar). Chaque changement est écrit aussitôt dans le fichier du plugin avec `toml_edit`, qui garde ses commentaires et ses autres réglages ; un réglage en commentaire dans le fichier y prend sa valeur à sa place. Le fichier d'un plugin qui n'existe pas est d'abord créé depuis son modèle commenté.
 
-Un écran de réglages pourra venir plus tard, en écrivant les mêmes fichiers.
+L'écran ouvre aussi le `config.toml` de Herdr, `menu.toml` et, quand la sidebar est installée, `sidebar.toml` dans l'éditeur de l'utilisateur, puis se ferme : un popup bloque Herdr tant qu'il est ouvert, l'édition se fait donc en dehors. Un éditeur qui a sa propre fenêtre démarre détaché ; un éditeur en terminal s'ouvre dans un onglet de Herdr, qui propose de recharger la configuration de Herdr une fois l'éditeur fermé. Le pane `Tools` d'où l'écran a été ouvert propose le rechargement par un bouton, et un retour à ses icônes. Aucun plugin n'écrit le `config.toml` de Herdr.
+
+*Révisé le 2026-11-01 : l'entrée ouvrait d'abord les fichiers dans un éditeur à l'intérieur de son popup, ce qui bloquait Herdr jusqu'à la fermeture de l'éditeur ; l'écran de réglages était prévu pour plus tard.*
 
 ## Conséquences
 
 - Couleurs et disposition restent dans le `config.toml` de Herdr ; les fichiers des plugins ne contiennent que ce que Herdr ne sait pas régler.
 - Les fichiers peuvent être versionnés avec le reste de la configuration (`dotfiles/herdr/` d'OS-Setup).
-- Un nouveau réglage, c'est un champ avec sa valeur par défaut, le modèle et la page du plugin, dans les deux langues.
+- Un nouveau réglage, c'est un champ avec sa valeur par défaut, le modèle, une ligne de l'écran des réglages et la page du plugin, dans les deux langues.
+- Le menu écrit `menu.toml` et `sidebar.toml`, jamais le `config.toml` de Herdr ; une copie versionnée des fichiers des plugins (OS-Setup) se met à jour à la main après un changement fait à l'écran.
 - Tant que l'action `install` de la sidebar n'a pas tourné une fois après une mise à jour, ses passages de la barre d'onglets prennent les valeurs par défaut.

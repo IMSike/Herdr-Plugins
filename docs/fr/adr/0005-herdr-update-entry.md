@@ -5,7 +5,7 @@
 
 ## Contexte
 
-Le mainteneur voulait mettre à jour Herdr depuis le pane `Tools`. `herdr update` installe la nouvelle version, mais le serveur en cours garde l'ancien binaire jusqu'à son redémarrage. La passation à chaud (`herdr update --handoff`) garde les sessions, mais le serveur ne la propose pas sous Windows (`herdr status --json` : `server.capabilities.live_handoff = false`). Là, le serveur doit s'arrêter : tous les panes se ferment et tous les agents s'arrêtent, parfois au milieu de leur travail. Un processus qui tourne dans Herdr ne peut pas relancer Herdr après l'avoir arrêté.
+Le mainteneur voulait mettre à jour Herdr depuis le pane `Tools`. `herdr update` installe la nouvelle version, mais le serveur en cours garde l'ancien binaire jusqu'à son redémarrage. La passation à chaud (`herdr update --handoff`) garde les sessions, mais le serveur ne la propose pas sous Windows (`herdr status --json` : `server.capabilities.live_handoff = false`). Là, le serveur doit s'arrêter : tous les panes se ferment et tous les agents s'arrêtent, parfois au milieu de leur travail. Un processus qui tourne dans Herdr ne peut pas relancer Herdr après l'avoir arrêté, et `herdr update` refuse de tourner dans Herdr (il vérifie `HERDR_ENV`).
 
 Options étudiées :
 
@@ -17,16 +17,19 @@ Options étudiées :
 
 ## Décision
 
-L'option b, en entrée intégrée **Herdr** du menu (`update-herdr`), lancée dans le grand popup :
+L'option b, en entrée intégrée **Update** du menu (`update`), lancée dans une fenêtre de terminal à part, hors de Herdr : une nouvelle console sous Windows, le premier émulateur de terminal trouvé ailleurs, démarrée sans `HERDR_ENV` :
 
 1. `herdr update`, avec `--handoff` quand le serveur le propose ;
-2. `herdr status --json` : quand ni `restart_needed` ni `server_binary_stale` n'est vrai, le popup dit que Herdr est à jour ;
-3. sinon il donne le nombre de panes qui se ferment et d'agents qui s'arrêtent (et combien sont au travail), et demande `[o/N]` ; toute autre réponse que oui annule ;
-4. une fois confirmé, il met `herdr` dans le presse-papiers (clip, pbcopy, wl-copy, xclip ou xsel), attend Entrée, puis lance `herdr server stop`.
+2. `herdr status --json` : quand ni `restart_needed` ni `server_binary_stale` n'est vrai, la fenêtre dit que Herdr est à jour ;
+3. sinon elle donne le nombre de panes qui se ferment et d'agents qui s'arrêtent (et combien sont au travail), et demande `[o/N]` ; toute autre réponse que oui annule ;
+4. une fois confirmé, elle lance `herdr server stop`, puis propose de relancer Herdr dans cette fenêtre ; sinon elle met `herdr` dans le presse-papiers (clip, pbcopy, wl-copy, xclip ou xsel).
+
+*Révisé le 2026-11-01 : l'entrée tournait d'abord dans le popup du menu, où `herdr update` refusait de se lancer.*
 
 ## Conséquences
 
 - Aucun agent ne s'arrête sans une confirmation qui le dit.
 - Là où la passation fonctionne, la confirmation n'est pas demandée : rien ne s'arrête.
-- Relancer Herdr reste une étape manuelle, facilitée par le presse-papiers.
+- Relancer Herdr demande un `o` de plus dans la fenêtre de mise à jour, ou de coller le presse-papiers.
+- Sous Linux, l'entrée demande un émulateur de terminal de sa liste ; sans lui, elle le dit.
 - L'entrée dépend des champs `update` de `herdr status --json` ; s'ils disparaissent, l'entrée dit que Herdr est à jour et la nouvelle version tourne au prochain démarrage.

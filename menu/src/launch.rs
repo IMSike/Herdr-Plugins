@@ -51,14 +51,26 @@ pub fn find_on_path(name: &str) -> Option<PathBuf> {
 
 /// Starts the entry without waiting for it: its output goes nowhere.
 pub fn detach(entry: &Entry, cwd: Option<&Path>) -> Result<(), String> {
-    let mut command = command(&entry.command)?;
+    spawn_detached(&entry.command, cwd)
+        .map_err(|e| format!("impossible de lancer « {} » : {e}", entry.label))
+}
+
+/// Starts `argv` without waiting for it.
+pub fn spawn_detached(argv: &[String], cwd: Option<&Path>) -> Result<(), String> {
+    let mut command = command(argv)?;
+    if let Some(cwd) = cwd {
+        command.current_dir(cwd);
+    }
+    detach_command(command)
+}
+
+/// Starts `command` without waiting for it: its output goes nowhere, and it
+/// keeps running when the pane that started it closes.
+pub fn detach_command(mut command: Command) -> Result<(), String> {
     command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    if let Some(cwd) = cwd {
-        command.current_dir(cwd);
-    }
     // A group of its own: closing the bar's pane hangs up the pane's group,
     // not the program it started.
     #[cfg(unix)]
@@ -73,9 +85,7 @@ pub fn detach(entry: &Entry, cwd: Option<&Path>) -> Result<(), String> {
             DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
         );
     }
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("impossible de lancer « {} » : {e}", entry.label))?;
+    let mut child = command.spawn().map_err(|e| e.to_string())?;
     // Reaped in the background, so that it leaves no zombie while the bar runs.
     std::thread::spawn(move || child.wait());
     Ok(())

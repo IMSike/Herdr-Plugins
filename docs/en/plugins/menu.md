@@ -2,14 +2,14 @@
 
 **English** · [Français](../../fr/plugins/menu.md)
 
-Starts a tool (lazygit, gh-dash, VS Code…) from one click or one key, updates Herdr, and opens the settings files. In a tab that shows the file explorer of [herdr-explorer](https://github.com/gcaudan/herdr-explorer), the menu is a short `Tools` pane above it, in its column: icons, names, and figures on the workspace folder. Elsewhere it is a small popup. Tools that run in the terminal open in a large popup over the current workspace; tabs and panes stay as they are behind it, and quitting the tool closes the popup.
+Starts a tool (lazygit, gh-dash, VS Code…) from one click or one key, updates Herdr, and sets the plugins. In a tab that shows the file explorer of [herdr-explorer](https://github.com/gcaudan/herdr-explorer), the menu is a short `Tools` pane above it, in its column: icons and their names, and the CPU and memory of Herdr and of the machine. Elsewhere it is a small popup. Tools that run in the terminal open in a large popup over the current workspace; tabs and panes stay as they are behind it, and quitting the tool closes the popup.
 
 ```
-   󰊢        󰊤        󰨞       󰚰       󰒓
-lazygit  gh-dash  VS Code   Herdr  Réglages
-
-     1,5G · 0,2% du disque
-         3 552 fichiers
+      󰊢         󰊤         󰨞
+   lazygit   gh-dash   VS Code
+      󰋊         󰚰         󰒓
+     Disk     Update   Settings
+       2% 3,1G · 󰍹 10% 22,4G
 ```
 
 ## Installation
@@ -32,14 +32,16 @@ The icons are [Nerd Font](https://www.nerdfonts.com) glyphs: without a Nerd Font
 
 ## Use
 
-**With the explorer.** The `Tools` pane opens with the explorer, however it is opened (`prefix+f`, opening on its own in a new tab), and closes with it. Click an icon or its name, or type the entry's key while the pane has the focus; hovering shows the entry in yellow. A tool that cannot start shows why in red, in place of the figures, for 5 seconds. `prefix+space` closes the pane and opens it again; Escape, `q` or Ctrl+C in the pane closes it. An entry's own key wins over `q`.
+**With the explorer.** The `Tools` pane opens with the explorer, however it is opened (`prefix+f`, opening on its own in a new tab), and closes with it. Click an icon or its name, or type the entry's key while the pane has the focus; hovering shows the entry in yellow. A tool that cannot start shows why in red, under the icons, for 5 seconds. `prefix+space` closes the pane and opens it again; Escape, `q` or Ctrl+C in the pane closes it. An entry's own key wins over `q`.
 
-Under the icons, the figures on the workspace folder (the explorer's folder):
+The icons are laid out one of two ways, set by `layout` (see [Settings](#settings)):
 
-- the total size of its files, every file included (`.git` and build folders too), and its share of the disk it is on. A file linked several times (hard links, as pnpm makes) counts each time, and a cloud file not downloaded (OneDrive) counts at its full size;
-- its number of files, those of `.git` left out, how old the figures are from an hour on (`· 3 h`), and an icon: a click on the figures measures the folder again (`…` while it is read).
+- `double` (default): two rows of icons, each with its name under it. The pane asks for 5 rows.
+- `single`: one row of icons; the row under it shows the name of the icon under the mouse, and nothing otherwise. The pane asks for 3 rows.
 
-**Without the explorer.** `prefix+space` opens the popup menu, titled with the workspace's folder name. Choose an entry with its key, with the arrows (or `j`/`k`) and Enter, or with a click. Escape, `q` or Ctrl+C closes the menu. An entry's own key wins over `j`, `k` and `q`.
+The last row shows the CPU and memory of Herdr's processes, then of the machine (`2% 3,1G · 󰍹 10% 22,4G`), as the [sidebar](sidebar.md) measures them: without the sidebar, or when its figures are more than 30 seconds old, the row stays empty.
+
+**Without the explorer.** `prefix+space` opens the popup menu, titled with the workspace's folder name. Choose an entry with its key, with the arrows (or `j`/`k`) and Enter, or with a click. Escape, `q` or Ctrl+C closes the menu. An entry's own key wins over `j`, `k` and `q`. The **Disk** entry belongs to the `Tools` pane only: the popup menu leaves it out.
 
 A terminal tool starts in the workspace's folder (or a terminal's folder, see below) in a popup of 95% of the terminal. When it cannot start or ends with an error, the popup shows why and waits for Enter. A program with a window of its own (VS Code) starts directly, without the popup, and keeps running when the menu or the `Tools` pane closes.
 
@@ -52,10 +54,11 @@ Without configuration the menu offers:
 | `l` | lazygit | `lazygit` |
 | `g` | gh-dash | `gh dash` (the [gh-dash](https://github.com/dlvhdr/gh-dash) extension of the GitHub CLI) |
 | `c` | VS Code | `code .`: the workspace's folder in VS Code |
-| `u` | Herdr | built-in action `update-herdr`: updates Herdr, see [below](#built-in-entries) |
-| `s` | Réglages | built-in action `settings`: opens the settings files, see [below](#built-in-entries) |
+| `d` | Disk | built-in action `disk`: the figures on the workspace folder, see [below](#built-in-entries) |
+| `u` | Update | built-in action `update`: updates Herdr, see [below](#built-in-entries) |
+| `s` | Settings | built-in action `settings`: the settings screen, see [below](#built-in-entries) |
 
-To choose your own, write `menu.toml` in the plugin's config folder (`herdr plugin config-dir imsike.menu` prints it; the **Réglages** entry opens it, and first creates it with every setting commented out). Its entries replace the built-in ones, all of them; a file without entries keeps them:
+To choose your own, write `menu.toml` in the plugin's config folder (`herdr plugin config-dir imsike.menu` prints it; the settings screen creates it, with every setting commented out, when it first saves one or opens the files). Its entries replace the built-in ones, all of them; a file without entries keeps them:
 
 ```toml
 [[entries]]
@@ -78,16 +81,9 @@ popup = false             # a program with a window of its own: no popup
 
 [[entries]]
 key = "u"
-label = "Herdr"
-action = "update-herdr"   # or "settings": a built-in entry, in place of command
+label = "Update"
+action = "update"         # or "settings", "disk": a built-in entry, in place of command
 ```
-
-At the top of the file, before the entries, the settings of the figures under the icons:
-
-| Setting | Default | Effect |
-|---|---|---|
-| `decimal_comma` | `true` | `1,5G` (`true`) or `1.5G` (`false`) |
-| `percent_space` | `false` | `0,2%` (`false`) or `0,2 %` with a narrow no-break space (`true`) |
 
 The folder a tool starts in:
 
@@ -98,25 +94,56 @@ The folder a tool starts in:
 
 On Windows, a command name is looked up on `PATH`, before the system folders (`bash` is the first one on `PATH`, Git Bash for instance, not WSL's), and a batch file (`code` is `code.cmd`) runs without naming its extension.
 
-A file that cannot be read or is invalid (unknown field, empty command, both a command and an action, a key used twice) is ignored: the menu shows the built-in entries, and shows the error: the popup menu above its help line, the `Tools` pane in red in place of the figures for 5 seconds. The `Tools` pane reads the file when it opens, the popup menu each time it opens; no reload is needed. A tool starts as the menu showed it, even when the file changed in between.
+A file that cannot be read or is invalid (unknown field, empty command, both a command and an action, a key used twice) is ignored: the menu shows the built-in entries, and shows the error: the popup menu above its help line, the `Tools` pane in red under the icons for 5 seconds. The popup menu reads the file each time it opens; the `Tools` pane reads it again within 2 seconds of a change, and takes the height of its new layout. A tool starts as the menu showed it, even when the file changed in between.
+
+## Settings
+
+At the top of `menu.toml`, before the entries; the settings screen changes them too:
+
+| Setting | Default | Effect |
+|---|---|---|
+| `decimal_comma` | `true` | `1,5G` (`true`) or `1.5G` (`false`) |
+| `percent_space` | `false` | `0,2%` (`false`) or `0,2 %` with a narrow no-break space (`true`) |
+| `layout` | `"double"` | the icons of the `Tools` pane: `"double"` (two rows, with their names) or `"single"` (one row, the name of the hovered icon under it) |
 
 ## Built-in entries
 
-Both run in the large popup, which shows what they do and asks before anything that cannot be undone.
+**Disk** (`d`) turns the `Tools` pane to the figures on the workspace folder (the explorer's folder), under a **󰁍 Retour** button (Escape, `q` or Backspace go back too):
 
-**Herdr** (`u`) installs the latest Herdr with `herdr update` (with `--handoff` where the server can hand its sessions over to the new version, which it cannot on Windows). Then `herdr status --json` tells whether the running server is still the old version:
+- the total size of its files, every file included (`.git` and build folders too), and its share of the disk it is on. A file linked several times (hard links, as pnpm makes) counts each time, and a cloud file not downloaded (OneDrive) counts at its full size;
+- its number of files, those of `.git` left out, how old the figures are from an hour on (`· 3 h`), and an icon: a click on the figures, or `r`, measures the folder again (`…` while it is read).
 
-- if not, the popup says Herdr is up to date and waits for Enter;
-- if so, it says how many panes close and how many agents stop (`5 panes, dont 2 agents (1 au travail)`) and asks `Redémarrer maintenant ? [o/N]`. Anything but `o` (or `oui`) cancels: the new version runs at Herdr's next start.
-- Once confirmed, `herdr` is put in the clipboard (with `clip`, `pbcopy`, `wl-copy`, `xclip` or `xsel`, whichever works), and Enter stops the server (`herdr server stop`): **every pane closes and every agent stops**, as when Herdr is quit. Paste the command in the terminal to start Herdr again.
+The folder is only measured while this page is shown: going back stops the measuring.
 
-**Réglages** (`s`) opens in an editor, together:
+**Update** (`u`) opens a terminal window of its own, outside Herdr: Herdr refuses to update from one of its panes. On Windows it is a new console window; elsewhere, the first terminal found among `x-terminal-emulator`, `gnome-terminal`, `konsole`, `xfce4-terminal`, `kitty`, `alacritty`, `wezterm`, `foot` and `xterm`. In it:
 
-- Herdr's `config.toml` (the path Herdr's help gives, which follows `HERDR_CONFIG_PATH`);
-- the menu's `menu.toml`;
-- the sidebar's `sidebar.toml`, when the [sidebar](sidebar.md) plugin is installed.
+1. `herdr update` installs the latest Herdr (with `--handoff` where the server can hand its sessions over to the new version, which it cannot on Windows).
+2. `herdr status --json` tells whether the running server is still the old version. If not, the window says Herdr is up to date: the client already open keeps its old version until you detach (`prefix+q`) and start `herdr` again.
+3. If so, it says how many panes close and how many agents stop (`5 panes, dont 2 agents (1 au travail)`) and asks `Redémarrer maintenant ? [o/N]`. Anything but `o` (or `oui`) cancels: the new version runs at the server's next start.
+4. Once confirmed, it stops the server (`herdr server stop`): **every pane closes and every agent stops**, as when Herdr is quit. Then it offers to start Herdr again in that window (`[o/N]`); otherwise it puts `herdr` in the clipboard (with `clip`, `pbcopy`, `wl-copy`, `xclip` or `xsel`, whichever works), to paste in a terminal.
 
-A plugin's file that does not exist yet is first created with every setting commented out, at its default. The editor is `VISUAL`, else `EDITOR` (arguments allowed: `code --wait`); without them, on Windows, VS Code (`code --wait`: the popup waits until the files' tabs are closed) when it is on `PATH`, else Notepad, one file after the other; elsewhere `nano`, else `vi`. Once the editor is closed, the popup checks `menu.toml`, then `config.toml` (`herdr config check`), and reloads Herdr's configuration (`herdr server reload-config`); an error stays on screen until Enter. The sidebar reads its file at each run; the `Tools` pane reads `menu.toml` when it opens (`prefix+space` twice).
+The window waits for Enter before closing, an error included.
+
+**Settings** (`s`) opens a settings screen in a popup. Up and down (or `j`/`k`) choose a line; left and right (or `h`/`l`), Enter or Space change it, and each change is saved at once; Escape or `q` closes the screen.
+
+| Line | Effect | File |
+|---|---|---|
+| Virgule décimale, Espace avant % | `decimal_comma`, `percent_space` | `menu.toml` and `sidebar.toml` |
+| Icônes | `layout` | `menu.toml` |
+| Durée de vie des valeurs | `ttl_seconds`, by 5 seconds, from 5 to 600 | `sidebar.toml` |
+| Shells | `shells`: Enter to type them, separated by commas, Enter to save, Escape to cancel | `sidebar.toml` |
+| Totaux dans la barre d'onglets | `tab_bar` | `sidebar.toml` |
+| Ouvrir les fichiers de configuration… | opens the files in an editor, see below | |
+| Recharger la configuration de Herdr | reloads Herdr's `config.toml` and says whether Herdr accepted it | |
+
+The Sidebar lines only show when the [sidebar](sidebar.md) plugin is installed. A file is written with its comments and its other settings kept: a setting commented out in it takes its value in its place. A plugin's file that does not exist yet is first created from its template, every setting commented out at its default.
+
+**Ouvrir les fichiers de configuration…** opens, together, Herdr's `config.toml` (the path Herdr's help gives, which follows `HERDR_CONFIG_PATH`), `menu.toml`, and `sidebar.toml` when the sidebar is installed. The editor is `VISUAL`, else `EDITOR` (arguments allowed); without them, on Windows, VS Code when it is on `PATH`, else Notepad, one window per file; elsewhere `nano`, else `vi`. The settings screen closes and Herdr stays free to use:
+
+- an editor with a window of its own (VS Code, Notepad, Sublime Text, gedit…) starts on its own, outside Herdr;
+- a terminal editor (`nano`, `vim`, `hx`…) opens in a new Herdr tab; once it is closed, the tab asks `Recharger la configuration de Herdr ? [O/n]`, then closes on Enter.
+
+Opened from a `Tools` pane, the screen also turns that pane to two buttons: **󰑓 Recharger** (or `r`, Enter) reloads Herdr's configuration once the files are saved, **󰁍 Retour** brings the icons back. The sidebar reads its file at each run, and the `Tools` pane re-reads `menu.toml` when it changes: only Herdr's `config.toml` needs the reload.
 
 The plugin only opens Herdr's `config.toml`: it never writes it ([ADR 0004](../adr/0004-plugin-settings.md), [ADR 0005](../adr/0005-herdr-update-entry.md)).
 
@@ -126,10 +153,11 @@ The plugin only opens Herdr's `config.toml`: it never writes it ([ADR 0004](../a
 
 - It is a normal Herdr pane. Herdr only splits to the right or downwards: the pane opens below the explorer, then swaps places with it, and the focus goes back to the pane that had it.
 - It opens on Herdr's `pane.created` event of the explorer, once the explorer stops moving (it places and sizes itself right after it opens: about one second). It closes on the `pane.closed` event, as soon as its tab has no explorer, or no terminal pane besides it and the explorer's own panes (Preview, Search…), so that the explorer can close its tab as it does on its own.
-- It asks for 5 rows, but Herdr never gives a side of a split less than a tenth of it: on a screen of fewer than 60 rows, it is taller. It takes its height back when the window is resized.
+- It asks for 5 rows (3 in the `single` layout), but Herdr never gives a side of a split less than a tenth of it: on a screen of fewer than 60 rows (40 in `single`), it is taller. It takes its height back when the window is resized.
 - **While it is open, the explorer no longer keeps its width**: `<` and `>` do nothing and its width follows the window's in proportion. The explorer only looks for its width at the full height of its own pane; a change to it is proposed upstream.
-- The figures are measured in the background: the whole folder is read, which takes a moment on a large one (`node_modules`, build folders). The reading stops after 200,000 files and folders or 2 seconds, whichever comes first: the figures then start with `≥` (at least). A reading asked for with a click goes up to 5 million files and folders or 60 seconds.
-- The figures are kept in a file of the plugin's state folder, one per folder (its path and its figures; if it cannot be written, the pane says so in red for 5 seconds): the panes of the same folder share them (while one of them reads the folder, the others wait for its figures), and a pane that opens again shows them without reading the folder. They are measured again once they are older than:
+- The CPU and memory row reads a file the sidebar writes in its state folder at each of its runs (every 5 seconds), every 2 seconds: the pane measures nothing itself.
+- The disk figures are measured in the background, only while the Disk page is shown: the whole folder is read, which takes a moment on a large one (`node_modules`, build folders). The reading stops after 200,000 files and folders or 2 seconds, whichever comes first: the figures then start with `≥` (at least). A reading asked for with a click goes up to 5 million files and folders or 60 seconds.
+- The figures are kept in a file of the plugin's state folder, one per folder (its path and its figures; if it cannot be written, the pane says so in red for 5 seconds): the panes of the same folder share them (while one of them reads the folder, the others wait for its figures), and a pane that shows them again does not read the folder. They are measured again once they are older than:
 
   | Files and folders read | Measured again after |
   | --- | --- |
@@ -145,6 +173,11 @@ The plugin only opens Herdr's `config.toml`: it never writes it ([ADR 0004](../a
 
 - Herdr shows one popup at a time. The action therefore stays running while the menu is open: it waits for the menu to write the choice into a file of the plugin's state folder, then opens the tool's popup once the menu's is gone. While waiting it uses about 4 MB of memory, checks the file 20 times a second, and checks once a second that the menu still runs.
 - If the menu popup is closed by something else than the menu itself, the action sees within a second that the menu is gone, and stops.
+
+**Settings and update**
+
+- The settings screen is a popup: Herdr waits while it is open, but it only stays open while you change settings. The editors run outside it, in their window or in a tab.
+- The update window runs outside Herdr, without the variable by which Herdr tells its panes (`HERDR_ENV`); it keeps running if the `Tools` pane closes.
 
 Commands run as your user, with your environment, like any program you would start in a pane.
 

@@ -1,5 +1,6 @@
 # Réglages du menu (imsike.menu). Une ligne commentée garde sa valeur par défaut.
-# Le pane Tools relit ce fichier quand il s'ouvre.
+# L'entrée Settings du menu règle les premiers ; le pane Tools relit ce fichier
+# quand il change.
 
 # 2,4G plutôt que 2.4G.
 # decimal_comma = true
@@ -7,8 +8,12 @@
 # 4 % plutôt que 4%.
 # percent_space = false
 
+# Icônes du pane Tools : "double" (deux lignes, avec les noms) ou "single"
+# (une ligne, le nom de l'icône survolée en dessous).
+# layout = "double"
+
 # Entrées du menu. Sans aucune entrée, le menu garde les siennes : lazygit (l),
-# gh-dash (g), VS Code (c), Herdr (u, mise à jour) et Réglages (s).
+# gh-dash (g), VS Code (c), Disk (d), Update (u) et Settings (s).
 # Dès qu'une entrée est écrite ici, elle remplace toute la liste.
 #
 # [[entries]]
@@ -21,5 +26,5 @@
 #
 # [[entries]]
 # key = "u"
-# label = "Herdr"
-# action = "update-herdr"   # ou "settings" : entrées intégrées, à la place de command
+# label = "Update"
+# action = "update"         # ou "settings", "disk" : entrées intégrées, à la place de command

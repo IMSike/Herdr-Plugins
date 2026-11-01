@@ -13,16 +13,21 @@
 //!    popup is being torn down. It stops waiting as soon as the menu's process
 //!    is gone, however the popup was closed.
 //! 4. `run` (popup) runs the entry's command in that folder.
+//!
+//! The built-in entries: `Update` opens a terminal window outside Herdr
+//! (`update`), `Settings` the `settings` popup, which opens the files in an
+//! editor (`edit-tab`, `edit` for a terminal one), `Disk` a view of the bar.
 
-mod actions;
 mod bar;
 mod config;
 mod herdr;
 mod launch;
+mod settings;
 mod stats;
 mod ui;
+mod update;
 
-use config::Entry;
+use config::{Action, Entry};
 use herdr::Context;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Write};
@@ -54,12 +59,19 @@ fn main() -> ExitCode {
         Some("run") => run(),
         Some("bar") => {
             let (menu, error) = menu_config();
-            bar::run(&menu, error)
+            bar::run(menu, error)
         }
+        Some("settings") => settings::run(),
+        Some("edit-tab") => settings::files::open_tab(),
+        Some("edit") => settings::files::edit_in_tab(),
+        Some("update") => update::run(),
         Some("startup") => bar::startup(),
         Some("pane-created") => bar::on_pane_created(),
         Some("pane-closed") => bar::on_pane_closed(),
-        _ => Err("usage : herdr-menu open|menu|run|bar|startup|pane-created|pane-closed".into()),
+        _ => Err(
+            "usage : herdr-menu open|menu|run|bar|settings|edit-tab|edit|update|startup|pane-created|pane-closed"
+                .into(),
+        ),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -107,7 +119,7 @@ fn open() -> Result<(), String> {
     let state = herdr_api::state_dir()?;
     // What an action, or a write of the figures, killed midway left behind.
     herdr_api::remove_stale(&state, STALE_AFTER, |name| {
-        name.starts_with("choice-") || name.ends_with(".partial")
+        name.starts_with("choice-") || name.starts_with("files-open-") || name.ends_with(".partial")
     });
     let choice_file = state.join(format!("choice-{}", std::process::id()));
     let pid_file = pid_file(&choice_file);
@@ -122,12 +134,23 @@ fn open() -> Result<(), String> {
     let Some(choice) = text?.as_deref().and_then(Choice::decode) else {
         return Ok(());
     };
-    let cwd = choice.cwd.as_deref();
-    // A program with a window of its own starts without the popup.
-    if !choice.entry.in_popup() {
-        return launch::detach(&choice.entry, cwd.map(Path::new));
+    start(&choice.entry, choice.cwd.as_deref(), None)
+}
+
+/// Starts an entry chosen in the menu or the bar (`bar`: its pane id): a
+/// built-in action, a program in the `run` popup, or one with a window of
+/// its own on its own. The disk view is the bar's own.
+pub(crate) fn start(entry: &Entry, cwd: Option<&str>, bar: Option<&str>) -> Result<(), String> {
+    match entry.action {
+        Some(Action::Update) => update::open_window(),
+        Some(Action::Settings) => {
+            let env: Vec<(&str, &str)> = bar.map(|b| (settings::BAR_ENV, b)).into_iter().collect();
+            herdr::open_pane_when_free("settings", &env).map_err(|e| e.to_string())
+        }
+        Some(Action::Disk) => Ok(()),
+        None if !entry.popup => launch::detach(entry, cwd.map(Path::new)),
+        None => run_in_popup(entry, cwd),
     }
-    run_in_popup(&choice.entry, cwd)
 }
 
 /// The choice file's content once the menu wrote it; `None` when the menu
@@ -271,7 +294,12 @@ fn menu() -> Result<(), String> {
     let me = MenuProcess::this().encode();
     let _ = herdr_api::write_atomic(&pid_file(&choice_file), me.as_bytes());
     let (menu, error) = menu_config();
-    let entries = menu.entries;
+    // The disk figures belong to the bar: the explorer's folder.
+    let entries: Vec<Entry> = menu
+        .entries
+        .into_iter()
+        .filter(|e| e.action != Some(Action::Disk))
+        .collect();
     let context = Context::from_env();
     let title = context
         .workspace_cwd
@@ -312,9 +340,6 @@ fn run_entry() -> Result<(), String> {
     let json = herdr_api::var(ENTRY_ENV)?;
     let entry: Entry =
         serde_json::from_str(&json).map_err(|e| format!("{ENTRY_ENV} illisible : {e}"))?;
-    if let Some(action) = entry.action {
-        return actions::run(action);
-    }
     let mut command = launch::command(&entry.command)?;
     if let Some(cwd) = std::env::var_os(CWD_ENV) {
         command.current_dir(cwd);

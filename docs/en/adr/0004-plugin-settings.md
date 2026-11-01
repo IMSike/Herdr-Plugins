@@ -21,13 +21,16 @@ Options studied:
 
 Each plugin reads a TOML file of its own in its config folder: `menu.toml` (settings at the top, then the entries), `sidebar.toml`. A missing file or setting keeps its default; an unknown setting makes the file ignored, with the reason shown (menu) or logged (sidebar). The sidebar's `install` writes its config folder's path in its state folder for the tab bar runs.
 
-The menu's built-in entry **Réglages** opens Herdr's `config.toml`, `menu.toml` and, when the sidebar is installed, `sidebar.toml` in the user's editor, creating a plugin's file from a commented template first; when the editor closes, it checks the files and reloads Herdr's configuration. No plugin writes Herdr's `config.toml`.
+The menu's built-in entry **Settings** opens a settings screen (TUI) in a popup, for the few settings of the plugins (number format, the icons' layout, the sidebar's settings). Each change is written at once to the plugin's file with `toml_edit`, which keeps its comments and its other settings; a setting commented out in the file takes its value in its place. A plugin's file that does not exist is created from its commented template first.
 
-A settings screen may come later, writing the same files.
+The screen also opens Herdr's `config.toml`, `menu.toml` and, when the sidebar is installed, `sidebar.toml` in the user's editor, and closes: a popup holds Herdr while it is open, so the editing happens outside it. An editor with a window of its own starts detached; a terminal editor opens in a Herdr tab, which offers to reload Herdr's configuration once the editor is closed. The `Tools` pane the screen was opened from offers the reload as a button, and a way back to its icons. No plugin writes Herdr's `config.toml`.
+
+*Revised on 2026-11-01: the entry first opened the files in an editor inside its popup, which held Herdr until the editor was closed; the settings screen was planned for later.*
 
 ## Consequences
 
 - Colors and layout stay in Herdr's `config.toml`; the plugins' files only hold what Herdr cannot set.
 - The files can be versioned with the rest of the configuration (OS-Setup's `dotfiles/herdr/`).
-- A new setting means a field with its default, the template, and the plugin's page, in both languages.
+- A new setting means a field with its default, the template, a line of the settings screen, and the plugin's page, in both languages.
+- The menu writes `menu.toml` and `sidebar.toml`, never Herdr's `config.toml`; a versioned copy of the plugins' files (OS-Setup) must be updated by hand after a change made on the screen.
 - Until the sidebar's `install` has run once after an update, its tab bar runs use the defaults.
