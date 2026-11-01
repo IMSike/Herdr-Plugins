@@ -73,13 +73,18 @@ pub struct Layout {
 /// `ROWS`; `None` when it already has them or is not on top of a split.
 pub fn ratio_change(layout: &Layout, me: &str, rows: u16) -> Option<f64> {
     let rect = &layout.panes.iter().find(|p| p.pane_id == me)?.rect;
-    let split = layout.splits.iter().find(|s| {
-        s.direction == "down"
-            && s.rect.x == rect.x
-            && s.rect.y == rect.y
-            && s.rect.width == rect.width
-            && s.rect.height > rect.height
-    })?;
+    // The innermost split the bar tops: the one `pane.resize` moves.
+    let split = layout
+        .splits
+        .iter()
+        .filter(|s| {
+            s.direction == "down"
+                && s.rect.x == rect.x
+                && s.rect.y == rect.y
+                && s.rect.width == rect.width
+                && s.rect.height > rect.height
+        })
+        .min_by_key(|s| s.rect.height)?;
     // What the pane takes beyond its terminal's rows: its border.
     let border = rect.height.saturating_sub(rows);
     let want = ROWS + border;
@@ -170,5 +175,33 @@ mod tests {
         low.splits[0].rect.height = 60;
         low.panes[0].rect.height = 6;
         assert_eq!(ratio_change(&low, "bar", 5), None);
+    }
+
+    #[test]
+    fn moves_the_innermost_split() {
+        // The column splits twice downwards: the bar, then the explorer
+        // above a preview. Herdr lists the outer split first.
+        let layout = Layout {
+            panes: vec![LayoutPane {
+                pane_id: "bar".into(),
+                rect: rect(160, 0, 40, 20),
+            }],
+            splits: vec![
+                Split {
+                    direction: "down".into(),
+                    ratio: 0.5,
+                    rect: rect(160, 0, 40, 60),
+                },
+                Split {
+                    direction: "down".into(),
+                    ratio: 0.5,
+                    rect: rect(160, 0, 40, 40),
+                },
+            ],
+            zoomed: false,
+            focused_pane_id: None,
+        };
+        let delta = ratio_change(&layout, "bar", 19).unwrap();
+        assert!((delta - (6.25 / 40.0 - 0.5)).abs() < 1e-9);
     }
 }
