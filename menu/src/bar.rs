@@ -47,6 +47,8 @@ const EXPLORER_PANES: &[&str] = &[
 ];
 /// Wait after a resize before checking the tab, so that a drag checks once.
 const SETTLE: Duration = Duration::from_millis(400);
+/// How long an error message stands in for the figures.
+const MESSAGE_FOR: Duration = Duration::from_secs(5);
 /// First row of the figures (with the gap above them): a click there measures
 /// the folder again.
 const FIGURES_TOP: u16 = 2;
@@ -368,6 +370,8 @@ fn show(me: &str, entries: &[Entry]) -> io::Result<()> {
     let _screen = Screen::enter()?;
     let measurer = folders(me).0.map(measure_in_background);
     let mut measured_at = None;
+    // When the error message gives its place back to the figures.
+    let mut message_until = Instant::now();
     let mut view = View {
         entries,
         hover: None,
@@ -391,6 +395,9 @@ fn show(me: &str, entries: &[Entry]) -> io::Result<()> {
                     measured_at = Some(measured.at);
                 }
             }
+        }
+        if view.message.is_some() && Instant::now() >= message_until {
+            view.message = None;
         }
         view.age =
             measured_at.and_then(|at| stats::age_label(stats::unix_now().saturating_sub(at)));
@@ -461,6 +468,7 @@ fn show(me: &str, entries: &[Entry]) -> io::Result<()> {
         };
         if let Some(i) = chosen {
             view.message = launch(me, &entries[i]).err();
+            message_until = Instant::now() + MESSAGE_FOR;
         }
     }
 }

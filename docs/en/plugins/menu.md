@@ -32,7 +32,7 @@ The icons are [Nerd Font](https://www.nerdfonts.com) glyphs: without a Nerd Font
 
 ## Use
 
-**With the explorer.** The `Tools` pane opens with the explorer, however it is opened (`prefix+f`, opening on its own in a new tab), and closes with it. Click an icon or its name, or type the entry's key while the pane has the focus; hovering shows the entry in yellow. `prefix+space` closes the pane and opens it again; Escape, `q` or Ctrl+C in the pane closes it.
+**With the explorer.** The `Tools` pane opens with the explorer, however it is opened (`prefix+f`, opening on its own in a new tab), and closes with it. Click an icon or its name, or type the entry's key while the pane has the focus; hovering shows the entry in yellow. A tool that cannot start shows why in red, in place of the figures, for 5 seconds. `prefix+space` closes the pane and opens it again; Escape, `q` or Ctrl+C in the pane closes it.
 
 Under the icons, the figures on the workspace folder (the explorer's folder):
 

@@ -32,7 +32,7 @@ Les icônes sont des glyphes [Nerd Font](https://www.nerdfonts.com) : sans Nerd 
 
 ## Utilisation
 
-**Avec l'explorateur.** Le pane `Tools` s'ouvre avec l'explorateur, quelle que soit la façon dont il s'ouvre (`prefix+f`, ouverture automatique dans un nouvel onglet), et se ferme avec lui. Cliquer sur une icône ou sur son nom, ou taper la touche de l'entrée quand le pane a le focus ; le survol affiche l'entrée en jaune. `prefix+space` ferme le pane et le rouvre ; Échap, `q` ou Ctrl+C dans le pane le ferme.
+**Avec l'explorateur.** Le pane `Tools` s'ouvre avec l'explorateur, quelle que soit la façon dont il s'ouvre (`prefix+f`, ouverture automatique dans un nouvel onglet), et se ferme avec lui. Cliquer sur une icône ou sur son nom, ou taper la touche de l'entrée quand le pane a le focus ; le survol affiche l'entrée en jaune. Un outil qui ne peut pas démarrer affiche pourquoi en rouge, à la place des chiffres, pendant 5 secondes. `prefix+space` ferme le pane et le rouvre ; Échap, `q` ou Ctrl+C dans le pane le ferme.
 
 Sous les icônes, les chiffres du dossier du workspace (celui de l'explorateur) :
 
