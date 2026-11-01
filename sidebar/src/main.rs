@@ -6,7 +6,7 @@
 //!   and sorts the Agents panel by the tree order.
 //! - `tick` (run by that entry every few seconds) measures every pane's
 //!   process tree, reports the tokens and prints the totals for the tab bar.
-//! - `event` (agent, focus and workspace hooks) places the agents in the tree
+//! - `event` (agent and workspace hooks) places the agents in the tree
 //!   right away; their figures wait for the next `tick`.
 //! - `show` prints the tokens without reporting them.
 
@@ -125,7 +125,7 @@ fn replace(dir: &Path, source: &Path, target: &Path) -> Result<(), String> {
 enum Mode {
     /// Run by the tab bar entry: report, save the sample, print the totals.
     Tick,
-    /// Run by a hook (agent, focus, workspace): place the agents only.
+    /// Run by a hook (agent, workspace): place the agents only.
     Event,
     /// Print the tokens instead of reporting them, for a manual check.
     Show,
@@ -146,7 +146,7 @@ fn tick(mode: Mode) -> Result<(), String> {
     // The processes first, the slow part: the session read after them, and
     // the reports, then describe the same moment. An event only moves the
     // tree: the figures stay as the last run measured them, which spares a
-    // reading of every process on each focus change.
+    // reading of every process on each agent change.
     let measured = match mode {
         Mode::Event => None,
         Mode::Tick => Some((None, read_system()?, unix_millis())),

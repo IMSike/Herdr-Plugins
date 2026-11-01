@@ -27,11 +27,6 @@ command = ["target/release/herdr-sidebar", "event"]
 on = "pane.agent_status_changed"
 command = ["target/release/herdr-sidebar", "event"]
 
-# Focusing an agent marks it seen: a done agent turns idle.
-[[events]]
-on = "pane.focused"
-command = ["target/release/herdr-sidebar", "event"]
-
 # A new workspace gets its header without waiting for the next run.
 [[events]]
 on = "workspace.created"
