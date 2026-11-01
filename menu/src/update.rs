@@ -6,7 +6,7 @@
 use crate::herdr;
 use herdr_api::env::INSIDE as INSIDE_HERDR;
 use serde_json::Value;
-use std::io::{self, Write};
+use std::io::Write;
 use std::process::{Command, Stdio};
 
 /// Opens the window that runs the update, and returns at once.
@@ -137,7 +137,7 @@ fn update() -> Result<String, String> {
          Tous les panes se ferment : {}.",
         stopping(panes.len(), agents.len(), working)
     );
-    if !confirm("Redémarrer maintenant ? [o/N] ") {
+    if !crate::ask("Redémarrer maintenant ? [o/N] ", false) {
         return Ok(
             "Redémarrage annulé : la nouvelle version servira au prochain \
                    démarrage du serveur Herdr."
@@ -145,7 +145,10 @@ fn update() -> Result<String, String> {
         );
     }
     herdr_shown(&["server", "stop"])?;
-    if confirm("\nServeur arrêté. Relancer Herdr dans cette fenêtre ? [o/N] ") {
+    if crate::ask(
+        "\nServeur arrêté. Relancer Herdr dans cette fenêtre ? [o/N] ",
+        false,
+    ) {
         herdr_shown(&[])?;
         return Ok("Herdr s'est fermé.".into());
     }
@@ -176,22 +179,8 @@ fn stopping(panes: usize, agents: usize, working: usize) -> String {
     text
 }
 
-/// Asks a yes-or-no question; anything but yes is no.
-fn confirm(question: &str) -> bool {
-    print!("{question}");
-    let _ = io::stdout().flush();
-    let mut answer = String::new();
-    if io::stdin().read_line(&mut answer).is_err() {
-        return false;
-    }
-    matches!(
-        answer.trim().to_lowercase().as_str(),
-        "o" | "oui" | "y" | "yes"
-    )
-}
-
 /// Puts `text` in the system clipboard; `false` when no clipboard tool works.
-pub fn copy_to_clipboard(text: &str) -> bool {
+fn copy_to_clipboard(text: &str) -> bool {
     let tools: &[&[&str]] = if cfg!(windows) {
         &[&["clip"]]
     } else if cfg!(target_os = "macos") {

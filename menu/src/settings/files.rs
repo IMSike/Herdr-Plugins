@@ -230,14 +230,7 @@ pub fn edit_in_tab() -> Result<(), String> {
     command
         .status()
         .map_err(|e| format!("impossible de lancer l'éditeur « {} » : {e}", editor[0]))?;
-    print!("Recharger la configuration de Herdr ? [O/n] ");
-    let _ = std::io::Write::flush(&mut std::io::stdout());
-    let mut answer = String::new();
-    let _ = std::io::stdin().read_line(&mut answer);
-    if matches!(
-        answer.trim().to_lowercase().as_str(),
-        "" | "o" | "oui" | "y" | "yes"
-    ) {
+    if crate::ask("Recharger la configuration de Herdr ? [O/n] ", true) {
         let message = reload().unwrap_or_else(|e| e);
         crate::pause(&format!("{message}\n\nAppuyer sur Entrée pour fermer."));
     }

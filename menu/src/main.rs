@@ -327,6 +327,26 @@ fn run() -> Result<(), String> {
     result
 }
 
+/// Asks a yes-or-no question; an empty answer is `default`, an unreadable
+/// one is no.
+pub(crate) fn ask(question: &str, default: bool) -> bool {
+    print!("{question}");
+    let _ = io::Write::flush(&mut io::stdout());
+    let mut answer = String::new();
+    if io::stdin().read_line(&mut answer).is_err() {
+        return false;
+    }
+    is_yes(&answer, default)
+}
+
+fn is_yes(answer: &str, default: bool) -> bool {
+    match answer.trim().to_lowercase().as_str() {
+        "" => default,
+        "o" | "oui" | "y" | "yes" => true,
+        _ => false,
+    }
+}
+
 /// Leaves `message` on screen until Enter: the popup closes with this process.
 pub(crate) fn pause(message: &str) {
     println!("{message}");
@@ -360,6 +380,26 @@ fn run_entry() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_empty_answer_takes_the_default() {
+        assert!(
+            is_yes(
+                "
+", true
+            ) && !is_yes(
+                "
+", false
+            )
+        );
+        assert!(
+            is_yes(
+                " Oui
+", false
+            ) && is_yes("y", false)
+        );
+        assert!(!is_yes("non", true) && !is_yes("x", true));
+    }
 
     #[test]
     fn choice_round_trips() {
