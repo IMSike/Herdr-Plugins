@@ -1,6 +1,6 @@
 # ADR 0003 — Le menu en pane au-dessus de l'explorateur de fichiers
 
-- **Statut** : acceptée
+- **Statut** : accepté
 - **Date** : 2026-11-01
 
 ## Contexte

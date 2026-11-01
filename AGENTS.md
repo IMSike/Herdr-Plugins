@@ -36,6 +36,16 @@ Work in progress, to-do lists and verification reports live in `.maintainer/` (i
 - Rust: see [CONTRIBUTING.md](CONTRIBUTING.md#code-conventions).
 - Encoding: UTF-8 without BOM, LF.
 
+## Tests
+
+Before proposing a change (the [Plugins](.github/workflows/plugins.yml) workflow runs the same on Linux and Windows):
+
+```sh
+cargo fmt --all --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+```
+
 ## Git
 
 - Maintainer's own work happens on the `dev` branch: never commit or push to `main` for them, they merge `dev` into `main`, which publishes a version. External contributions are pull requests to `main`. Commit messages and PR titles follow the **Angular convention** (`feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `revert`); there is no `chore`. The scope is the plugin's name (`feat(sidebar): ...`) or `repo`.

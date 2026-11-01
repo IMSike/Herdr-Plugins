@@ -1,6 +1,6 @@
 # ADR 0002 — Versions des plugins : tags Git seulement, manifestes figés à `0.0.0`
 
-- **Statut** : acceptée
+- **Statut** : accepté
 - **Date** : 2026-11-01
 
 ## Contexte

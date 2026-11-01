@@ -10,7 +10,12 @@ Requirements: Git, [Herdr](https://herdr.dev), the Rust toolchain, 1.88 or later
 git clone https://github.com/IMSike/Herdr-Plugins.git
 cd Herdr-Plugins
 git config core.hooksPath .githooks       # checks commit messages locally
+cargo fmt --all --check                   # formatting
+cargo clippy --all-targets -- -D warnings # lints
+cargo test                                # the tests of every crate
 ```
+
+The [Plugins](.github/workflows/plugins.yml) workflow runs the same checks on Linux and Windows for each push to `main` or `dev` and each pull request.
 
 A plugin under development is linked rather than installed: `herdr plugin link <absolute path to the plugin folder>`. Linking runs no build step, so build it yourself first; `herdr plugin unlink <plugin-id>` removes it and leaves the files alone.
 

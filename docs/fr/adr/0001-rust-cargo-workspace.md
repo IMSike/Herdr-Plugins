@@ -1,6 +1,6 @@
 # ADR 0001 — Plugins en Rust, un seul dépôt, un workspace Cargo
 
-- **Statut** : acceptée
+- **Statut** : accepté
 - **Date** : 2026-10-31
 
 ## Contexte
