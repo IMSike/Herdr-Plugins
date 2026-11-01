@@ -6,6 +6,11 @@ use serde_json::{Map, Value, json};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+/// How long a popup waits for the previous one to be torn down.
+const BUSY_FOR_AT_MOST: Duration = Duration::from_secs(3);
+/// How often it tries again meanwhile.
+const BUSY_RETRY_EVERY: Duration = Duration::from_millis(50);
+
 /// The part of `HERDR_PLUGIN_CONTEXT_JSON` the menu uses.
 #[derive(Debug, Default, Deserialize)]
 pub struct Context {
@@ -121,11 +126,11 @@ pub fn open_pane(entrypoint: &str, env: &[(&str, &str)]) -> Result<(), OpenError
 
 /// Opens a pane, retrying while the previous popup is being torn down.
 pub fn open_pane_when_free(entrypoint: &str, env: &[(&str, &str)]) -> Result<(), OpenError> {
-    let deadline = Instant::now() + Duration::from_secs(3);
+    let deadline = Instant::now() + BUSY_FOR_AT_MOST;
     loop {
         match open_pane(entrypoint, env) {
             Err(OpenError::Busy) if Instant::now() < deadline => {
-                std::thread::sleep(Duration::from_millis(50));
+                std::thread::sleep(BUSY_RETRY_EVERY);
             }
             result => return result,
         }
@@ -139,7 +144,7 @@ pub fn open_plugin_pane(
     options: Value,
     env: &[(&str, &str)],
 ) -> Result<Option<String>, herdr_api::Error> {
-    let plugin = std::env::var(herdr_api::env::PLUGIN_ID).unwrap_or_default();
+    let plugin = herdr_api::var(herdr_api::env::PLUGIN_ID)?;
     let env: Map<String, Value> = env
         .iter()
         .map(|(k, v)| (k.to_string(), Value::from(*v)))

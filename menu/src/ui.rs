@@ -171,7 +171,7 @@ fn draw(
 }
 
 /// Cuts `text` to `width` characters.
-fn fit(text: &str, width: usize) -> String {
+pub(crate) fn fit(text: &str, width: usize) -> String {
     text.chars().take(width).collect()
 }
 

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// File name of the user's menu, in `HERDR_PLUGIN_CONFIG_DIR`.
-pub const FILE_NAME: &str = "menu.toml";
+const FILE_NAME: &str = "menu.toml";
 
 /// Directory a tool starts in.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

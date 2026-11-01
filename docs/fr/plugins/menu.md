@@ -8,7 +8,7 @@ Lance un outil (lazygit, gh-dash, VS Code…) d'un clic ou d'une touche. Dans un
       󰊢        󰊤        󰨞
    lazygit  gh-dash  VS Code
 
-     1.5G · 0,2 % du disque
+     1,5G · 0,2 % du disque
          3 552 fichiers
 ```
 
@@ -91,11 +91,11 @@ Un fichier illisible ou invalide (champ inconnu, commande vide, touche utilisée
 **Le pane `Tools`**
 
 - C'est un pane Herdr ordinaire. Herdr ne coupe que vers la droite ou vers le bas : le pane s'ouvre sous l'explorateur, puis échange sa place avec lui, et le focus revient au pane qui l'avait.
-- Il s'ouvre sur l'événement `pane.created` de l'explorateur, une fois que celui-ci ne bouge plus (il se place et se dimensionne juste après son ouverture : environ une seconde). Il se ferme sur l'événement `pane.closed`, dès que son onglet n'a plus d'explorateur, ou plus d'autre pane qu'eux deux, pour que l'explorateur puisse fermer son onglet comme il le fait seul.
+- Il s'ouvre sur l'événement `pane.created` de l'explorateur, une fois que celui-ci ne bouge plus (il se place et se dimensionne juste après son ouverture : environ une seconde). Il se ferme sur l'événement `pane.closed`, dès que son onglet n'a plus d'explorateur, ou plus de pane terminal en dehors de lui et des panes propres à l'explorateur (Preview, Search…), pour que l'explorateur puisse fermer son onglet comme il le fait seul.
 - Il demande 5 lignes, mais Herdr ne donne jamais moins d'un dixième d'un split à chacun de ses côtés : sur un écran de moins de 60 lignes, il est plus haut. Il reprend sa hauteur quand la fenêtre change de taille.
 - **Tant qu'il est ouvert, l'explorateur ne garde plus sa largeur** : `<` et `>` ne font plus rien, et sa largeur suit celle de la fenêtre en proportion. L'explorateur ne cherche sa largeur que sur toute la hauteur de son propre pane ; une correction lui est proposée.
 - Les chiffres sont mesurés en arrière-plan : tout le dossier est lu, ce qui prend un moment sur un gros dossier (`node_modules`, dossiers de build). La lecture s'arrête après 200 000 fichiers et dossiers ou 2 secondes, au premier atteint : les chiffres commencent alors par `≥` (au moins). Une lecture demandée d'un clic va jusqu'à 5 millions de fichiers et dossiers ou 60 secondes.
-- Les chiffres sont gardés dans un fichier du dossier d'état du plugin, un par dossier (son chemin et ses chiffres ; s'il ne peut pas être écrit, le pane l'affiche en rouge pendant 5 secondes) : les panes d'un même dossier les partagent, et un pane qui se rouvre les affiche sans relire le dossier. Ils sont mesurés à nouveau une fois plus vieux que :
+- Les chiffres sont gardés dans un fichier du dossier d'état du plugin, un par dossier (son chemin et ses chiffres ; s'il ne peut pas être écrit, le pane l'affiche en rouge pendant 5 secondes) : les panes d'un même dossier les partagent (pendant que l'un d'eux lit le dossier, les autres attendent ses chiffres), et un pane qui se rouvre les affiche sans relire le dossier. Ils sont mesurés à nouveau une fois plus vieux que :
 
   | Fichiers et dossiers lus | Nouvelle mesure après |
   | --- | --- |

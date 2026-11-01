@@ -18,7 +18,7 @@ mod geometry;
 use crate::config::Entry;
 use crate::herdr::{self, Context, Pane};
 use crate::stats::{self, Measured, Stats};
-use crate::ui::Screen;
+use crate::ui::{Screen, fit};
 use crossterm::cursor::MoveTo;
 use crossterm::event::{
     self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
@@ -26,7 +26,7 @@ use crossterm::event::{
 use crossterm::queue;
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use crossterm::terminal::{self, Clear, ClearType};
-use geometry::{Layout, ROWS, centred, ratio_change, slot_at, slots};
+use geometry::{Layout, ROWS, centered, ratio_change, slot_at, slots};
 use serde_json::{Value, json};
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -34,7 +34,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 /// Title of the `bar` pane in the manifest, which Herdr gives as its label.
-pub const LABEL: &str = "Tools";
+const LABEL: &str = "Tools";
 /// Label of the explorer's tree pane.
 const EXPLORER: &str = "Explorer";
 /// Labels of the explorer plugin's own panes: none of them is a terminal.
@@ -58,6 +58,21 @@ const REFRESH: &str = "\u{F0450}";
 /// A bar just opened may not run its program yet, nor one slowed down by an
 /// antivirus scanning a new binary: how long to wait for it.
 const STARTING: Duration = Duration::from_secs(5);
+/// How often a bar that does not run its program yet is checked again.
+const STARTING_CHECK_EVERY: Duration = Duration::from_millis(500);
+/// How long a new explorer may keep moving before its bar opens anyway.
+const SETTLE_AT_MOST: Duration = Duration::from_secs(4);
+/// How long a new explorer must keep the same place to count as settled.
+const SETTLED_FOR: Duration = Duration::from_millis(600);
+/// How often a new explorer's place is read while it settles.
+const SETTLE_CHECK_EVERY: Duration = Duration::from_millis(200);
+/// When the bar first fits its height: once the swap that opened it is done.
+const FIRST_FIT_AFTER: Duration = Duration::from_millis(300);
+/// The longest wait for an event: news of the measuring thread and the
+/// end of a message are shown within this.
+const WAKE_EVERY: Duration = Duration::from_millis(500);
+/// How often a bar checks whether another bar of the folder finished its reading.
+const OTHER_READING_CHECK_EVERY: Duration = Duration::from_secs(1);
 
 fn label_is(pane: &Pane, label: &str) -> bool {
     pane.label.as_deref() == Some(label)
@@ -67,17 +82,11 @@ fn label_is(pane: &Pane, label: &str) -> bool {
 /// after a restart: that one keeps the label, not the program. A pane Herdr
 /// tells nothing about counts as running: it is kept.
 fn is_live(pane: &Pane) -> bool {
-    let Ok(result) = herdr_api::request("pane.process_info", json!({ "pane_id": pane.pane_id }))
-    else {
+    let Ok(info) = herdr_api::process_info(&pane.pane_id) else {
         return true;
     };
-    result["process_info"]["foreground_processes"]
-        .as_array()
-        .is_none_or(|processes| {
-            processes
-                .iter()
-                .any(|p| p["name"].as_str().is_some_and(crate::is_this_program))
-        })
+    info.foreground_processes
+        .is_none_or(|processes| processes.iter().any(|p| crate::is_this_program(&p.name)))
 }
 
 /// The bars among `bars` that do not run the program, and still do not
@@ -86,7 +95,7 @@ fn dead(bars: Vec<Pane>) -> Vec<Pane> {
     let deadline = Instant::now() + STARTING;
     let mut dead: Vec<Pane> = bars.into_iter().filter(|p| !is_live(p)).collect();
     while !dead.is_empty() && Instant::now() < deadline {
-        std::thread::sleep(Duration::from_millis(500));
+        std::thread::sleep(STARTING_CHECK_EVERY);
         dead.retain(|p| !is_live(p));
     }
     dead
@@ -182,7 +191,7 @@ fn event_pane() -> Option<Pane> {
 fn settled(pane: &str) -> bool {
     let start = Instant::now();
     let mut last = None;
-    while start.elapsed() < Duration::from_secs(4) {
+    while start.elapsed() < SETTLE_AT_MOST {
         let Some(layout) = layout_of(pane) else {
             return false;
         };
@@ -190,11 +199,11 @@ fn settled(pane: &str) -> bool {
             return false;
         };
         let now = (now.rect.x, now.rect.y, now.rect.width, now.rect.height);
-        if last == Some(now) && start.elapsed() >= Duration::from_millis(600) {
+        if last == Some(now) && start.elapsed() >= SETTLED_FOR {
             return true;
         }
         last = Some(now);
-        std::thread::sleep(Duration::from_millis(200));
+        std::thread::sleep(SETTLE_CHECK_EVERY);
     }
     true
 }
@@ -216,7 +225,7 @@ fn open_above(explorer: &Pane) -> Result<(), String> {
     )?;
     // Down to its height at once, before its program draws: it opens with half
     // of the column. Its border is one row; the bar corrects it once it runs.
-    fit_rows(&bar, |height| height.saturating_sub(1));
+    fit_height_to(&bar, |height| height.saturating_sub(1));
     // The swap moves the focus to the bar: give it back.
     if let Some(focused) = focused {
         let _ = herdr_api::request("pane.focus", json!({ "pane_id": focused }));
@@ -311,6 +320,19 @@ fn measure_in_background(root: PathBuf) -> Measurer {
                     continue;
                 }
             }
+            // Another bar of the folder measures it: its figures come
+            // through the file.
+            let lock = match &file {
+                Some(file) => stats::ReadingLock::take(file),
+                None => None,
+            };
+            if file.is_some() && lock.is_none() {
+                match asked.recv_timeout(OTHER_READING_CHECK_EVERY) {
+                    Ok(()) | Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                }
+                continue;
+            }
             if send.send(Measure::Started).is_err() {
                 return;
             }
@@ -329,6 +351,7 @@ fn measure_in_background(root: PathBuf) -> Measurer {
             if send.send(Measure::Done(measured.clone())).is_err() {
                 return;
             }
+            drop(lock);
             last = Some(measured);
             // Clicks made during a full reading are answered by it; one made
             // during an automatic, limited reading asks for a full one.
@@ -355,6 +378,9 @@ struct View<'a> {
 fn show(me: &str, entries: &[Entry], error: Option<String>) -> io::Result<()> {
     let _screen = Screen::enter()?;
     let measurer = folders(me).0.map(measure_in_background);
+    // Launches run on threads of their own: the bar keeps answering while a
+    // popup waits for the previous one to close. They send back their error.
+    let (launch_failed, launch_errors) = mpsc::channel::<String>();
     let mut measured_at = None;
     // When the error message gives its place back to the figures.
     let mut message_until = Instant::now() + MESSAGE_FOR;
@@ -368,7 +394,7 @@ fn show(me: &str, entries: &[Entry], error: Option<String>) -> io::Result<()> {
         measuring: false,
     };
     // The first check fits the height once the swap is done.
-    let mut check_at = Some(Instant::now() + Duration::from_millis(300));
+    let mut check_at = Some(Instant::now() + FIRST_FIT_AFTER);
     // Drawn again only when something changed.
     let mut drawn: Option<(View, (u16, u16))> = None;
     loop {
@@ -386,6 +412,10 @@ fn show(me: &str, entries: &[Entry], error: Option<String>) -> io::Result<()> {
                 }
             }
         }
+        for error in launch_errors.try_iter() {
+            view.message = Some(error);
+            message_until = Instant::now() + MESSAGE_FOR;
+        }
         if view.message.is_some() && Instant::now() >= message_until {
             view.message = None;
         }
@@ -399,14 +429,14 @@ fn show(me: &str, entries: &[Entry], error: Option<String>) -> io::Result<()> {
         let until_check = check_at.map_or(Duration::MAX, |at| {
             at.saturating_duration_since(Instant::now())
         });
-        if !event::poll(until_check.min(Duration::from_millis(500)))? {
+        if !event::poll(until_check.min(WAKE_EVERY))? {
             if check_at.is_some_and(|at| Instant::now() >= at) {
                 check_at = None;
                 let tab = my_tab(me);
                 if tab.is_some_and(|tab| !has_its_place(&tab.iter().collect::<Vec<_>>())) {
                     return Ok(());
                 }
-                fit(me);
+                fit_height(me);
             }
             continue;
         }
@@ -423,12 +453,15 @@ fn show(me: &str, entries: &[Entry], error: Option<String>) -> io::Result<()> {
                     }
                     continue;
                 }
-                match key.code {
-                    KeyCode::Char(c) if entries.iter().any(|e| e.key == c) => {
-                        entries.iter().position(|e| e.key == c)
-                    }
-                    KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
-                    _ => None,
+                // An entry's own key wins over `q`.
+                if let KeyCode::Char(c) = key.code
+                    && let Some(i) = entries.iter().position(|e| e.key == c)
+                {
+                    Some(i)
+                } else if matches!(key.code, KeyCode::Esc | KeyCode::Char('q')) {
+                    return Ok(());
+                } else {
+                    None
                 }
             }
             Event::Mouse(mouse) => {
@@ -438,7 +471,9 @@ fn show(me: &str, entries: &[Entry], error: Option<String>) -> io::Result<()> {
                     mouse.row,
                     mouse.column,
                 );
-                let on_figures = view.stats.is_some() && mouse.row >= FIGURES_TOP;
+                // Not while a message stands in for the figures.
+                let on_figures =
+                    view.message.is_none() && view.stats.is_some() && mouse.row >= FIGURES_TOP;
                 match mouse.kind {
                     MouseEventKind::Down(MouseButton::Left) => {
                         if on_figures && let Some(m) = &measurer {
@@ -457,8 +492,13 @@ fn show(me: &str, entries: &[Entry], error: Option<String>) -> io::Result<()> {
             _ => None,
         };
         if let Some(i) = chosen {
-            view.message = launch(me, &entries[i]).err();
-            message_until = Instant::now() + MESSAGE_FOR;
+            view.message = None;
+            let (me, entry, failed) = (me.to_string(), entries[i].clone(), launch_failed.clone());
+            std::thread::spawn(move || {
+                if let Err(error) = launch(&me, &entry) {
+                    let _ = failed.send(error);
+                }
+            });
         }
     }
 }
@@ -471,19 +511,19 @@ fn draw(view: &View) -> io::Result<()> {
     for (i, entry) in view.entries.iter().enumerate() {
         let left = start + slot * i as u16;
         let hovered = view.hover == Some(i);
-        let colour = if hovered { Color::Yellow } else { Color::Reset };
+        let color = if hovered { Color::Yellow } else { Color::Reset };
         // The icon (one cell in most fonts) over the middle of the name.
         let icon = entry.icon();
         queue!(
             out,
-            MoveTo(centred(left, slot, &icon), 0),
-            SetForegroundColor(colour),
+            MoveTo(centered(left, slot, &icon), 0),
+            SetForegroundColor(color),
             Print(&icon),
             ResetColor
         )?;
         if rows > 1 {
-            let name: String = entry.label.chars().take(usize::from(slot)).collect();
-            queue!(out, MoveTo(centred(left, slot, &name), 1))?;
+            let name = fit(&entry.label, usize::from(slot));
+            queue!(out, MoveTo(centered(left, slot, &name), 1))?;
             if hovered {
                 queue!(out, SetForegroundColor(Color::Yellow))?;
             } else {
@@ -494,8 +534,8 @@ fn draw(view: &View) -> io::Result<()> {
     }
     // Figures, or an error, under the names, after a gap when there is room.
     let first = if rows >= ROWS { 3 } else { 2 };
-    let cut = |text: String| -> String { text.chars().take(usize::from(width)).collect() };
-    // Each line: its text, its colour, and what follows in another colour.
+    let cut = |text: &str| fit(text, usize::from(width));
+    // Each line: its text, its color, and what follows in another color.
     let lines: Vec<(String, Color, String)> = match (&view.message, &view.stats) {
         (Some(message), _) => vec![(message.clone(), Color::Red, String::new())],
         (None, Some(stats)) => {
@@ -511,21 +551,21 @@ fn draw(view: &View) -> io::Result<()> {
         }
         (None, None) => Vec::new(),
     };
-    let suffix_colour = if view.hover_figures {
+    let suffix_color = if view.hover_figures {
         Color::Yellow
     } else {
         Color::DarkGrey
     };
-    for (row, (text, colour, suffix)) in (first..rows).zip(lines) {
-        let whole = cut(format!("{text}{suffix}"));
-        let text = cut(text);
+    for (row, (text, color, suffix)) in (first..rows).zip(lines) {
+        let whole = cut(&format!("{text}{suffix}"));
+        let text = cut(&text);
         let suffix: String = whole.chars().skip(text.chars().count()).collect();
         queue!(
             out,
-            MoveTo(centred(0, width, &whole), row),
-            SetForegroundColor(colour),
+            MoveTo(centered(0, width, &whole), row),
+            SetForegroundColor(color),
             Print(text),
-            SetForegroundColor(suffix_colour),
+            SetForegroundColor(suffix_color),
             Print(suffix),
             ResetColor
         )?;
@@ -545,23 +585,21 @@ fn launch(me: &str, entry: &Entry) -> Result<(), String> {
 }
 
 fn layout_of(pane: &str) -> Option<Layout> {
-    herdr_api::request("pane.layout", json!({ "pane_id": pane }))
-        .ok()
-        .and_then(|r| serde_json::from_value(r["layout"].clone()).ok())
+    herdr_api::request_field("pane.layout", json!({ "pane_id": pane }), "layout").ok()
 }
 
 /// Brings the bar back to its rows by moving the border below it: Herdr keeps
 /// each split's ratio, so a resized window changes the bar's height.
-fn fit(me: &str) {
+fn fit_height(me: &str) {
     let Ok((_, rows)) = terminal::size() else {
         return;
     };
-    fit_rows(me, |_| rows);
+    fit_height_to(me, |_| rows);
 }
 
-/// `fit` with the rows of the bar's terminal, worked out from its height in
-/// the layout.
-fn fit_rows(me: &str, rows: impl Fn(u16) -> u16) {
+/// `fit_height` with the rows of the bar's terminal, worked out from its
+/// height in the layout.
+fn fit_height_to(me: &str, rows: impl Fn(u16) -> u16) {
     let Some(layout) = layout_of(me) else {
         return;
     };

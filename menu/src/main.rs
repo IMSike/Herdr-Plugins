@@ -41,6 +41,10 @@ const ALIVE_EVERY: Duration = Duration::from_secs(1);
 /// Files of the state folder left by a process killed midway are removed
 /// after this long: no menu stays open a day.
 const STALE_AFTER: Duration = Duration::from_secs(24 * 3600);
+/// How often the action looks for the choice file.
+const CHOICE_CHECK_EVERY: Duration = Duration::from_millis(50);
+/// Checks in a row that cannot read the processes before the menu counts as gone.
+const UNREADABLE_CHECKS: u32 = 3;
 
 fn main() -> ExitCode {
     let result = match std::env::args().nth(1).as_deref() {
@@ -97,7 +101,7 @@ fn open() -> Result<(), String> {
         Err(message) => eprintln!("herdr-menu : pane Tools impossible, menu en popup : {message}"),
     }
     let state = herdr_api::state_dir()?;
-    // What an action or a figures file killed midway left behind.
+    // What an action, or a write of the figures, killed midway left behind.
     herdr_api::remove_stale(&state, STALE_AFTER, |name| {
         name.starts_with("choice-") || name.ends_with(".partial")
     });
@@ -127,17 +131,27 @@ fn open() -> Result<(), String> {
 fn wait_for_choice(choice_file: &Path, pid_file: &Path) -> Result<Option<String>, String> {
     let started = Instant::now();
     let mut next_check = started + ALIVE_EVERY;
+    let mut unreadable = 0;
     loop {
         if let Ok(text) = std::fs::read_to_string(choice_file) {
             return Ok(Some(text));
         }
         if Instant::now() >= next_check {
             next_check += ALIVE_EVERY;
-            let pid = std::fs::read_to_string(pid_file)
+            let menu = std::fs::read_to_string(pid_file)
                 .ok()
-                .and_then(|text| text.trim().parse::<u32>().ok());
-            let gone = match pid {
-                Some(pid) => !is_running(pid),
+                .and_then(|text| MenuProcess::decode(&text));
+            let gone = match menu {
+                Some(menu) => match menu.is_running() {
+                    Some(running) => {
+                        unreadable = 0;
+                        !running
+                    }
+                    None => {
+                        unreadable += 1;
+                        unreadable >= UNREADABLE_CHECKS
+                    }
+                },
                 None => started.elapsed() >= START_TIMEOUT,
             };
             if gone {
@@ -145,7 +159,7 @@ fn wait_for_choice(choice_file: &Path, pid_file: &Path) -> Result<Option<String>
                 return Ok(std::fs::read_to_string(choice_file).ok());
             }
         }
-        std::thread::sleep(Duration::from_millis(50));
+        std::thread::sleep(CHOICE_CHECK_EVERY);
     }
 }
 
@@ -155,22 +169,63 @@ fn pid_file(choice_file: &Path) -> PathBuf {
     PathBuf::from(name)
 }
 
-/// Whether the menu still runs under `pid`. The menu is this same program: a
-/// process of another program given the same pid since does not count.
-fn is_running(pid: u32) -> bool {
+/// The menu's process, as the menu writes it in the pid file: its pid, and
+/// when it started (when the system said), which tells it from a later
+/// process given the same pid.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct MenuProcess {
+    pid: u32,
+    start_time: Option<u64>,
+}
+
+impl MenuProcess {
+    fn this() -> Self {
+        let pid = std::process::id();
+        let start_time = process(pid).flatten().map(|(_, start)| start);
+        Self { pid, start_time }
+    }
+
+    fn encode(&self) -> String {
+        match self.start_time {
+            Some(start) => format!("{} {start}", self.pid),
+            None => self.pid.to_string(),
+        }
+    }
+
+    fn decode(text: &str) -> Option<Self> {
+        let mut parts = text.split_whitespace();
+        let pid = parts.next()?.parse().ok()?;
+        let start_time = match parts.next() {
+            Some(start) => Some(start.parse().ok()?),
+            None => None,
+        };
+        Some(Self { pid, start_time })
+    }
+
+    /// Whether the menu still runs; `None` when the processes cannot be read.
+    fn is_running(&self) -> Option<bool> {
+        Some(process(self.pid)?.is_some_and(|(name, start_time)| {
+            self.start_time.is_none_or(|start| start == start_time) && is_this_program(&name)
+        }))
+    }
+}
+
+/// The name and start time of the process `pid`, if it runs; `None` when the
+/// processes cannot be read.
+fn process(pid: u32) -> Option<Option<(String, u64)>> {
     use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
-    let Ok(mut system) = System::new() else {
-        return true;
-    };
+    let mut system = System::new().ok()?;
     let pid = Pid::from_u32(pid);
     system.refresh_processes_specifics(
         ProcessesToUpdate::Some(&[pid]),
         true,
         ProcessRefreshKind::nothing(),
     );
-    system
-        .process(pid)
-        .is_some_and(|p| is_this_program(&p.name().to_string_lossy()))
+    Some(
+        system
+            .process(pid)
+            .map(|p| (p.name().to_string_lossy().into_owned(), p.start_time())),
+    )
 }
 
 /// Whether a process name is this program's: the menu, the bar and the
@@ -209,10 +264,8 @@ fn write_choice(path: &Path, choice: Option<&Choice>) -> io::Result<()> {
 fn menu() -> Result<(), String> {
     let choice_file = PathBuf::from(herdr_api::var(CHOICE_ENV)?);
     // Tells the waiting action that the menu runs, and which process to watch.
-    let _ = herdr_api::write_atomic(
-        &pid_file(&choice_file),
-        std::process::id().to_string().as_bytes(),
-    );
+    let me = MenuProcess::this().encode();
+    let _ = herdr_api::write_atomic(&pid_file(&choice_file), me.as_bytes());
     let (entries, error) = entries();
     let context = Context::from_env();
     let title = context
@@ -236,7 +289,7 @@ fn menu() -> Result<(), String> {
 fn run() -> Result<(), String> {
     let result = run_entry();
     if let Err(message) = &result {
-        // The popup closes with this process: leave the message on screen until a key.
+        // The popup closes with this process: leave the message on screen until Enter.
         println!("{message}\n\nAppuyer sur Entrée pour fermer.");
         let _ = io::stdout().flush();
         let _ = io::stdin().read_line(&mut String::new());
@@ -293,7 +346,23 @@ mod tests {
 
     #[test]
     fn this_process_runs() {
-        assert!(is_running(std::process::id()));
+        let me = MenuProcess::this();
+        assert!(me.start_time.is_some());
+        assert_eq!(MenuProcess::decode(&me.encode()), Some(me));
+        assert_eq!(me.is_running(), Some(true));
+        // A later process given the same pid is another one.
+        let other = MenuProcess {
+            start_time: me.start_time.map(|s| s + 10),
+            ..me
+        };
+        assert_eq!(other.is_running(), Some(false));
+        assert_eq!(
+            MenuProcess::decode("42"),
+            Some(MenuProcess {
+                pid: 42,
+                start_time: None
+            })
+        );
         assert!(same_program("herdr-menu.exe", "HERDR-MENU.EXE"));
         assert!(same_program(
             "herdr_menu-0123456789abcdef",

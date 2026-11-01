@@ -8,7 +8,7 @@ Starts a tool (lazygit, gh-dash, VS Code…) from one click or one key. In a tab
       󰊢        󰊤        󰨞
    lazygit  gh-dash  VS Code
 
-     1.5G · 0,2 % du disque
+     1,5G · 0,2 % du disque
          3 552 fichiers
 ```
 
@@ -91,11 +91,11 @@ A file that cannot be read or is invalid (unknown field, empty command, a key us
 **The `Tools` pane**
 
 - It is a normal Herdr pane. Herdr only splits to the right or downwards: the pane opens below the explorer, then swaps places with it, and the focus goes back to the pane that had it.
-- It opens on Herdr's `pane.created` event of the explorer, once the explorer stops moving (it places and sizes itself right after it opens: about one second). It closes on the `pane.closed` event, as soon as its tab has no explorer, or no pane besides it and the explorer, so that the explorer can close its tab as it does on its own.
+- It opens on Herdr's `pane.created` event of the explorer, once the explorer stops moving (it places and sizes itself right after it opens: about one second). It closes on the `pane.closed` event, as soon as its tab has no explorer, or no terminal pane besides it and the explorer's own panes (Preview, Search…), so that the explorer can close its tab as it does on its own.
 - It asks for 5 rows, but Herdr never gives a side of a split less than a tenth of it: on a screen of fewer than 60 rows, it is taller. It takes its height back when the window is resized.
 - **While it is open, the explorer no longer keeps its width**: `<` and `>` do nothing and its width follows the window's in proportion. The explorer only looks for its width at the full height of its own pane; a change to it is proposed upstream.
 - The figures are measured in the background: the whole folder is read, which takes a moment on a large one (`node_modules`, build folders). The reading stops after 200,000 files and folders or 2 seconds, whichever comes first: the figures then start with `≥` (at least). A reading asked for with a click goes up to 5 million files and folders or 60 seconds.
-- The figures are kept in a file of the plugin's state folder, one per folder (its path and its figures; if it cannot be written, the pane says so in red for 5 seconds): the panes of the same folder share them, and a pane that opens again shows them without reading the folder. They are measured again once they are older than:
+- The figures are kept in a file of the plugin's state folder, one per folder (its path and its figures; if it cannot be written, the pane says so in red for 5 seconds): the panes of the same folder share them (while one of them reads the folder, the others wait for its figures), and a pane that opens again shows them without reading the folder. They are measured again once they are older than:
 
   | Files and folders read | Measured again after |
   | --- | --- |

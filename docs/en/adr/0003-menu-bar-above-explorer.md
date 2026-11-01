@@ -19,7 +19,7 @@ Options studied:
 
 ## Decision
 
-The menu opens a `Tools` pane above the explorer: split below it, then swapped with it. It follows the explorer through Herdr events: `pane.created` of a pane labelled `Explorer` opens it, once the explorer has stopped moving; `pane.closed` closes it when its tab has no explorer, or no other pane besides the two. `prefix+space` closes and reopens it in a tab with the explorer, and opens the popup menu elsewhere.
+The menu opens a `Tools` pane above the explorer: split below it, then swapped with it. It follows the explorer through Herdr events: `pane.created` of a pane labeled `Explorer` opens it, once the explorer has stopped moving; `pane.closed` closes it when its tab has no explorer, or no terminal pane besides the two and the explorer's own panes (Preview, Search…). `prefix+space` closes and reopens it in a tab with the explorer, and opens the popup menu elsewhere.
 
 The explorer's width keeping, which only looks at the full height of its pane, is fixed upstream by a pull request to herdr-explorer rather than worked around here.
 

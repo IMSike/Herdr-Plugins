@@ -7,11 +7,11 @@ use serde::Deserialize;
 /// Rows the bar asks for: icons, names, a gap and two lines of figures.
 pub const ROWS: u16 = 5;
 /// Narrowest column of one entry.
-pub const MIN_SLOT: u16 = 9;
+const MIN_SLOT: u16 = 9;
 /// Smallest share Herdr gives a side of a split.
-pub const MIN_RATIO: f64 = 0.1;
+const MIN_RATIO: f64 = 0.1;
 
-/// Columns of one entry and the column the first one starts at, centred.
+/// Columns of one entry and the column the first one starts at, centered.
 pub fn slots(width: u16, entries: &[Entry]) -> (u16, u16) {
     let count = entries.len().max(1) as u16;
     let longest = entries
@@ -32,8 +32,8 @@ pub fn slot_at((slot, start): (u16, u16), count: usize, row: u16, column: u16) -
     (index < count).then_some(index)
 }
 
-/// The column `text` starts at, centred in `width` columns from `start`.
-pub fn centred(start: u16, width: u16, text: &str) -> u16 {
+/// The column `text` starts at, centered in `width` columns from `start`.
+pub fn centered(start: u16, width: u16, text: &str) -> u16 {
     let len = text.chars().count() as u16;
     start + width.saturating_sub(len) / 2
 }
@@ -124,13 +124,13 @@ mod tests {
     }
 
     #[test]
-    fn slots_are_centred_and_fit_the_width() {
+    fn slots_are_centered_and_fit_the_width() {
         let entries = [entry("lazygit"), entry("gh-dash"), entry("VS Code")];
         // 3 slots of 9 in 38 columns: 5 columns on the left.
         assert_eq!(slots(38, &entries), (9, 5));
         // Too narrow: the slots share the width.
         assert_eq!(slots(20, &entries), (6, 1));
-        assert_eq!(centred(5, 9, "lazygit"), 6);
+        assert_eq!(centered(5, 9, "lazygit"), 6);
     }
 
     #[test]

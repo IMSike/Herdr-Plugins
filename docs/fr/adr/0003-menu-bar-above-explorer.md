@@ -19,7 +19,7 @@ Options étudiées :
 
 ## Décision
 
-Le menu ouvre un pane `Tools` au-dessus de l'explorateur : coupé sous lui, puis échangé avec lui. Il suit l'explorateur par les événements de Herdr : le `pane.created` d'un pane nommé `Explorer` l'ouvre, une fois l'explorateur immobile ; `pane.closed` le ferme quand son onglet n'a plus d'explorateur, ou plus d'autre pane qu'eux deux. `prefix+space` le ferme et le rouvre dans un onglet avec l'explorateur, et ouvre le menu en popup ailleurs.
+Le menu ouvre un pane `Tools` au-dessus de l'explorateur : coupé sous lui, puis échangé avec lui. Il suit l'explorateur par les événements de Herdr : le `pane.created` d'un pane nommé `Explorer` l'ouvre, une fois l'explorateur immobile ; `pane.closed` le ferme quand son onglet n'a plus d'explorateur, ou plus de pane terminal en dehors d'eux deux et des panes propres à l'explorateur (Preview, Search…). `prefix+space` le ferme et le rouvre dans un onglet avec l'explorateur, et ouvre le menu en popup ailleurs.
 
 La gestion de la largeur de l'explorateur, qui ne regarde que la hauteur entière de son pane, est corrigée chez lui par une pull request à herdr-explorer plutôt que contournée ici.
 

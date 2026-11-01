@@ -96,8 +96,12 @@ impl Measured {
         (self.at + lifetime(&self.stats).as_secs()).saturating_sub(now)
     }
 
-    /// The more recent of two readings of the same folder.
+    /// The more recent of two readings of the same folder. One dated in the
+    /// future (taken before the clock was set back) is left out: it would
+    /// always look the more recent, and always be due.
     pub fn newest(a: Option<Self>, b: Option<Self>) -> Option<Self> {
+        let now = unix_now();
+        let (a, b) = (a.filter(|m| m.at <= now), b.filter(|m| m.at <= now));
         match (a, b) {
             (Some(a), Some(b)) => Some(if a.at >= b.at { a } else { b }),
             (a, b) => a.or(b),
@@ -126,6 +130,49 @@ pub fn load(file: &Path, root: &Path) -> Option<Measured> {
     let text = std::fs::read_to_string(file).ok()?;
     let measured: Measured = serde_json::from_str(&text).ok()?;
     (normalized(&measured.root) == normalized(root)).then_some(measured)
+}
+
+/// Held while a bar measures a folder: another bar of the same folder waits
+/// for its figures instead of walking the folder too. Released when dropped.
+pub struct ReadingLock(Option<PathBuf>);
+
+impl ReadingLock {
+    /// A reading longer than this was cut short (its bar killed): its lock
+    /// is taken over. The longest reading lasts a minute (`Limit::manual`).
+    const STALE_AFTER: Duration = Duration::from_secs(120);
+
+    /// The lock of the folder whose figures go to `file`; `None` while
+    /// another bar holds it.
+    pub fn take(file: &Path) -> Option<Self> {
+        let path = file.with_extension("lock");
+        for _ in 0..2 {
+            match std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+            {
+                Ok(_) => return Some(Self(Some(path))),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                    let stale = std::fs::metadata(&path)
+                        .is_ok_and(|m| herdr_api::is_older_than(&m, Self::STALE_AFTER));
+                    if !stale || std::fs::remove_file(&path).is_err() {
+                        return None;
+                    }
+                }
+                // The state folder cannot be written: measure without a lock.
+                Err(_) => return Some(Self(None)),
+            }
+        }
+        None
+    }
+}
+
+impl Drop for ReadingLock {
+    fn drop(&mut self) {
+        if let Some(path) = &self.0 {
+            let _ = std::fs::remove_file(path);
+        }
+    }
 }
 
 /// Keeps the figures for the other bars of the folder and the next ones.

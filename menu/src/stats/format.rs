@@ -42,12 +42,13 @@ pub fn files_line(stats: &Stats) -> String {
 
 /// `0,3 %`, `12 %`, `< 0,1 %`.
 fn format_share(percent: f64) -> String {
+    use herdr_api::format_percent;
     if percent < 0.1 {
-        "< 0,1 %".into()
+        format!("< {}", format_percent("0,1"))
     } else if percent < 10.0 {
-        format!("{percent:.1} %").replace('.', ",")
+        format_percent(format!("{percent:.1}").replace('.', ","))
     } else {
-        format!("{percent:.0} %")
+        format_percent(format!("{percent:.0}"))
     }
 }
 
@@ -73,9 +74,9 @@ mod tests {
         assert_eq!(age_label(3599), None);
         assert_eq!(age_label(3 * 3600), Some("3 h".into()));
         assert_eq!(age_label(50 * 3600), Some("2 j".into()));
-        assert_eq!(format_share(0.05), "< 0,1 %");
-        assert_eq!(format_share(0.34), "0,3 %");
-        assert_eq!(format_share(12.4), "12 %");
+        assert_eq!(format_share(0.05), "< 0,1\u{202F}%");
+        assert_eq!(format_share(0.34), "0,3\u{202F}%");
+        assert_eq!(format_share(12.4), "12\u{202F}%");
         assert_eq!(group_thousands(4210), "4\u{202F}210");
         assert_eq!(group_thousands(999), "999");
         assert_eq!(group_thousands(1_234_567), "1\u{202F}234\u{202F}567");
@@ -94,7 +95,7 @@ mod tests {
             complete: false,
             ..stats
         };
-        assert_eq!(size_line(&partial), "≥ 850M · ≥ 0,8 % du disque");
+        assert_eq!(size_line(&partial), "≥ 850M · ≥ 0,8\u{202F}% du disque");
         assert_eq!(files_line(&partial), "≥ 200 000 fichiers");
     }
 }
