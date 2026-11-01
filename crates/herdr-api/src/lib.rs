@@ -3,9 +3,54 @@
 
 mod socket;
 
-pub use socket::{Error, request};
+pub use socket::{Error, request, request_field};
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+/// Environment variables Herdr gives a plugin's commands.
+pub mod env {
+    pub const SOCKET_PATH: &str = "HERDR_SOCKET_PATH";
+    pub const PLUGIN_ID: &str = "HERDR_PLUGIN_ID";
+    pub const STATE_DIR: &str = "HERDR_PLUGIN_STATE_DIR";
+    pub const CONFIG_DIR: &str = "HERDR_PLUGIN_CONFIG_DIR";
+    pub const CONTEXT_JSON: &str = "HERDR_PLUGIN_CONTEXT_JSON";
+    pub const EVENT_JSON: &str = "HERDR_PLUGIN_EVENT_JSON";
+    /// The pane a plugin pane's program runs in.
+    pub const PANE_ID: &str = "HERDR_PANE_ID";
+}
+
+/// The plugin's state folder, when Herdr gives it.
+pub fn state_dir() -> Option<PathBuf> {
+    std::env::var_os(env::STATE_DIR).map(PathBuf::from)
+}
+
+/// Milliseconds since the Unix epoch.
+pub fn unix_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64)
+}
+
+/// Removes the files of `dir` that `matches` and that were last written
+/// more than `age` ago: what a process killed midway left behind.
+pub fn remove_stale(dir: &Path, age: Duration, matches: impl Fn(&str) -> bool) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let stale = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|elapsed| elapsed > age);
+        if stale && matches(&name.to_string_lossy()) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
 
 /// Writes `bytes` to `path` through a file of this process, renamed over it:
 /// a reader sees the old content or the new one, never half of it, and two
@@ -54,5 +99,24 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), b"new");
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn removes_only_old_matching_files() {
+        let dir = std::env::temp_dir().join(format!("herdr-api-stale-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.partial"), "").unwrap();
+        std::fs::write(dir.join("keep.json"), "").unwrap();
+        // Nothing is old enough yet.
+        remove_stale(&dir, Duration::from_secs(60), |n| n.ends_with(".partial"));
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
+        std::thread::sleep(Duration::from_millis(20));
+        remove_stale(&dir, Duration::ZERO, |n| n.ends_with(".partial"));
+        let left: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(left, ["keep.json"]);
     }
 }
