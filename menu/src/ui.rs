@@ -61,6 +61,12 @@ impl Write for Frame {
     }
 }
 
+/// Whether a key holds Ctrl, and not AltGr: Windows reports AltGr as
+/// Ctrl+Alt, which types `@` or `{` on some keyboards.
+pub fn is_control(modifiers: KeyModifiers) -> bool {
+    modifiers.contains(KeyModifiers::CONTROL) && !modifiers.contains(KeyModifiers::ALT)
+}
+
 impl Drop for Screen {
     fn drop(&mut self) {
         let _ = execute!(
@@ -87,7 +93,7 @@ pub fn choose(title: &str, entries: &[Entry], error: Option<&str>) -> io::Result
         draw(title, &entries[top..], error, selected - top, visible)?;
         match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => {
-                if key.modifiers.contains(KeyModifiers::CONTROL) {
+                if is_control(key.modifiers) {
                     if key.code == KeyCode::Char('c') {
                         return Ok(None);
                     }

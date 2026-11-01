@@ -6,11 +6,9 @@ pub mod files;
 mod store;
 
 use crate::config::{self, Layout, Menu, TotalsStyle};
-use crate::ui::{Frame, Screen, fit};
+use crate::ui::{Frame, Screen, fit, is_control};
 use crossterm::cursor::MoveTo;
-use crossterm::event::{
-    self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
-};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind};
 use crossterm::queue;
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use crossterm::terminal;
@@ -584,9 +582,7 @@ fn show(state: &mut State) -> io::Result<()> {
                     KeyCode::Backspace => {
                         text.pop();
                     }
-                    KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        text.push(c)
-                    }
+                    KeyCode::Char(c) if !is_control(key.modifiers) => text.push(c),
                     _ => {}
                 }
             }
@@ -594,7 +590,7 @@ fn show(state: &mut State) -> io::Result<()> {
         }
         let close = match event {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => Some(true),
+                KeyCode::Char('c') if is_control(key.modifiers) => Some(true),
                 KeyCode::Esc | KeyCode::Char('q') => Some(true),
                 KeyCode::Up | KeyCode::Char('k') => {
                     state.selected = (state.selected + items.len() - 1) % items.len();

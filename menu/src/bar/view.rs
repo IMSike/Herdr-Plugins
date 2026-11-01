@@ -13,9 +13,7 @@ use crate::settings::files;
 use crate::stats::{self, Measured, Stats};
 use crate::ui::{Frame, Screen, fit};
 use crossterm::cursor::MoveTo;
-use crossterm::event::{
-    self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
-};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind};
 use crossterm::queue;
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use crossterm::terminal;
@@ -299,7 +297,7 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
         match event::read()? {
             Event::Resize(..) => check_at = Some(Instant::now() + SETTLE),
             Event::Key(key) if key.kind == KeyEventKind::Press => {
-                if key.modifiers.contains(KeyModifiers::CONTROL) {
+                if crate::ui::is_control(key.modifiers) {
                     if key.code == KeyCode::Char('c') {
                         return Ok(());
                     }
