@@ -56,7 +56,7 @@ fn figure_tokens(cpu: Option<String>, usage: &Usage) -> Map<String, Value> {
     tokens
 }
 
-/// `4% 853M  1`; the CPU share is missing on the first run.
+/// `4 % 853M  1`; the CPU share is missing on the first run.
 pub fn figures(cpu: Option<String>, usage: &Usage, with_shells: bool) -> String {
     let mut parts: Vec<String> = cpu.into_iter().collect();
     parts.push(format_size(usage.memory));
@@ -66,7 +66,7 @@ pub fn figures(cpu: Option<String>, usage: &Usage, with_shells: bool) -> String 
     parts.join(" ")
 }
 
-/// Every pane's total, then the whole machine's: `6% 2.4G · 󰍹 35% 21.3G`.
+/// Every pane's total, then the whole machine's: `6 % 2,4G · 󰍹 35 % 21,3G`.
 pub fn tab_bar(
     cpu: Option<String>,
     total: &Usage,
@@ -123,15 +123,15 @@ mod tests {
         };
         let tokens = agent(
             &block(Some("api")),
-            Some((Some("4%".into()), &usage)),
-            Some("6% 1.2G".into()),
+            Some((Some("4\u{202F}%".into()), &usage)),
+            Some("6\u{202F}% 1,2G".into()),
         );
         assert_eq!(tokens["ws"], "api");
-        assert_eq!(tokens["cpu"], "4%");
+        assert_eq!(tokens["cpu"], "4\u{202F}%");
         assert_eq!(tokens["ram"], "853M");
         assert_eq!(tokens["shells"], "2 shells");
-        assert_eq!(tokens["stats"], "4% 853M \u{F489} 2");
-        assert_eq!(tokens["ws_stats"], "6% 1.2G");
+        assert_eq!(tokens["stats"], "4\u{202F}% 853M \u{F489} 2");
+        assert_eq!(tokens["ws_stats"], "6\u{202F}% 1,2G");
 
         let unread = agent(&block(None), None, None);
         assert_eq!(unread["ws"], Value::Null);
@@ -164,16 +164,16 @@ mod tests {
         };
         assert_eq!(
             tab_bar(
-                Some("6%".into()),
+                Some("6\u{202F}%".into()),
                 &total,
-                Some("35%".into()),
+                Some("35\u{202F}%".into()),
                 21 * 1024 * MB
             ),
-            "6% 2.0G · \u{F0379} 35% 21.0G"
+            "6\u{202F}% 2,0G · \u{F0379} 35\u{202F}% 21,0G"
         );
         assert_eq!(
             tab_bar(None, &total, None, 512 * MB),
-            "2.0G · \u{F0379} 512M"
+            "2,0G · \u{F0379} 512M"
         );
     }
 }

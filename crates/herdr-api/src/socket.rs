@@ -35,6 +35,13 @@ impl From<Error> for String {
     }
 }
 
+/// A failure before any request: a missing variable, for instance.
+impl From<String> for Error {
+    fn from(message: String) -> Self {
+        failure(message)
+    }
+}
+
 fn failure(message: String) -> Error {
     Error {
         code: None,
@@ -116,12 +123,17 @@ fn connect(path: &str, deadline: Instant) -> io::Result<std::os::unix::net::Unix
 #[cfg(windows)]
 fn connect(path: &str, deadline: Instant) -> io::Result<std::fs::File> {
     // The named pipe is named after the full socket path.
+    use std::os::windows::fs::OpenOptionsExt;
     const PIPE_BUSY: i32 = 231;
+    // The server may identify the plugin, never act as it: a process that
+    // took the pipe's name before Herdr cannot use the plugin's rights.
+    const SECURITY_IDENTIFICATION: u32 = 1 << 16;
     let pipe = format!(r"\\.\pipe\{path}");
     loop {
         match std::fs::OpenOptions::new()
             .read(true)
             .write(true)
+            .security_qos_flags(SECURITY_IDENTIFICATION)
             .open(&pipe)
         {
             Err(e) if e.raw_os_error() == Some(PIPE_BUSY) && Instant::now() < deadline => {
