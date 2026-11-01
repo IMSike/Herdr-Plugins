@@ -31,6 +31,7 @@ A plugin under development is linked rather than installed: `herdr plugin link <
 - Rust, edition 2024, formatted by `cargo fmt`, with `cargo clippy` clean.
 - Each plugin is a crate of the root Cargo workspace, in its own folder with its `herdr-plugin.toml`; code shared by several plugins lives in `crates/` ([ADR 0001](docs/en/adr/0001-rust-cargo-workspace.md)).
 - Pure logic (formatting, computations) in modules of its own, without I/O, tested on their own.
+- No `unsafe`, with one exception: the sidebar's call to Windows' `GetSystemTimes` (`sidebar/src/machine.rs`), the machine's CPU times and the clock of every CPU share, which no dependency gives as precisely without slowing each run. Anything else goes through a safe crate (`sysinfo`, the standard library).
 - Identifiers and comments in English; user-facing text in French for now.
 - Encoding: UTF-8 without BOM, LF. Enforced by `.gitattributes` and `.editorconfig`.
 
