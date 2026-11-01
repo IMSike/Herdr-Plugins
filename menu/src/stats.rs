@@ -1,10 +1,10 @@
 //! What the bar shows under its icons: the size of the workspace folder, its
 //! share of its disk, and its number of files.
 
-use serde::{Deserialize, Serialize};
-
 mod format;
+
 pub use format::{age_label, files_line, size_line};
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
