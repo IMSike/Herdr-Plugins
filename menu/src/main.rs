@@ -232,7 +232,11 @@ impl MenuProcess {
     /// Whether the menu still runs; `None` when the processes cannot be read.
     fn is_running(&self) -> Option<bool> {
         Some(process(self.pid)?.is_some_and(|(name, start_time)| {
-            self.start_time.is_none_or(|start| start == start_time) && is_this_program(&name)
+            // Linux derives start times from the boot time, which a clock
+            // adjustment moves by a second.
+            self.start_time
+                .is_none_or(|start| start.abs_diff(start_time) <= 1)
+                && is_this_program(&name)
         }))
     }
 }
