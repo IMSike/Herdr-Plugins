@@ -47,7 +47,7 @@ pub fn agent(
 }
 
 /// `cpu` is left out (not cleared) on the first run, which has no average yet.
-pub fn figure_tokens(cpu: Option<String>, usage: &Usage) -> Map<String, Value> {
+fn figure_tokens(cpu: Option<String>, usage: &Usage) -> Map<String, Value> {
     let mut tokens = Map::new();
     if let Some(cpu) = cpu {
         tokens.insert("cpu".into(), cpu.into());

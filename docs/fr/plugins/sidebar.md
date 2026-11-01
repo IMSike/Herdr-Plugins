@@ -80,8 +80,6 @@ Tokens des agents (panneau Agents) :
 
 Symboles d'état : `◐` au travail, `◆` bloqué, `●` terminé (pas encore vu), `○` inactif, `·` inconnu. Les règles de couleur ci-dessus se basent sur ces symboles.
 
-Tokens des workspaces (panneau Spaces) : `$cpu` et `$ram`.
-
 Barre d'onglets : `<cpu> <mémoire> · 󰍹 <cpu> <mémoire>` (`6% 2.4G · 󰍹 35% 21.3G`) : le total de tous les panes, puis celui de la machine entière (après l'icône écran Nerd Font), mis à jour à chaque passage. L'heure qui suit (`· 14:05`) est l'entrée `datetime` propre à Herdr : elle reste affichée si le plugin échoue. Les chiffres de la machine comptent tous les processus, y compris ceux que le plugin ne peut pas lire (processus protégés, machines virtuelles) : sa part de CPU vient des temps CPU du système, sa mémoire est la mémoire utilisée (ce que le Gestionnaire des tâches affiche comme « En cours d'utilisation » sous Windows).
 
 - **CPU** : utilisé depuis le passage précédent, en part de la machine entière, arrondi au pourcent (`0%`, `12%` : moins de 0,5 % s'affiche `0%`) ; absent au premier passage, et quand le passage précédent date de moins d'une seconde ou de plus de deux minutes.

@@ -159,9 +159,9 @@ fn tick(mode: Mode) -> Result<(), String> {
     };
     // Lets Herdr drop a report older than one already applied.
     let seq = unix_millis();
-    let send = |method: &str, key: &str, id: &str, tokens: Map<String, Value>| match mode {
-        Mode::Show => println!("{id} : {}", Value::Object(tokens)),
-        _ => report(method, key, id, tokens, seq),
+    let send = |pane_id: &str, tokens: Map<String, Value>| match mode {
+        Mode::Show => println!("{pane_id} : {}", Value::Object(tokens)),
+        _ => report(pane_id, tokens, seq),
     };
 
     let snapshot: Snapshot = request_field("session.snapshot", json!({}), "snapshot")?;
@@ -191,7 +191,7 @@ fn tick(mode: Mode) -> Result<(), String> {
             // Most events move one agent at most: the others are not sent again.
             let shown = snapshot.panes.iter().find(|p| p.pane_id == block.pane_id);
             if shown.is_none_or(|pane| !tokens::unchanged(&tokens, &pane.tokens)) {
-                send("pane.report_metadata", "pane_id", &block.pane_id, tokens);
+                send(&block.pane_id, tokens);
             }
         }
         return Ok(());
@@ -238,15 +238,7 @@ fn tick(mode: Mode) -> Result<(), String> {
             .find(|(id, _)| *id == block.pane_id)
             .map(|(_, u)| (cpu(u), u));
         let tokens = tokens::agent(&block, usage, workspace);
-        send("pane.report_metadata", "pane_id", &block.pane_id, tokens);
-    }
-    for (id, usage) in &sums {
-        send(
-            "workspace.report_metadata",
-            "workspace_id",
-            id,
-            tokens::figure_tokens(cpu(usage), usage),
-        );
+        send(&block.pane_id, tokens);
     }
 
     let machine_cpu = previous
@@ -291,15 +283,15 @@ fn shell_of(pane: &Pane, known: Option<&Shell>, table: &Table) -> Option<Shell> 
 }
 
 /// A failed report only loses one refresh: it is logged, never fatal.
-fn report(method: &str, key: &str, id: &str, tokens: Map<String, Value>, seq: u64) {
+fn report(pane_id: &str, tokens: Map<String, Value>, seq: u64) {
     let params = json!({
-        key: id,
+        "pane_id": pane_id,
         "source": SOURCE,
         "tokens": tokens,
         "ttl_ms": TOKEN_TTL_MS,
         "seq": seq,
     });
-    if let Err(e) = request(method, params) {
+    if let Err(e) = request("pane.report_metadata", params) {
         eprintln!("herdr-sidebar : {e}");
     }
 }

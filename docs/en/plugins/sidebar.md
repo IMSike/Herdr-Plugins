@@ -80,8 +80,6 @@ Agent tokens (Agents panel):
 
 State glyphs: `◐` working, `◆` blocked, `●` done (finished, not seen yet), `○` idle, `·` unknown. The colour rules above match these glyphs.
 
-Workspace tokens (Spaces panel): `$cpu` and `$ram`.
-
 Tab bar: `<cpu> <memory> · 󰍹 <cpu> <memory>` (`6% 2.4G · 󰍹 35% 21.3G`): the total of every pane, then the whole machine's (after the Nerd Font monitor icon), updated at each run. The time after them (`· 14:05`) is Herdr's own `datetime` entry: it stays when the plugin fails. The machine's figures count every process, those the plugin cannot read too (protected processes, virtual machines): its CPU share comes from the system's CPU times, its memory is the memory in use (what the Task Manager shows as "In use" on Windows).
 
 - **CPU**: used since the previous run, as a share of the whole machine, rounded to the percent (`0%`, `12%`: below 0.5% shows `0%`); missing on the first run, and when the previous run is less than a second or more than two minutes old.
