@@ -40,16 +40,12 @@ pub const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
 const TOTALS_FILE: &str = "totals.json";
 /// Nerd Font monitor glyph (nf-md-monitor), before the whole machine's figures.
 pub const MACHINE_GLYPH: char = '\u{F0379}';
-/// What a value carries for Herdr's color rules: one to four of them, by
-/// level. It has no width: Herdr matches it but draws nothing.
-pub const MARKER: char = '\u{200B}';
 
 /// The three values between the four levels, in increasing order.
 pub type Thresholds = [f64; 3];
 
 /// How high a figure is against its thresholds: green, yellow, orange, red.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Level {
     Green,
     Yellow,
@@ -58,8 +54,7 @@ pub enum Level {
 }
 
 impl Level {
-    /// The level of `value`: above a threshold (strictly, as Herdr's `gt`
-    /// rules compare) is the next level.
+    /// The level of `value`: above a threshold (strictly) is the next level.
     pub fn of(value: f64, thresholds: &Thresholds) -> Self {
         match thresholds.iter().filter(|&&t| value > t).count() {
             0 => Self::Green,
@@ -67,12 +62,6 @@ impl Level {
             2 => Self::Orange,
             _ => Self::Red,
         }
-    }
-
-    /// The markers that tell it to Herdr's `contains` rules: one for green,
-    /// four for red.
-    pub fn marker(self) -> String {
-        std::iter::repeat_n(MARKER, self as usize + 1).collect()
     }
 }
 
@@ -87,6 +76,30 @@ pub fn check_thresholds(thresholds: &Thresholds) -> Result<(), String> {
     Ok(())
 }
 
+/// The thresholds of the totals, as `sidebar.toml` sets them.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct TotalsThresholds {
+    /// Herdr's CPU, percent of the machine.
+    pub cpu: Thresholds,
+    /// Herdr's memory, GiB.
+    pub memory: Thresholds,
+    /// The machine's CPU, percent.
+    pub machine_cpu: Thresholds,
+    /// The machine's memory in use, percent of its memory.
+    pub machine_memory: Thresholds,
+}
+
+impl Default for TotalsThresholds {
+    fn default() -> Self {
+        Self {
+            cpu: CPU_LEVELS,
+            memory: MEMORY_LEVELS,
+            machine_cpu: MACHINE_CPU_LEVELS,
+            machine_memory: MACHINE_MEMORY_LEVELS,
+        }
+    }
+}
+
 /// Every pane's total and the whole machine's, as one run measured them.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Totals {
@@ -97,22 +110,83 @@ pub struct Totals {
     pub memory: u64,
     pub machine_cpu: Option<f64>,
     pub machine_memory: u64,
-    /// The level of each figure, in their order, when the threshold colors
-    /// are on; a CPU share without average has none.
+    /// The machine's memory, in use or not.
     #[serde(default)]
-    pub levels: Option<TotalsLevels>,
+    pub machine_total: u64,
+    /// Whether the figures take the color of their level.
+    #[serde(default)]
+    pub colors: bool,
+    #[serde(default)]
+    pub thresholds: TotalsThresholds,
 }
 
-/// The levels of the totals' figures.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TotalsLevels {
-    pub cpu: Option<Level>,
-    pub memory: Level,
-    pub machine_cpu: Option<Level>,
-    pub machine_memory: Level,
+/// One of the four figures of the totals, as a gauge: its text, how full
+/// its bar is, and where its thresholds fall on the bar.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Gauge {
+    /// CPU (rather than memory).
+    pub cpu: bool,
+    /// The whole machine's (rather than Herdr's).
+    pub machine: bool,
+    /// `6%`, `2,4G`; `None` for a CPU share without average.
+    pub text: Option<String>,
+    /// The share of the bar it fills, from 0 to 1.
+    pub fill: Option<f64>,
+    /// The value at the end of the bar, in the thresholds' unit.
+    pub full: f64,
+    /// The value, in the thresholds' unit.
+    pub value: Option<f64>,
+    pub thresholds: Thresholds,
+}
+
+impl Gauge {
+    /// Its level, when the colors are on.
+    pub fn level(&self, colors: bool) -> Option<Level> {
+        self.value
+            .filter(|_| colors)
+            .map(|v| Level::of(v, &self.thresholds))
+    }
 }
 
 impl Totals {
+    /// Herdr's CPU and memory, then the machine's.
+    pub fn gauges(&self, numbers: &NumberFormat) -> [Gauge; 4] {
+        let total = self.machine_total as f64;
+        let share = |bytes: u64| (total > 0.0).then(|| bytes as f64 / total);
+        let cpu = |value: Option<f64>, machine, thresholds| Gauge {
+            cpu: true,
+            machine,
+            text: value.map(|v| numbers.cpu(v)),
+            fill: value.map(|v| v / 100.0),
+            full: 100.0,
+            value,
+            thresholds,
+        };
+        let t = &self.thresholds;
+        [
+            cpu(self.cpu, false, t.cpu),
+            Gauge {
+                cpu: false,
+                machine: false,
+                text: Some(numbers.size(self.memory)),
+                fill: share(self.memory),
+                full: total / GIB,
+                value: Some(self.memory as f64 / GIB),
+                thresholds: t.memory,
+            },
+            cpu(self.machine_cpu, true, t.machine_cpu),
+            Gauge {
+                cpu: false,
+                machine: true,
+                text: Some(numbers.size(self.machine_memory)),
+                fill: share(self.machine_memory),
+                full: 100.0,
+                value: share(self.machine_memory).map(|s| s * 100.0),
+                thresholds: t.machine_memory,
+            },
+        ]
+    }
+
     /// `6% 2,4G · 󰍹 35% 21,3G`; a CPU share without average is left out.
     pub fn line(&self, numbers: &NumberFormat) -> String {
         self.parts(numbers)
@@ -122,33 +196,22 @@ impl Totals {
     }
 
     /// The line in pieces, each figure with its level (when the colors are
-    /// on), the separators with none.
+    /// on), the separators with none. The glyph keeps the space after it:
+    /// a terminal may draw it over two cells.
     pub fn parts(&self, numbers: &NumberFormat) -> Vec<(String, Option<Level>)> {
-        let levels = self.levels.as_ref();
-        let figures = |cpu: Option<f64>, cpu_level, memory: u64, memory_level| {
-            let mut parts = Vec::new();
-            if let Some(cpu) = cpu {
-                parts.push((numbers.cpu(cpu), cpu_level));
-                parts.push((" ".to_string(), None));
+        let mut parts = Vec::new();
+        for gauge in self.gauges(numbers) {
+            if gauge.machine && gauge.cpu {
+                parts.push((" · ".to_string(), None));
+                parts.push((format!("{MACHINE_GLYPH} "), None));
             }
-            parts.push((numbers.size(memory), memory_level));
-            parts
-        };
-        let mut parts = figures(
-            self.cpu,
-            levels.and_then(|l| l.cpu),
-            self.memory,
-            levels.map(|l| l.memory),
-        );
-        parts.push((" · ".to_string(), None));
-        parts.push((MACHINE_GLYPH.to_string(), None));
-        parts.push((" ".to_string(), None));
-        parts.extend(figures(
-            self.machine_cpu,
-            levels.and_then(|l| l.machine_cpu),
-            self.machine_memory,
-            levels.map(|l| l.machine_memory),
-        ));
+            if let Some(text) = &gauge.text {
+                parts.push((text.clone(), gauge.level(self.colors)));
+                if gauge.cpu {
+                    parts.push((" ".to_string(), None));
+                }
+            }
+        }
         parts
     }
 
@@ -188,7 +251,9 @@ mod tests {
             memory: 2 * BYTES_IN_GIB,
             machine_cpu: Some(35.0),
             machine_memory: 21 * BYTES_IN_GIB,
-            levels: None,
+            machine_total: 32 * BYTES_IN_GIB,
+            colors: false,
+            thresholds: TotalsThresholds::default(),
         }
     }
 
@@ -205,28 +270,41 @@ mod tests {
     }
 
     #[test]
-    fn each_figure_keeps_its_level() {
-        let levels = TotalsLevels {
-            cpu: Some(Level::Green),
-            memory: Level::Yellow,
-            machine_cpu: None,
-            machine_memory: Level::Red,
+    fn each_figure_takes_its_level_with_the_colors() {
+        let numbers = NumberFormat::default();
+        let levels = |totals: &Totals| -> Vec<Level> {
+            totals
+                .parts(&numbers)
+                .into_iter()
+                .filter_map(|(_, level)| level)
+                .collect()
         };
+        assert!(levels(&totals()).is_empty());
         let colored = Totals {
-            machine_cpu: None,
-            levels: Some(levels),
+            colors: true,
             ..totals()
         };
-        let parts = colored.parts(&NumberFormat::default());
-        let figures: Vec<_> = parts.iter().filter(|(_, l)| l.is_some()).collect();
+        // 6% green, 2 GiB yellow (above 1, not above 2), 35% green, 21 of 32
+        // GiB (66%) yellow.
         assert_eq!(
-            figures,
-            [
-                &("6%".to_string(), Some(Level::Green)),
-                &("2,0G".to_string(), Some(Level::Yellow)),
-                &("21,0G".to_string(), Some(Level::Red)),
-            ]
+            levels(&colored),
+            [Level::Green, Level::Yellow, Level::Green, Level::Yellow]
         );
+    }
+
+    #[test]
+    fn gauges_fill_their_bar() {
+        let gauges = totals().gauges(&NumberFormat::default());
+        assert!((gauges[0].fill.unwrap() - 0.064).abs() < 1e-9);
+        assert_eq!(gauges[1].fill, Some(2.0 / 32.0));
+        assert_eq!(gauges[1].full, 32.0);
+        assert_eq!(gauges[3].value, Some(21.0 / 32.0 * 100.0));
+        assert!(gauges[2].machine && gauges[2].cpu);
+        let unknown = Totals {
+            machine_total: 0,
+            ..totals()
+        };
+        assert_eq!(unknown.gauges(&NumberFormat::default())[3].fill, None);
     }
 
     #[test]
@@ -236,8 +314,6 @@ mod tests {
         assert_eq!(Level::of(10.5, &thresholds), Level::Yellow);
         assert_eq!(Level::of(30.0, &thresholds), Level::Orange);
         assert_eq!(Level::of(90.0, &thresholds), Level::Red);
-        assert_eq!(Level::Green.marker(), "\u{200B}");
-        assert_eq!(Level::Red.marker().chars().count(), 4);
         assert!(check_thresholds(&thresholds).is_ok());
         assert!(check_thresholds(&[10.0, 10.0, 50.0]).is_err());
         assert!(check_thresholds(&[-1.0, 10.0, 50.0]).is_err());

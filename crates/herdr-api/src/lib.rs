@@ -119,8 +119,10 @@ pub struct NumberFormat {
     pub percent_space: bool,
     /// CPU shares with one decimal: `4,2%` rather than `4%`.
     pub cpu_decimal: bool,
-    /// The units of a size: `853M`, `853 Mo` or `853 MB`.
+    /// The units of a size: `853M`, `853Mo` or `853MB`.
     pub memory_unit: MemoryUnit,
+    /// `2,4 Go` (a narrow no-break space) rather than `2,4Go`.
+    pub memory_space: bool,
 }
 
 /// How a size is written; `K`, `M` or `G` as the size needs.
@@ -129,9 +131,9 @@ pub enum MemoryUnit {
     /// `853M`, `2,4G`.
     #[default]
     M,
-    /// `853 Mo`, `2,4 Go`.
+    /// `853Mo`, `2,4Go`.
     Mo,
-    /// `853 MB`, `2.4 GB`.
+    /// `853MB`, `2.4GB`.
     MB,
 }
 
@@ -154,12 +156,12 @@ impl MemoryUnit {
         }
     }
 
-    /// `prefix` (`K`, `M`, `G`) with its unit, and the space before it.
+    /// `prefix` (`K`, `M`, `G`) with its unit.
     fn suffix(self, prefix: char) -> String {
         match self {
             Self::M => prefix.to_string(),
-            Self::Mo => format!("\u{202F}{prefix}o"),
-            Self::MB => format!("\u{202F}{prefix}B"),
+            Self::Mo => format!("{prefix}o"),
+            Self::MB => format!("{prefix}B"),
         }
     }
 }
@@ -171,6 +173,7 @@ impl Default for NumberFormat {
             percent_space: false,
             cpu_decimal: false,
             memory_unit: MemoryUnit::M,
+            memory_space: false,
         }
     }
 }
@@ -187,11 +190,12 @@ impl NumberFormat {
     }
 
     /// A size in binary units: `512K`, `853M`, `2,4G` (or `Ko`, `Mo`, `Go`;
-    /// `KB`, `MB`, `GB`).
+    /// `KB`, `MB`, `GB`), after a narrow no-break space with `memory_space`.
     pub fn size(&self, bytes: u64) -> String {
         const KIB: f64 = 1024.0;
         let b = bytes as f64;
-        let unit = |prefix| self.memory_unit.suffix(prefix);
+        let space = if self.memory_space { "\u{202F}" } else { "" };
+        let unit = |prefix| format!("{space}{}", self.memory_unit.suffix(prefix));
         if b < KIB * KIB {
             format!("{:.0}{}", b / KIB, unit('K'))
         } else if b < KIB * KIB * 1000.0 {
@@ -243,11 +247,12 @@ mod tests {
             memory_unit: MemoryUnit::Mo,
             ..NumberFormat::default()
         };
-        assert_eq!(octets.size(512 * 1024), "512\u{202F}Ko");
-        assert_eq!(octets.size(853 * 1024 * 1024), "853\u{202F}Mo");
-        assert_eq!(octets.size(2_576_980_378), "2,4\u{202F}Go");
+        assert_eq!(octets.size(512 * 1024), "512Ko");
+        assert_eq!(octets.size(853 * 1024 * 1024), "853Mo");
+        assert_eq!(octets.size(2_576_980_378), "2,4Go");
         let bytes = NumberFormat {
             memory_unit: MemoryUnit::MB,
+            memory_space: true,
             decimal_comma: false,
             ..NumberFormat::default()
         };
