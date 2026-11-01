@@ -2,7 +2,7 @@
 
 **English** · [Français](../../fr/plugins/sidebar.md)
 
-Turns Herdr's Agents panel into a tree: each workspace's agents listed under its name, with CPU and memory per workspace and per agent and the number of shells each agent is running. The tab bar shows the total of all panes and the whole machine's. The plugin only reports values; how they look is set by the sidebar rows of Herdr's `config.toml`.
+Turns Herdr's Agents panel into a tree: each workspace's agents listed under its name, with CPU and memory per workspace and per agent and the number of shells each agent is running. The total of all panes and the whole machine's show in the [menu](menu.md)'s `Tools` pane, or in the tab bar. The plugin only reports values; how they look is set by the sidebar rows of Herdr's `config.toml`.
 
 ```
  agents                 arbre
@@ -33,7 +33,8 @@ Then add to Herdr's `config.toml`:
 [ui]
 sidebar_width = 34
 sidebar_max_width = 40
-# Runs the plugin every 5 seconds and shows its totals at the right of the tab bar, then the time (Herdr's own entry).
+# Runs the plugin every 5 seconds: keep it even with nothing shown. It shows its totals at the
+# right of the tab bar only with tab_bar = true (sidebar.toml); then the time (Herdr's own entry).
 # Windows (the state folder is under %LOCALAPPDATA%):
 tab_bar_right = [
   { type = "command", command = '"%LOCALAPPDATA%\herdr\plugins\imsike.sidebar\herdr-sidebar.exe" tick', interval_seconds = 5, timeout_seconds = 5 },
@@ -82,7 +83,7 @@ Agent tokens (Agents panel):
 
 State glyphs: `◐` working, `◆` blocked, `●` done (finished, not seen yet), `○` idle, `·` unknown. The color rules above match these glyphs.
 
-Tab bar: `<cpu> <memory> · 󰍹 <cpu> <memory>` (`6% 2,4G · 󰍹 35% 21,3G`): the total of every pane, then the whole machine's (after the Nerd Font monitor icon), updated at each run. The time after them (`· 14:05`) is Herdr's own `datetime` entry: it stays when the plugin fails. The machine's figures count every process, those the plugin cannot read too (protected processes, virtual machines): its CPU share comes from the system's CPU times, its memory is the memory in use (what the Task Manager shows as "In use" on Windows).
+Totals: `<cpu> <memory> · 󰍹 <cpu> <memory>` (`6% 2,4G · 󰍹 35% 21,3G`): the total of every pane, then the whole machine's (after the Nerd Font monitor icon), updated at each run. Each run writes them in `totals.json`, in the state folder, which the menu's `Tools` pane shows on its last row. The tab bar shows them only with `tab_bar = true`; otherwise its entry stays empty and Herdr leaves it out, separator included. The time (`14:05`) is Herdr's own `datetime` entry: it stays when the plugin fails. The machine's figures count every process, those the plugin cannot read too (protected processes, virtual machines): its CPU share comes from the system's CPU times, its memory is the memory in use (what the Task Manager shows as "In use" on Windows).
 
 - **CPU**: used since the previous run, as a share of the whole machine, rounded to the percent (`0%`, `12%`: below 0.5% shows `0%`); missing on the first run, and when the previous run is less than a second or more than two minutes old.
 - **Memory**: working set on Windows, resident memory elsewhere (`850M`, `1,2G`).
@@ -93,7 +94,7 @@ To check the values without the sidebar, `herdr-sidebar show` (from the state fo
 
 ## Settings
 
-`sidebar.toml`, in the plugin's config folder (`herdr plugin config-dir imsike.sidebar` prints it), sets how the values are written. The menu's **Réglages** entry opens it, and first creates it with every setting commented out. A missing setting keeps its default:
+`sidebar.toml`, in the plugin's config folder (`herdr plugin config-dir imsike.sidebar` prints it), sets how the values are written. The menu's settings screen (**Settings**) changes it, or opens it, and first creates it with every setting commented out. A missing setting keeps its default:
 
 | Setting | Default | Effect |
 |---|---|---|
@@ -101,6 +102,7 @@ To check the values without the sidebar, `herdr-sidebar show` (from the state fo
 | `percent_space` | `false` | `4%` (`false`) or `4 %` with a narrow no-break space (`true`) |
 | `ttl_seconds` | `20` | how long a value lasts when no run refreshes it; at least 1 |
 | `shells` | `["bash", "sh", "zsh", "fish", "dash", "nu", "pwsh", "powershell", "cmd"]` | process names counted as shells (without `.exe`, any case) |
+| `tab_bar` | `false` | also show the totals in the tab bar (`true`) |
 
 ```toml
 percent_space = true
@@ -129,4 +131,4 @@ Herdr runs the tab bar command without the plugin's environment, so without its 
 
 ## Turn it off
 
-Remove the `command` entry of `tab_bar_right` and the `$ws`, `$ws_stats`, `$line`, `$usage`, `$shell_count`, `$stats`, `$cpu`, `$ram`, `$shells` tokens from `config.toml` and the `[ui.sidebar.*]` rows (the default rows come back), then `herdr plugin disable imsike.sidebar` (or `herdr plugin uninstall imsike.sidebar`), which also gives the Agents panel its own sort back. The copied binary, `sample.json`, `seq` and `config-dir` stay in the state folder, and `sidebar.toml` in the config folder, until you delete them.
+Remove the `command` entry of `tab_bar_right` and the `$ws`, `$ws_stats`, `$line`, `$usage`, `$shell_count`, `$stats`, `$cpu`, `$ram`, `$shells` tokens from `config.toml` and the `[ui.sidebar.*]` rows (the default rows come back), then `herdr plugin disable imsike.sidebar` (or `herdr plugin uninstall imsike.sidebar`), which also gives the Agents panel its own sort back. The copied binary, `sample.json`, `totals.json`, `seq` and `config-dir` stay in the state folder, and `sidebar.toml` in the config folder, until you delete them.

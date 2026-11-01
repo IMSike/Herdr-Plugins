@@ -14,3 +14,6 @@
 
 # Noms des processus comptés comme shells (sans .exe, casse indifférente).
 # shells = ["bash", "sh", "zsh", "fish", "dash", "nu", "pwsh", "powershell", "cmd"]
+
+# Totaux (panes, machine) aussi dans la barre d'onglets ; le pane Tools les affiche.
+# tab_bar = false

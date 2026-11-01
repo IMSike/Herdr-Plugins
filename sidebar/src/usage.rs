@@ -2,7 +2,6 @@
 
 use std::collections::{HashMap, HashSet};
 
-use herdr_api::NumberFormat;
 use serde::{Deserialize, Serialize};
 
 /// A previous sample older than this gives no meaningful CPU average.
@@ -214,14 +213,13 @@ pub fn cpu_share(cpu_ms: u64, all_cores_ms: u64) -> f64 {
     (cpu_ms as f64 * 100.0 / all_cores_ms as f64).min(100.0)
 }
 
-/// Rounded to the percent, to keep lines short: `0%`, `12%`.
-pub fn format_cpu(percent: f64, numbers: &NumberFormat) -> String {
-    numbers.percent(format!("{percent:.0}"))
-}
+pub use herdr_api::sidebar::format_cpu;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use herdr_api::NumberFormat;
 
     fn shells() -> Vec<String> {
         crate::settings::Settings::default().shells

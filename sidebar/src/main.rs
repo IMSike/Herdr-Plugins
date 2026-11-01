@@ -5,7 +5,9 @@
 //!   state folder, so a `ui.tab_bar_right` command entry has a fixed path,
 //!   and sorts the Agents panel by the tree order.
 //! - `tick` (run by that entry every few seconds) measures every pane's
-//!   process tree, reports the tokens and prints the totals for the tab bar.
+//!   process tree, reports the tokens and leaves the totals in `totals.json`
+//!   for the `Tools` pane; it prints them for the tab bar only when the
+//!   settings ask (an empty output hides the entry).
 //! - `event` (agent and workspace hooks) places the agents in the tree
 //!   right away; their figures wait for the next `tick`.
 //! - `show` prints the tokens without reporting them.
@@ -28,12 +30,13 @@ use std::time::{Duration, Instant};
 use serde_json::{Map, Value, json};
 use sysinfo::{MemoryRefreshKind, ProcessRefreshKind, ProcessesToUpdate, System};
 
+use herdr_api::sidebar::Totals;
 use herdr_api::{request, request_field, unix_millis};
 use settings::Settings;
 use snapshot::{Pane, Snapshot};
 use usage::{Proc, Sample, Shell, Table, Usage, cpu_share, format_cpu};
 
-const SOURCE: &str = "imsike.sidebar";
+const SOURCE: &str = herdr_api::sidebar::ID;
 const SAMPLE_FILE: &str = "sample.json";
 /// The last report's `seq`: reports go on in order after the clock is set back.
 const SEQ_FILE: &str = "seq";
@@ -171,7 +174,7 @@ fn is_same_file_content(source: &Path, target: &Path) -> io::Result<bool> {
 
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
-    /// Run by the tab bar entry: report, save the sample, print the totals.
+    /// Run by the tab bar entry: report, save the sample and the totals.
     Tick,
     /// Run by a hook (agent, workspace): place the agents only.
     Event,
@@ -309,24 +312,25 @@ fn tick(mode: Mode) -> Result<(), String> {
         send(&block.pane_id, tokens);
     }
 
-    let machine_cpu = previous
-        .as_ref()
-        .and_then(|p| machine::cpu_percent(p.machine?, system.cpu_times?))
-        .map(|percent| format_cpu(percent, &numbers));
-    println!(
-        "{}",
-        tokens::tab_bar(
-            cpu(&total),
-            &total,
-            machine_cpu,
-            system.used_memory,
-            &numbers
-        )
-    );
+    let totals = Totals {
+        at_ms: now,
+        cpu: all_cores_ms.map(|ms| cpu_share(total.cpu_ms, ms)),
+        memory: total.memory,
+        machine_cpu: previous
+            .as_ref()
+            .and_then(|p| machine::cpu_percent(p.machine?, system.cpu_times?)),
+        machine_memory: system.used_memory,
+    };
+    if mode == Mode::Show || settings.tab_bar {
+        println!("{}", totals.line(&numbers));
+    }
     if mode == Mode::Tick {
         let mut sample = system.sample(now);
         sample.shells = shells;
         write_sample(&sample_path, &sample);
+        if let Err(e) = totals.save(&state_dir) {
+            eprintln!("herdr-sidebar : totaux non enregistrés : {e}");
+        }
     }
     if late() {
         return too_slow();

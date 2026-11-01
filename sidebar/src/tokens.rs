@@ -1,5 +1,4 @@
-//! The values the plugin reports as sidebar tokens, and the line it prints
-//! for the tab bar.
+//! The values the plugin reports as sidebar tokens.
 
 use serde_json::{Map, Value};
 
@@ -11,8 +10,6 @@ use crate::usage::Usage;
 /// Nerd Font terminal glyph (nf-oct-terminal). Some terminals draw it two
 /// cells wide: the space after it keeps the count clear.
 const SHELL_GLYPH: char = '\u{F489}';
-/// Nerd Font monitor glyph (nf-md-monitor), before the whole machine's figures.
-const MACHINE_GLYPH: char = '\u{F0379}';
 
 /// The tokens that place a block in the tree.
 pub fn layout(block: &Block) -> Map<String, Value> {
@@ -70,25 +67,6 @@ pub fn figures(
         parts.push(format!("{SHELL_GLYPH} {}", usage.shells));
     }
     parts.join(" ")
-}
-
-/// Every pane's total, then the whole machine's: `6% 2,4G · 󰍹 35% 21,3G`.
-pub fn tab_bar(
-    cpu: Option<String>,
-    total: &Usage,
-    machine_cpu: Option<String>,
-    used_memory: u64,
-    numbers: &NumberFormat,
-) -> String {
-    let machine: Vec<String> = machine_cpu
-        .into_iter()
-        .chain([numbers.size(used_memory)])
-        .collect();
-    format!(
-        "{} · {MACHINE_GLYPH} {}",
-        figures(cpu, total, false, numbers),
-        machine.join(" ")
-    )
 }
 
 /// Whether reporting `tokens` would change nothing to the `current` ones
@@ -168,29 +146,5 @@ mod tests {
         assert!(unchanged(&tokens, &current));
         current.insert("line".into(), "└ ○ api".into());
         assert!(!unchanged(&tokens, &current));
-    }
-
-    #[test]
-    fn the_tab_bar_shows_both_totals() {
-        let numbers = NumberFormat::default();
-        let total = Usage {
-            cpu_ms: 0,
-            memory: 2 * 1024 * MB,
-            shells: 3,
-        };
-        assert_eq!(
-            tab_bar(
-                Some("6%".into()),
-                &total,
-                Some("35%".into()),
-                21 * 1024 * MB,
-                &numbers
-            ),
-            "6% 2,0G · \u{F0379} 35% 21,0G"
-        );
-        assert_eq!(
-            tab_bar(None, &total, None, 512 * MB, &numbers),
-            "2,0G · \u{F0379} 512M"
-        );
     }
 }

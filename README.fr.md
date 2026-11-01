@@ -11,7 +11,7 @@ Des plugins [Herdr](https://herdr.dev) : ceux qu'[OS-Setup](https://github.com/I
 | Plugin | Contenu |
 |---|---|
 | [`menu`](docs/fr/plugins/menu.md) | Lance un outil (lazygit, gh-dash, VS Code…) depuis un pane `Tools` d'icônes au-dessus de l'explorateur de fichiers, ou depuis un menu en popup ; chiffres sur le dossier du workspace ; met à jour Herdr, ouvre les réglages |
-| [`sidebar`](docs/fr/plugins/sidebar.md) | Un arbre workspace → agents dans le panneau Agents de Herdr, avec CPU, mémoire et nombre de shells ; totaux de tous les panes et de la machine entière dans la barre d'onglets |
+| [`sidebar`](docs/fr/plugins/sidebar.md) | Un arbre workspace → agents dans le panneau Agents de Herdr, avec CPU, mémoire et nombre de shells ; totaux de tous les panes et de la machine entière pour le pane `Tools` du menu ou la barre d'onglets |
 
 ## Installation
 

@@ -4,10 +4,10 @@
 
 use std::path::Path;
 
-use herdr_api::NumberFormat;
+use herdr_api::{NumberFormat, sidebar};
 use serde::Deserialize;
 
-pub const FILE_NAME: &str = "sidebar.toml";
+pub const FILE_NAME: &str = sidebar::SETTINGS_FILE;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -21,6 +21,8 @@ pub struct Settings {
     pub ttl_seconds: u64,
     /// Process names counted as shells (without `.exe`, any case).
     pub shells: Vec<String>,
+    /// The totals in the tab bar too; the `Tools` pane shows them anyway.
+    pub tab_bar: bool,
 }
 
 impl Default for Settings {
@@ -29,20 +31,9 @@ impl Default for Settings {
         Self {
             decimal_comma: numbers.decimal_comma,
             percent_space: numbers.percent_space,
-            ttl_seconds: 20,
-            shells: [
-                "bash",
-                "sh",
-                "zsh",
-                "fish",
-                "dash",
-                "nu",
-                "pwsh",
-                "powershell",
-                "cmd",
-            ]
-            .map(String::from)
-            .to_vec(),
+            ttl_seconds: sidebar::TTL_SECONDS,
+            shells: sidebar::SHELLS.iter().map(|s| s.to_string()).collect(),
+            tab_bar: false,
         }
     }
 }

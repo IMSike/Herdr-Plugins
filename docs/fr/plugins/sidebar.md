@@ -2,7 +2,7 @@
 
 [English](../../en/plugins/sidebar.md) · **Français**
 
-Transforme le panneau Agents de Herdr en arbre : les agents de chaque workspace listés sous son nom, avec CPU et mémoire par workspace et par agent, et le nombre de shells lancés par chaque agent. La barre d'onglets affiche le total de tous les panes et celui de la machine entière. Le plugin ne fait que fournir les valeurs ; leur affichage se règle dans les lignes de sidebar du `config.toml` de Herdr.
+Transforme le panneau Agents de Herdr en arbre : les agents de chaque workspace listés sous son nom, avec CPU et mémoire par workspace et par agent, et le nombre de shells lancés par chaque agent. Le total de tous les panes et celui de la machine entière s'affichent dans le pane `Tools` du [menu](menu.md), ou dans la barre d'onglets. Le plugin ne fait que fournir les valeurs ; leur affichage se règle dans les lignes de sidebar du `config.toml` de Herdr.
 
 ```
  agents                 arbre
@@ -33,7 +33,8 @@ Puis ajoutez au `config.toml` de Herdr :
 [ui]
 sidebar_width = 34
 sidebar_max_width = 40
-# Lance le plugin toutes les 5 secondes et affiche ses totaux à droite de la barre d'onglets, puis l'heure (entrée propre à Herdr).
+# Lance le plugin toutes les 5 secondes : à garder même sans rien afficher. Ses totaux ne s'affichent
+# à droite de la barre d'onglets qu'avec tab_bar = true (sidebar.toml) ; puis l'heure (entrée propre à Herdr).
 # Windows (le dossier d'état est sous %LOCALAPPDATA%) :
 tab_bar_right = [
   { type = "command", command = '"%LOCALAPPDATA%\herdr\plugins\imsike.sidebar\herdr-sidebar.exe" tick', interval_seconds = 5, timeout_seconds = 5 },
@@ -82,7 +83,7 @@ Tokens des agents (panneau Agents) :
 
 Symboles d'état : `◐` au travail, `◆` bloqué, `●` terminé (pas encore vu), `○` inactif, `·` inconnu. Les règles de couleur ci-dessus se basent sur ces symboles.
 
-Barre d'onglets : `<cpu> <mémoire> · 󰍹 <cpu> <mémoire>` (`6% 2,4G · 󰍹 35% 21,3G`) : le total de tous les panes, puis celui de la machine entière (après l'icône écran Nerd Font), mis à jour à chaque passage. L'heure qui suit (`· 14:05`) est l'entrée `datetime` propre à Herdr : elle reste affichée si le plugin échoue. Les chiffres de la machine comptent tous les processus, y compris ceux que le plugin ne peut pas lire (processus protégés, machines virtuelles) : sa part de CPU vient des temps CPU du système, sa mémoire est la mémoire utilisée (ce que le Gestionnaire des tâches affiche comme « En cours d'utilisation » sous Windows).
+Totaux : `<cpu> <mémoire> · 󰍹 <cpu> <mémoire>` (`6% 2,4G · 󰍹 35% 21,3G`) : le total de tous les panes, puis celui de la machine entière (après l'icône écran Nerd Font), mis à jour à chaque passage. Chaque passage les écrit dans `totals.json`, dans le dossier d'état, que le pane `Tools` du menu affiche sur sa dernière ligne. La barre d'onglets ne les affiche qu'avec `tab_bar = true` ; sinon son entrée reste vide et Herdr l'omet, séparateur compris. L'heure (`14:05`) est l'entrée `datetime` propre à Herdr : elle reste affichée si le plugin échoue. Les chiffres de la machine comptent tous les processus, y compris ceux que le plugin ne peut pas lire (processus protégés, machines virtuelles) : sa part de CPU vient des temps CPU du système, sa mémoire est la mémoire utilisée (ce que le Gestionnaire des tâches affiche comme « En cours d'utilisation » sous Windows).
 
 - **CPU** : utilisé depuis le passage précédent, en part de la machine entière, arrondi au pourcent (`0%`, `12%` : moins de 0,5 % s'affiche `0%`) ; absent au premier passage, et quand le passage précédent date de moins d'une seconde ou de plus de deux minutes.
 - **Mémoire** : working set sous Windows, mémoire résidente ailleurs (`850M`, `1,2G`).
@@ -93,7 +94,7 @@ Pour vérifier les valeurs sans la sidebar, `herdr-sidebar show` (depuis le doss
 
 ## Réglages
 
-`sidebar.toml`, dans le dossier de configuration du plugin (`herdr plugin config-dir imsike.sidebar` l'affiche), règle l'écriture des valeurs. L'entrée **Réglages** du menu l'ouvre, après l'avoir créé avec tous les réglages en commentaire. Un réglage absent garde sa valeur par défaut :
+`sidebar.toml`, dans le dossier de configuration du plugin (`herdr plugin config-dir imsike.sidebar` l'affiche), règle l'écriture des valeurs. L'écran des réglages du menu (**Settings**) le modifie, ou l'ouvre, après l'avoir créé avec tous les réglages en commentaire. Un réglage absent garde sa valeur par défaut :
 
 | Réglage | Par défaut | Effet |
 |---|---|---|
@@ -101,6 +102,7 @@ Pour vérifier les valeurs sans la sidebar, `herdr-sidebar show` (depuis le doss
 | `percent_space` | `false` | `4%` (`false`) ou `4 %` avec une espace fine insécable (`true`) |
 | `ttl_seconds` | `20` | durée de vie d'une valeur quand aucun passage ne la rafraîchit ; au moins 1 |
 | `shells` | `["bash", "sh", "zsh", "fish", "dash", "nu", "pwsh", "powershell", "cmd"]` | noms des processus comptés comme shells (sans `.exe`, casse indifférente) |
+| `tab_bar` | `false` | affiche aussi les totaux dans la barre d'onglets (`true`) |
 
 ```toml
 percent_space = true
@@ -129,4 +131,4 @@ Herdr lance la commande de la barre d'onglets sans l'environnement du plugin, do
 
 ## Désactiver
 
-Retirez l'entrée `command` de `tab_bar_right` et les tokens `$ws`, `$ws_stats`, `$line`, `$usage`, `$shell_count`, `$stats`, `$cpu`, `$ram`, `$shells` du `config.toml` et les lignes `[ui.sidebar.*]` (les lignes par défaut reviennent), puis `herdr plugin disable imsike.sidebar` (ou `herdr plugin uninstall imsike.sidebar`), ce qui rend aussi au panneau Agents son propre tri. Le binaire copié, `sample.json`, `seq` et `config-dir` restent dans le dossier d'état, et `sidebar.toml` dans le dossier de configuration, jusqu'à ce que vous les supprimiez.
+Retirez l'entrée `command` de `tab_bar_right` et les tokens `$ws`, `$ws_stats`, `$line`, `$usage`, `$shell_count`, `$stats`, `$cpu`, `$ram`, `$shells` du `config.toml` et les lignes `[ui.sidebar.*]` (les lignes par défaut reviennent), puis `herdr plugin disable imsike.sidebar` (ou `herdr plugin uninstall imsike.sidebar`), ce qui rend aussi au panneau Agents son propre tri. Le binaire copié, `sample.json`, `totals.json`, `seq` et `config-dir` restent dans le dossier d'état, et `sidebar.toml` dans le dossier de configuration, jusqu'à ce que vous les supprimiez.
