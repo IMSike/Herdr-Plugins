@@ -98,9 +98,7 @@ impl Levels {
             _ => "%",
         }
     }
-}
 
-impl Levels {
     fn of(self, settings: &Settings) -> &Thresholds {
         match self {
             Self::Cpu => &settings.cpu_levels,
