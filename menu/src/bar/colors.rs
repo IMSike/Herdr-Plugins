@@ -1,5 +1,5 @@
-//! The colors of the threshold levels, and the gradient of the bars through
-//! them.
+//! The colors of the threshold levels, the gradient of the bars through
+//! them, and the zones of the levels on the empty part of a bar.
 
 use crossterm::style::Color;
 use herdr_api::sidebar::{Level, Thresholds};
@@ -34,6 +34,24 @@ pub fn gradient(value: f64, thresholds: &Thresholds) -> Color {
     level_color(Level::Red)
 }
 
+/// The empty part of a bar (gruvbox's dark grey).
+const TRACK: (u8, u8, u8) = (0x3c, 0x38, 0x36);
+/// How much of its level's color the empty part of a bar takes.
+const ZONE_TINT: f64 = 0.45;
+
+/// The color of the empty part of a bar at `value`: its level's, dimmed
+/// toward the track, so the bar shows where each threshold falls.
+pub fn zone(value: f64, thresholds: &Thresholds) -> Color {
+    let (a, b) = (TRACK, level_rgb(Level::of(value, thresholds)));
+    let mix =
+        |x: u8, y: u8| (f64::from(x) + (f64::from(y) - f64::from(x)) * ZONE_TINT).round() as u8;
+    Color::Rgb {
+        r: mix(a.0, b.0),
+        g: mix(a.1, b.1),
+        b: mix(a.2, b.2),
+    }
+}
+
 /// The colors of the levels (gruvbox).
 fn level_rgb(level: Level) -> (u8, u8, u8) {
     match level {
@@ -60,6 +78,9 @@ mod tests {
         assert_eq!(gradient(10.0, &thresholds), level_color(Level::Yellow));
         assert_eq!(gradient(25.0, &thresholds), level_color(Level::Orange));
         assert_eq!(gradient(80.0, &thresholds), level_color(Level::Red));
+        // The empty part takes its level's color, dimmed.
+        assert_eq!(zone(5.0, &thresholds), zone(0.0, &thresholds));
+        assert_ne!(zone(5.0, &thresholds), zone(30.0, &thresholds));
         // Halfway between green and yellow.
         assert_eq!(
             gradient(5.0, &thresholds),

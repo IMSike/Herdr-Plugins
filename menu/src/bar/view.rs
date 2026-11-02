@@ -1,7 +1,7 @@
 //! What the bar shows: its icons and the sidebar's totals, the disk
 //! figures, or the reload of the configuration files open in an editor.
 
-use super::colors::{gradient, level_color};
+use super::colors::{gradient, level_color, zone};
 use super::geometry::{Grid, centered, wanted_rows};
 use super::{
     FIGURES_TOP, FIRST_FIT_AFTER, MESSAGE_FOR, OTHER_READING_CHECK_EVERY, REFRESH, SETTLE,
@@ -684,9 +684,6 @@ fn draw_line(
     Ok(())
 }
 
-/// Partial blocks of a bar's last cell, by eighths.
-const EIGHTHS: [char; 7] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉'];
-
 /// The totals as four bars: `CPU :`, `RAM :`, then the machine's, each
 /// bar in a gradient through the colors of its thresholds, then its value.
 fn draw_bars(
@@ -741,19 +738,20 @@ fn draw_bars(
     Ok(())
 }
 
-/// A bar of `cells` cells, filled as far as the gauge goes; each cell in
-/// the color its place takes in the gradient of the thresholds.
+/// A thin bar of `cells` cells, filled by half cells as far as the gauge
+/// goes, each filled cell in the color its place takes in the gradient of
+/// the thresholds; the empty part in the dimmed color of its level's zone.
 fn draw_gauge(out: &mut impl Write, gauge: &Gauge, cells: usize) -> io::Result<()> {
     let filled = gauge.fill.unwrap_or(0.0).clamp(0.0, 1.0) * cells as f64;
     let mut current = None;
     for cell in 0..cells {
         let covered = (filled - cell as f64).clamp(0.0, 1.0);
-        let eighths = (covered * 8.0).round() as usize;
+        let halves = (covered * 2.0).round() as usize;
         let at = (cell as f64 + 0.5) / cells as f64 * gauge.full;
-        let (symbol, color) = match eighths {
-            0 => ('░', Color::DarkGrey),
-            8 => ('█', gradient(at, &gauge.thresholds)),
-            n => (EIGHTHS[n - 1], gradient(at, &gauge.thresholds)),
+        let (symbol, color) = match halves {
+            0 => ('─', zone(at, &gauge.thresholds)),
+            1 => ('╸', gradient(at, &gauge.thresholds)),
+            _ => ('━', gradient(at, &gauge.thresholds)),
         };
         if current != Some(color) {
             queue!(out, SetForegroundColor(color))?;
