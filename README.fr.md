@@ -31,7 +31,7 @@ Les mises à jour ne sont jamais automatiques : `herdr plugin update` récupère
 |---|---|
 | [Plugins](docs/fr/README.md) | Ce que chaque plugin affiche ou fait, implications, comment le désactiver |
 | [Ajouter un plugin](docs/fr/adding-plugins.md) | Organisation, crate, manifeste, essai, documentation |
-| [Décisions d'architecture](docs/fr/adr/) | Pourquoi Rust et un workspace Cargo, versions et mises à jour, le menu au-dessus de l'explorateur de fichiers, réglages des plugins, mise à jour de Herdr depuis le menu |
+| [Décisions d'architecture](docs/fr/adr/) | Pourquoi Rust et un workspace Cargo, versions et mises à jour, le menu au-dessus de l'explorateur de fichiers, réglages des plugins, mise à jour de Herdr depuis le menu, couleurs par seuil |
 
 ## Contribuer
 

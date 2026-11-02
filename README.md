@@ -31,7 +31,7 @@ Updates are never automatic: `herdr plugin update` fetches the latest commit of 
 |---|---|
 | [Plugins](docs/en/README.md) | What each plugin shows or does, implications, how to turn it off |
 | [Adding a plugin](docs/en/adding-plugins.md) | Layout, crate, manifest, trying it, docs |
-| [Architecture decisions](docs/en/adr/) | Why Rust and one Cargo workspace, versions and updates, the menu above the file explorer, plugin settings, updating Herdr from the menu |
+| [Architecture decisions](docs/en/adr/) | Why Rust and one Cargo workspace, versions and updates, the menu above the file explorer, plugin settings, updating Herdr from the menu, threshold colors |
 
 ## Contributing
 

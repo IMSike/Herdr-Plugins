@@ -32,7 +32,7 @@ A plugin under development is linked rather than installed: `herdr plugin link <
 - Each plugin is a crate of the root Cargo workspace, in its own folder with its `herdr-plugin.toml`; code shared by several plugins lives in `crates/` ([ADR 0001](docs/en/adr/0001-rust-cargo-workspace.md)).
 - Pure logic (formatting, computations) in modules of its own, without I/O, tested on their own.
 - No `unsafe`, with one exception: the sidebar's call to Windows' `GetSystemTimes` (`sidebar/src/machine.rs`), the machine's CPU times and the clock of every CPU share, which no dependency gives as precisely without slowing each run. Anything else goes through a safe crate (`sysinfo`, the standard library).
-- Identifiers and comments in English; user-facing text in French for now.
+- Identifiers and comments in English; user-facing text in French for now, except the names of the menu's built-in entries (Disk, Update, Settings), which their keys (`d`, `u`, `s`) come from.
 - Encoding: UTF-8 without BOM, LF. Enforced by `.gitattributes` and `.editorconfig`.
 
 ## Documentation
