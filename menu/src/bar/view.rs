@@ -494,9 +494,13 @@ fn modified(file: Option<&Path>) -> Option<SystemTime> {
 /// Starts the entry: the tool in the plugin's large popup or on its own, or
 /// a built-in action.
 fn launch(me: &str, entry: &Entry) -> Result<(), String> {
-    let (explorer, terminal) = folders(me);
-    let cwd = herdr::start_folder(entry.cwd, explorer, terminal)
-        .map(|p| p.to_string_lossy().into_owned());
+    // An action starts in no folder: asking Herdr for the tab's is not needed.
+    let cwd = if entry.action.is_some() {
+        None
+    } else {
+        let (explorer, terminal) = folders(me);
+        herdr::start_folder(entry.cwd, explorer, terminal).map(|p| p.to_string_lossy().into_owned())
+    };
     crate::start(entry, cwd.as_deref(), Some(me))
 }
 
