@@ -14,7 +14,7 @@ use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetFor
 use crossterm::terminal;
 use files::Files;
 use herdr_api::NumberFormat;
-use herdr_api::sidebar::{self, Settings, Thresholds, check_thresholds};
+use herdr_api::sidebar::{self, Levels, Settings, Thresholds, check_thresholds};
 use std::io;
 use toml_edit::Value;
 
@@ -56,65 +56,21 @@ enum Item {
     Reload,
 }
 
-/// One of the sidebar's sets of thresholds.
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum Levels {
-    Cpu,
-    Memory,
-    MachineCpu,
-    MachineMemory,
+/// The name of a set of thresholds on the screen.
+fn levels_name(levels: Levels) -> &'static str {
+    match levels {
+        Levels::Cpu => "Seuils CPU (Workspaces)",
+        Levels::Memory => "Seuils mémoire (Workspaces)",
+        Levels::MachineCpu => "Seuils CPU (machine)",
+        Levels::MachineMemory => "Seuils mémoire (machine)",
+    }
 }
 
-impl Levels {
-    const ALL: [Self; 4] = [
-        Self::Cpu,
-        Self::Memory,
-        Self::MachineCpu,
-        Self::MachineMemory,
-    ];
-
-    /// Its setting in `sidebar.toml`.
-    fn key(self) -> &'static str {
-        match self {
-            Self::Cpu => "cpu_levels",
-            Self::Memory => "memory_levels",
-            Self::MachineCpu => "machine_cpu_levels",
-            Self::MachineMemory => "machine_memory_levels",
-        }
-    }
-
-    fn name(self) -> &'static str {
-        match self {
-            Self::Cpu => "Seuils CPU (Workspaces)",
-            Self::Memory => "Seuils mémoire (Workspaces)",
-            Self::MachineCpu => "Seuils CPU (machine)",
-            Self::MachineMemory => "Seuils mémoire (machine)",
-        }
-    }
-
-    fn unit(self) -> &'static str {
-        match self {
-            Self::Memory => "Go",
-            _ => "%",
-        }
-    }
-
-    fn of(self, settings: &Settings) -> &Thresholds {
-        match self {
-            Self::Cpu => &settings.cpu_levels,
-            Self::Memory => &settings.memory_levels,
-            Self::MachineCpu => &settings.machine_cpu_levels,
-            Self::MachineMemory => &settings.machine_memory_levels,
-        }
-    }
-
-    fn of_mut(self, settings: &mut Settings) -> &mut Thresholds {
-        match self {
-            Self::Cpu => &mut settings.cpu_levels,
-            Self::Memory => &mut settings.memory_levels,
-            Self::MachineCpu => &mut settings.machine_cpu_levels,
-            Self::MachineMemory => &mut settings.machine_memory_levels,
-        }
+/// The unit of a set of thresholds on the screen.
+fn levels_unit(levels: Levels) -> &'static str {
+    match levels {
+        Levels::Memory => "Go",
+        _ => "%",
     }
 }
 
@@ -254,12 +210,12 @@ impl State {
             ),
             Item::Colors => ("Couleurs", yes_no(sidebar.is_some_and(|s| s.colors))),
             Item::Levels(which) => (
-                which.name(),
+                levels_name(which),
                 match typed {
                     Some(text) => format!("{text}▏"),
                     None => sidebar.map_or_else(String::new, |s| {
                         let values: Vec<String> = which.of(s).iter().map(|v| number(*v)).collect();
-                        format!("{} {}", values.join(" · "), which.unit())
+                        format!("{} {}", values.join(" · "), levels_unit(which))
                     }),
                 },
             ),

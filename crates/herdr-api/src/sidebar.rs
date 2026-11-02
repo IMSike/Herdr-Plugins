@@ -5,7 +5,7 @@
 
 mod settings;
 
-pub use settings::{Settings, TEMPLATE};
+pub use settings::{Levels, Settings, TEMPLATE};
 
 use crate::NumberFormat;
 use serde::{Deserialize, Serialize};

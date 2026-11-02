@@ -82,10 +82,10 @@ impl Settings {
 
     pub fn thresholds(&self) -> TotalsThresholds {
         TotalsThresholds {
-            cpu: self.cpu_levels,
-            memory: self.memory_levels,
-            machine_cpu: self.machine_cpu_levels,
-            machine_memory: self.machine_memory_levels,
+            cpu: *Levels::Cpu.of(self),
+            memory: *Levels::Memory.of(self),
+            machine_cpu: *Levels::MachineCpu.of(self),
+            machine_memory: *Levels::MachineMemory.of(self),
         }
     }
 
@@ -113,15 +113,58 @@ impl Settings {
         if settings.ttl_seconds == 0 {
             return Err("ttl_seconds doit valoir au moins 1".into());
         }
-        for (name, thresholds) in [
-            ("cpu_levels", &settings.cpu_levels),
-            ("memory_levels", &settings.memory_levels),
-            ("machine_cpu_levels", &settings.machine_cpu_levels),
-            ("machine_memory_levels", &settings.machine_memory_levels),
-        ] {
-            check_thresholds(thresholds).map_err(|e| format!("{name} : {e}"))?;
+        for levels in Levels::ALL {
+            check_thresholds(levels.of(&settings))
+                .map_err(|e| format!("{} : {e}", levels.key()))?;
         }
         Ok(settings)
+    }
+}
+
+/// One of the sidebar's sets of thresholds: the list of them, for whatever
+/// goes through all four.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Levels {
+    Cpu,
+    Memory,
+    MachineCpu,
+    MachineMemory,
+}
+
+impl Levels {
+    pub const ALL: [Self; 4] = [
+        Self::Cpu,
+        Self::Memory,
+        Self::MachineCpu,
+        Self::MachineMemory,
+    ];
+
+    /// Its setting in `sidebar.toml`.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Cpu => "cpu_levels",
+            Self::Memory => "memory_levels",
+            Self::MachineCpu => "machine_cpu_levels",
+            Self::MachineMemory => "machine_memory_levels",
+        }
+    }
+
+    pub fn of(self, settings: &Settings) -> &Thresholds {
+        match self {
+            Self::Cpu => &settings.cpu_levels,
+            Self::Memory => &settings.memory_levels,
+            Self::MachineCpu => &settings.machine_cpu_levels,
+            Self::MachineMemory => &settings.machine_memory_levels,
+        }
+    }
+
+    pub fn of_mut(self, settings: &mut Settings) -> &mut Thresholds {
+        match self {
+            Self::Cpu => &mut settings.cpu_levels,
+            Self::Memory => &mut settings.memory_levels,
+            Self::MachineCpu => &mut settings.machine_cpu_levels,
+            Self::MachineMemory => &mut settings.machine_memory_levels,
+        }
     }
 }
 
