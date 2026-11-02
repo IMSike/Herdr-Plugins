@@ -177,7 +177,7 @@ const LAUNCH_AGAIN_AFTER: Duration = Duration::from_secs(1);
 
 /// The buttons of a page: each with its row, its first column and its text.
 fn buttons(page: Page, width: u16) -> Vec<(Button, u16, u16, &'static str)> {
-    let len = |text: &str| text.chars().count() as u16;
+    let len = cells;
     match page {
         Page::Tools => Vec::new(),
         Page::Disk => vec![(Button::Back, 0, 1, BACK)],
@@ -197,11 +197,16 @@ fn buttons(page: Page, width: u16) -> Vec<(Button, u16, u16, &'static str)> {
     }
 }
 
+/// The cells `text` takes on screen (see `ui::width`).
+fn cells(text: &str) -> u16 {
+    u16::try_from(crate::ui::width(text)).unwrap_or(u16::MAX)
+}
+
 fn button_at(page: Page, width: u16, row: u16, column: u16) -> Option<Button> {
     buttons(page, width)
         .into_iter()
         .find(|&(_, r, left, text)| {
-            r == row && column >= left && column < left + text.chars().count() as u16
+            r == row && column >= left && column < left.saturating_add(cells(text))
         })
         .map(|(button, ..)| button)
 }
