@@ -277,13 +277,24 @@ impl State {
             .menu
             .as_ref()
             .ok_or("dossier de configuration du menu inconnu")?;
-        store::set(path, files::MENU_TEMPLATE, key, value)
+        store::set(path, files::MENU_TEMPLATE, key, value)?;
+        // A file the menu still ignores (an unknown setting…) is said so.
+        match config::load(path.parent()) {
+            (_, Some(e)) => Err(format!("enregistré, mais {e}")),
+            (_, None) => Ok(()),
+        }
     }
 
     /// Writes `key` to `sidebar.toml`, when the sidebar is installed.
     fn set_sidebar(&self, key: &str, value: Value) -> Result<(), String> {
         match &self.files.sidebar {
-            Some(path) => store::set(path, files::SIDEBAR_TEMPLATE, key, value),
+            Some(path) => {
+                store::set(path, files::SIDEBAR_TEMPLATE, key, value)?;
+                // A file the sidebar still ignores is said so.
+                Settings::read(path)
+                    .map(|_| ())
+                    .map_err(|e| format!("enregistré, mais {e}"))
+            }
             None => Ok(()),
         }
     }
@@ -394,6 +405,11 @@ impl State {
                     current.saturating_sub(1) / TTL_STEP * TTL_STEP
                 }
                 .clamp(TTL_STEP, TTL_MAX);
+                // From a value out of the range, which the file may hold, a
+                // step never goes the other way.
+                if (forward && value < current) || (!forward && value > current) {
+                    return None;
+                }
                 self.set_in_sidebar("ttl_seconds", (value as i64).into(), |s| {
                     s.ttl_seconds = value
                 })?
@@ -549,8 +565,11 @@ fn show(state: &mut State) -> io::Result<()> {
             continue;
         }
         let close = match event {
+            // Ctrl+L and the like are no l: only Ctrl+C means something.
+            Event::Key(key) if key.kind == KeyEventKind::Press && is_control(key.modifiers) => {
+                (key.code == KeyCode::Char('c')).then_some(true)
+            }
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-                KeyCode::Char('c') if is_control(key.modifiers) => Some(true),
                 KeyCode::Esc | KeyCode::Char('q') => Some(true),
                 KeyCode::Up | KeyCode::Char('k') => {
                     state.selected = (state.selected + items.len() - 1) % items.len();

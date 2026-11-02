@@ -133,7 +133,7 @@ Le dossier n'est mesuré que pendant que cette page est affichée : revenir arr�
 
 La fenêtre attend Entrée avant de se fermer, erreur comprise. Tant qu'elle est ouverte, un nouveau clic sur Update dit qu'une mise à jour est en cours au lieu d'en ouvrir une deuxième. Sans affichage graphique (en SSH), ou quand le terminal se ferme aussitôt, le pane `Tools` le dit en rouge : lancez `herdr update` hors de Herdr.
 
-**Settings** (`s`) ouvre un écran de réglages dans un popup de 70 % de la largeur du terminal et 80 % de sa hauteur ; la liste défile quand elle ne tient pas (une flèche en haut à droite le signale). Haut et bas (ou `j`/`k`) choisissent une ligne ; gauche et droite (ou `h`/`l`), Entrée ou Espace la changent, et chaque changement est enregistré aussitôt ; Échap ou `q` ferme l'écran.
+**Settings** (`s`) ouvre un écran de réglages dans un popup de 70 % de la largeur du terminal et 80 % de sa hauteur ; la liste défile quand elle ne tient pas (une flèche en haut à droite le signale). Haut et bas (ou `j`/`k`) choisissent une ligne ; gauche et droite (ou `h`/`l`), Entrée ou Espace la changent, et chaque changement est enregistré aussitôt ; Échap ou `q` ferme l'écran. Quand le fichier reste ignoré après un changement (un autre de ses réglages est invalide), l'écran le dit en rouge, avec la raison.
 
 | Ligne | Effet | Fichier |
 |---|---|---|
