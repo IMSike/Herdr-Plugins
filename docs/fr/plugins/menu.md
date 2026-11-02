@@ -97,7 +97,7 @@ Le dossier où démarre un outil :
 | `workspace` | le dossier de l'explorateur | le dossier du workspace |
 | `pane` | le dossier du premier terminal de l'onglet | le dossier du pane actif |
 
-Sous Windows, une commande est cherchée dans le `PATH`, avant les dossiers du système (`bash` est le premier du `PATH`, Git Bash par exemple, pas celui de WSL), et un fichier batch (`code` est `code.cmd`) se lance sans préciser son extension.
+Une commande est cherchée dans les dossiers du `PATH` écrits en entier : une entrée vide (`PATH=:/usr/bin`) ou `.` lancerait un programme de ce nom trouvé dans le dossier de l'espace de travail, celui d'un dépôt cloné par exemple. Sous Windows, elle est cherchée avant les dossiers du système (`bash` est le premier du `PATH`, Git Bash par exemple, pas celui de WSL), et un fichier batch (`code` est `code.cmd`) se lance sans préciser son extension.
 
 Un fichier illisible ou invalide (champ inconnu, commande vide, commande et action à la fois, touche utilisée deux fois) est ignoré : le menu affiche les entrées intégrées, et affiche l'erreur : le menu en popup au-dessus de sa ligne d'aide, le pane `Tools` en rouge sous les icônes pendant 5 secondes. Le menu en popup lit le fichier à chaque ouverture ; le pane `Tools` le relit dans les 2 secondes qui suivent un changement, et prend la hauteur de sa nouvelle disposition. Un outil démarre tel que le menu l'affichait, même si le fichier a changé entre-temps.
 

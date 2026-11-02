@@ -97,7 +97,7 @@ The folder a tool starts in:
 | `workspace` | the explorer's folder | the workspace's folder |
 | `pane` | the folder of the tab's first terminal | the focused pane's folder |
 
-On Windows, a command name is looked up on `PATH`, before the system folders (`bash` is the first one on `PATH`, Git Bash for instance, not WSL's), and a batch file (`code` is `code.cmd`) runs without naming its extension.
+A command name is looked up in the folders of `PATH` written in full: an empty entry (`PATH=:/usr/bin`) or `.` would run a program of that name found in the workspace's folder, a cloned repository's for instance. On Windows it is looked up before the system folders (`bash` is the first one on `PATH`, Git Bash for instance, not WSL's), and a batch file (`code` is `code.cmd`) runs without naming its extension.
 
 A file that cannot be read or is invalid (unknown field, empty command, both a command and an action, a key used twice) is ignored: the menu shows the built-in entries, and shows the error: the popup menu above its help line, the `Tools` pane in red under the icons for 5 seconds. The popup menu reads the file each time it opens; the `Tools` pane reads it again within 2 seconds of a change, and takes the height of its new layout. A tool starts as the menu showed it, even when the file changed in between.
 

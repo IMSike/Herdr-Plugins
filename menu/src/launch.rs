@@ -9,25 +9,36 @@ use std::process::{Command, Stdio};
 /// up on `PATH` here: Rust's own search tries the system folders first (`bash`
 /// would be WSL's, not the Git Bash found on `PATH`), and a batch file (`code`
 /// is `code.cmd`) runs with the right escaping when given its full path.
+///
+/// On Unix too: `execvp` would read an empty `PATH` entry (`PATH=:/usr/bin`)
+/// as the folder the program starts in, and run a program of that name a
+/// cloned repository holds.
 pub fn command(argv: &[String]) -> Result<Command, String> {
     let (name, args) = argv.split_first().ok_or("commande vide")?;
-    let mut command = Command::new(program(name));
+    let mut command = Command::new(program(name)?);
     command.args(args);
     Ok(command)
 }
 
 #[cfg(windows)]
-fn program(name: &str) -> std::ffi::OsString {
+fn program(name: &str) -> Result<std::ffi::OsString, String> {
     let bare = Path::new(name);
     if bare.extension().is_some() || bare.components().count() > 1 {
-        return name.into();
+        return Ok(name.into());
     }
-    find_on_path(name).map_or_else(|| name.into(), PathBuf::into_os_string)
+    // Rust's own search does not look in the current folder.
+    Ok(find_on_path(name).map_or_else(|| name.into(), PathBuf::into_os_string))
 }
 
+/// A name with a `/` is a path, used as it is.
 #[cfg(not(windows))]
-fn program(name: &str) -> std::ffi::OsString {
-    name.into()
+fn program(name: &str) -> Result<std::ffi::OsString, String> {
+    if name.contains('/') {
+        return Ok(name.into());
+    }
+    find_on_path(name)
+        .map(PathBuf::into_os_string)
+        .ok_or_else(|| format!("« {name} » introuvable dans le PATH"))
 }
 
 /// Where the program `name` is on `PATH`, if it is there.
@@ -47,9 +58,21 @@ pub fn find_on_path(name: &str) -> Option<PathBuf> {
                 } else {
                     dir.join(format!("{name}.{ext}"))
                 };
-                file.is_file().then_some(file)
+                is_program(&file).then_some(file)
             })
         })
+}
+
+/// A file that can run: on Unix, one with an execute bit.
+#[cfg(unix)]
+fn is_program(file: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(file).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+}
+
+#[cfg(not(unix))]
+fn is_program(file: &Path) -> bool {
+    file.is_file()
 }
 
 /// Starts the entry without waiting for it: its output goes nowhere.
