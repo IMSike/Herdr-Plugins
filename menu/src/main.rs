@@ -328,7 +328,7 @@ fn menu() -> Result<(), String> {
 fn run() -> Result<(), String> {
     let result = run_entry();
     if let Err(message) = &result {
-        pause(&format!("{message}\n\nAppuyer sur Entrée pour fermer."));
+        pause(message);
     }
     result
 }
@@ -353,9 +353,10 @@ fn is_yes(answer: &str, default: bool) -> bool {
     }
 }
 
-/// Leaves `message` on screen until Enter: the popup closes with this process.
+/// Leaves `message` on screen until Enter, and says so: the popup or the
+/// window closes with this process.
 pub(crate) fn pause(message: &str) {
-    println!("{message}");
+    println!("{message}\n\nAppuyer sur Entrée pour fermer.");
     let _ = io::stdout().flush();
     let _ = io::stdin().read_line(&mut String::new());
 }

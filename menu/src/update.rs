@@ -144,7 +144,7 @@ pub fn run() -> Result<(), String> {
         Ok(message) => message.clone(),
         Err(e) => format!("Erreur : {e}"),
     };
-    crate::pause(&format!("\n{message}\n\nAppuyer sur Entrée pour fermer."));
+    crate::pause(&format!("\n{message}"));
     result.map(|_| ())
 }
 
