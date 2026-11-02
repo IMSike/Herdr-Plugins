@@ -98,6 +98,23 @@ fn parse_levels(text: &str) -> Result<Thresholds, String> {
     Ok(thresholds)
 }
 
+/// Thresholds as they are written: whole numbers as integers (`[10, 25,
+/// 50]`, not `[10.0, …]`), unless too large for one to hold them exactly,
+/// which would change them.
+fn levels_array(thresholds: &Thresholds) -> toml_edit::Array {
+    /// Past this, an `f64` no longer holds every whole number.
+    const EXACT: f64 = 9_007_199_254_740_992.0;
+    let mut array = toml_edit::Array::new();
+    for &value in thresholds {
+        if value.fract() == 0.0 && value.abs() < EXACT {
+            array.push(value as i64);
+        } else {
+            array.push(value);
+        }
+    }
+    array
+}
+
 struct State {
     files: Files,
     menu: Menu,
@@ -417,17 +434,10 @@ impl State {
 
     fn save_levels(&mut self, which: Levels, text: &str) -> Result<String, String> {
         let thresholds = parse_levels(text)?;
-        let mut array = toml_edit::Array::new();
-        for value in thresholds {
-            // Whole numbers as integers: `[10, 25, 50]`, not `[10.0, …]`.
-            if value.fract() == 0.0 {
-                array.push(value as i64);
-            } else {
-                array.push(value);
-            }
-        }
-        self.set_in_sidebar(which.key(), array.into(), |s| *which.of_mut(s) = thresholds)
-            .unwrap_or_else(|| Ok(String::new()))
+        self.set_in_sidebar(which.key(), levels_array(&thresholds).into(), |s| {
+            *which.of_mut(s) = thresholds
+        })
+        .unwrap_or_else(|| Ok(String::new()))
     }
 
     fn show(&mut self, result: Result<String, String>) {
@@ -676,5 +686,23 @@ mod tests {
         assert!(parse_levels("50 25 10").is_err());
         assert_eq!(number(10.0), "10");
         assert_eq!(number(2.5), "2.5");
+    }
+
+    #[test]
+    fn typed_thresholds_read_back_as_typed() {
+        let file =
+            std::env::temp_dir().join(format!("herdr-menu-levels-{}.toml", std::process::id()));
+        for text in ["10 25 50", "0,5 1 2.5", "1e19 2e19 3e19"] {
+            let thresholds = parse_levels(text).unwrap();
+            let line = format!("cpu_levels = {}\n", levels_array(&thresholds));
+            std::fs::write(&file, line).unwrap();
+            let read = Settings::read(&file).unwrap();
+            assert_eq!(*Levels::Cpu.of(&read), thresholds, "{text}");
+        }
+        assert_eq!(
+            levels_array(&[10.0, 25.0, 50.0]).to_string(),
+            "[10, 25, 50]"
+        );
+        let _ = std::fs::remove_file(file);
     }
 }
