@@ -539,8 +539,9 @@ fn scroll(state: &State, height: u16) -> usize {
 
 fn show(state: &mut State) -> io::Result<()> {
     let _screen = Screen::enter()?;
+    let mut shown = Vec::new();
     loop {
-        draw(state)?;
+        draw(state)?.show_if_new(&mut shown)?;
         let items = state.items();
         let item = items[state.selected.min(items.len() - 1)];
         let event = event::read()?;
@@ -622,7 +623,7 @@ fn show(state: &mut State) -> io::Result<()> {
     }
 }
 
-fn draw(state: &State) -> io::Result<()> {
+fn draw(state: &State) -> io::Result<Frame> {
     let (width, height) = terminal::size()?;
     let width = usize::from(width);
     let mut out = Frame::new()?;
@@ -705,7 +706,7 @@ fn draw(state: &State) -> io::Result<()> {
         Print(fit(help, width)),
         SetAttribute(Attribute::Reset)
     )?;
-    out.show()
+    Ok(out)
 }
 
 #[cfg(test)]

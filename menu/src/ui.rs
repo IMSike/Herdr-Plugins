@@ -43,6 +43,17 @@ impl Frame {
         Ok(Self(out))
     }
 
+    /// Writes it to the terminal, unless it is `last`, the frame shown
+    /// before: an event that changes nothing (a key released, the pointer
+    /// moved within a row) sends nothing to Herdr.
+    pub fn show_if_new(self, last: &mut Vec<u8>) -> io::Result<()> {
+        if self.0 == *last {
+            return Ok(());
+        }
+        last.clone_from(&self.0);
+        self.show()
+    }
+
     /// Writes it to the terminal.
     pub fn show(mut self) -> io::Result<()> {
         queue!(self.0, EndSynchronizedUpdate)?;
@@ -87,11 +98,12 @@ pub fn choose(title: &str, entries: &[Entry], error: Option<&str>) -> io::Result
     let mut selected = 0usize;
     // The first entry drawn: the list scrolls to keep the selection visible.
     let mut top = 0usize;
+    let mut shown = Vec::new();
     loop {
         let (_, height) = terminal::size()?;
         let visible = visible_rows(height);
         top = scrolled(top, selected, visible);
-        draw(title, &entries[top..], error, selected - top, visible)?;
+        draw(title, &entries[top..], error, selected - top, visible)?.show_if_new(&mut shown)?;
         match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => {
                 if is_control(key.modifiers) {
@@ -168,7 +180,7 @@ fn draw(
     error: Option<&str>,
     selected: usize,
     visible: usize,
-) -> io::Result<()> {
+) -> io::Result<Frame> {
     let (width, height) = terminal::size()?;
     let width = usize::from(width);
     let mut out = Frame::new()?;
@@ -208,7 +220,7 @@ fn draw(
         Print(fit(" touche, ↑↓ Entrée, clic · Échap", width)),
         SetAttribute(Attribute::Reset)
     )?;
-    out.show()
+    Ok(out)
 }
 
 /// The cells `text` takes on screen: two for a wide character (CJK), none
