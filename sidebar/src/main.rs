@@ -190,7 +190,10 @@ fn tick(mode: Mode) -> Result<(), String> {
             Some((Some(first), read_system()?, unix_millis()))
         }
     };
-    // Lets Herdr drop a report older than one already applied.
+    let snapshot: Snapshot = request_field("session.snapshot", json!({}), "snapshot")?;
+    // Lets Herdr drop a report older than one already applied. Taken once
+    // the session is read: a run that read it later reports with a later
+    // `seq`, and its tree is not dropped for an earlier run's.
     let seq = match mode {
         Mode::Show => 0,
         _ => next_seq(&state_dir.join(SEQ_FILE)),
@@ -204,7 +207,6 @@ fn tick(mode: Mode) -> Result<(), String> {
     };
     let too_slow = || Err("Herdr trop lent : passage interrompu".to_string());
 
-    let snapshot: Snapshot = request_field("session.snapshot", json!({}), "snapshot")?;
     let agents = snapshot.agents();
     let blocks = tree::blocks(&snapshot.spaces(), &agents);
 
