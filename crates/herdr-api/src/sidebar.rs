@@ -39,7 +39,7 @@ pub const MACHINE_CPU_LEVELS: Thresholds = [50.0, 70.0, 90.0];
 /// Default thresholds of the machine's memory in use (percent of its memory).
 pub const MACHINE_MEMORY_LEVELS: Thresholds = [60.0, 75.0, 90.0];
 /// Bytes in a GiB, the unit of the memory thresholds.
-const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
+const GIB: u64 = 1024 * 1024 * 1024;
 /// The totals of the last run, in the sidebar's state folder.
 const TOTALS_FILE: &str = "totals.json";
 /// Nerd Font monitor glyph (nf-md-monitor), before the whole machine's figures.
@@ -174,8 +174,8 @@ impl Totals {
                 machine: false,
                 text: Some(numbers.size(self.memory)),
                 fill: share(self.memory),
-                full: total / GIB,
-                value: Some(self.memory as f64 / GIB),
+                full: total / GIB as f64,
+                value: Some(self.memory as f64 / GIB as f64),
                 thresholds: t.memory,
             },
             cpu(self.machine_cpu, true, t.machine_cpu),
@@ -256,16 +256,14 @@ fn beside(mine: &Path) -> Result<PathBuf, String> {
 mod tests {
     use super::*;
 
-    const BYTES_IN_GIB: u64 = 1024 * 1024 * 1024;
-
     fn totals() -> Totals {
         Totals {
             at_ms: 0,
             cpu: Some(6.4),
-            memory: 2 * BYTES_IN_GIB,
+            memory: 2 * GIB,
             machine_cpu: Some(35.0),
-            machine_memory: 21 * BYTES_IN_GIB,
-            machine_total: 32 * BYTES_IN_GIB,
+            machine_memory: 21 * GIB,
+            machine_total: 32 * GIB,
             colors: false,
             thresholds: TotalsThresholds::default(),
         }

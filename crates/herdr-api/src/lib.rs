@@ -108,7 +108,7 @@ pub fn remove_stale(dir: &Path, age: Duration, matches: impl Fn(&str) -> bool) {
 /// Writes `bytes` to `path` through a file of this process, renamed over it:
 /// a reader sees the old content or the new one, never half of it, and two
 /// processes writing at once do not mix their content.
-pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(format!(".{}.partial", std::process::id()));
     let partial = path.with_file_name(name);
@@ -177,7 +177,7 @@ pub enum MemoryUnit {
     M,
     /// `853Mo`, `2,4Go`.
     Mo,
-    /// `853MB`, `2.4GB`.
+    /// `853MB`, `2,4GB`.
     MB,
 }
 
