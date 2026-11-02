@@ -45,16 +45,19 @@ impl Grid {
         let (per_row, slot) = match layout {
             IconLayout::Single => {
                 let per_row = count.max(1);
-                (per_row, (width / per_row as u16).clamp(1, MAX_ICON_SLOT))
+                (per_row, (width / cells(per_row)).clamp(1, MAX_ICON_SLOT))
             }
             IconLayout::Double => {
                 let per_row = count.div_ceil(2).max(1);
                 let longest = entries
                     .iter()
-                    .map(|e| crate::ui::width(&e.label) as u16)
+                    .map(|e| cells(crate::ui::width(&e.label)))
                     .max()
                     .unwrap_or(0);
-                let slot = (longest + 2).max(MIN_SLOT).min(width / per_row as u16);
+                let slot = longest
+                    .saturating_add(2)
+                    .max(MIN_SLOT)
+                    .min(width / cells(per_row));
                 (per_row, slot.max(1))
             }
         };
@@ -74,7 +77,7 @@ impl Grid {
 
     /// Rows the entries take: each row of icons and the row of names under it.
     pub fn rows(&self) -> u16 {
-        2 * self.count.div_ceil(self.per_row).max(1) as u16
+        cells(self.count.div_ceil(self.per_row).max(1)).saturating_mul(2)
     }
 
     /// The first column of entry `i`'s slot, and the row of its icon.
@@ -82,12 +85,15 @@ impl Grid {
         let line = i / self.per_row;
         let first = line * self.per_row;
         let start = self.start(first);
-        (start + self.slot * (i - first) as u16, 2 * line as u16)
+        (
+            start.saturating_add(self.slot.saturating_mul(cells(i - first))),
+            cells(line).saturating_mul(2),
+        )
     }
 
     fn start(&self, first: usize) -> u16 {
-        let in_line = (self.count - first).min(self.per_row) as u16;
-        self.width.saturating_sub(self.slot * in_line) / 2
+        let in_line = cells((self.count - first).min(self.per_row));
+        self.width.saturating_sub(self.slot.saturating_mul(in_line)) / 2
     }
 
     /// The entry under a click: its icon or its name (the row under it).
@@ -106,10 +112,16 @@ impl Grid {
     }
 }
 
+/// A count as screen cells: past what a screen holds, it stays the most
+/// one can (a cast would wrap, to zero for a divisor).
+fn cells(count: usize) -> u16 {
+    u16::try_from(count).unwrap_or(u16::MAX)
+}
+
 /// The column `text` starts at, centered in `width` columns from `start`.
 pub fn centered(start: u16, width: u16, text: &str) -> u16 {
-    let len = crate::ui::width(text) as u16;
-    start + width.saturating_sub(len) / 2
+    let len = cells(crate::ui::width(text));
+    start.saturating_add(width.saturating_sub(len) / 2)
 }
 
 #[derive(Deserialize)]
@@ -245,6 +257,11 @@ mod tests {
         assert_eq!(grid.place(1), (8, 0));
         // Too narrow: the slots share the width.
         assert_eq!(Grid::new(18, &entries(), IconLayout::Single).slot(), 3);
+        // More entries than a screen has columns: nothing wraps or divides by zero.
+        let many = vec![entry("x"); 65_536];
+        let grid = Grid::new(40, &many, IconLayout::Single);
+        assert_eq!(grid.slot(), 1);
+        assert_eq!(grid.place(65_535), (u16::MAX, 0));
     }
 
     #[test]
