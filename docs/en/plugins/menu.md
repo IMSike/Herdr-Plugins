@@ -131,7 +131,7 @@ The folder is only measured while this page is shown: going back stops the measu
 3. If so, it says how many panes close and how many agents stop (`5 panes, dont 2 agents (1 au travail)`) and asks `Redémarrer maintenant ? [o/N]`. Anything but `o` (or `oui`) cancels: the new version runs at the server's next start.
 4. Once confirmed, it stops the server (`herdr server stop`): **every pane closes and every agent stops**, as when Herdr is quit. Then it offers to start Herdr again in that window (`[o/N]`); otherwise it puts `herdr` in the clipboard (with `clip`, `pbcopy`, `wl-copy`, `xclip` or `xsel`, whichever works), to paste in a terminal.
 
-The window waits for Enter before closing, an error included. While it is open, another click on Update says that an update is under way instead of opening a second one.
+The window waits for Enter before closing, an error included. While it is open, another click on Update says that an update is under way instead of opening a second one. Without a graphical display (over SSH), or when the terminal closes at once, the `Tools` pane says so in red: run `herdr update` outside Herdr.
 
 **Settings** (`s`) opens a settings screen in a popup of 70% of the terminal's width and 80% of its height; the list scrolls when it does not fit (an arrow in the top right corner says so). Up and down (or `j`/`k`) choose a line; left and right (or `h`/`l`), Enter or Space change it, and each change is saved at once; Escape or `q` closes the screen.
 

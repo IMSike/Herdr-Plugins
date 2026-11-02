@@ -131,7 +131,7 @@ Le dossier n'est mesuré que pendant que cette page est affichée : revenir arr�
 3. Si oui, elle dit combien de panes se ferment et combien d'agents s'arrêtent (`5 panes, dont 2 agents (1 au travail)`) et demande `Redémarrer maintenant ? [o/N]`. Toute autre réponse que `o` (ou `oui`) annule : la nouvelle version tournera au prochain démarrage du serveur.
 4. Une fois confirmé, elle arrête le serveur (`herdr server stop`) : **tous les panes se ferment et tous les agents s'arrêtent**, comme quand on quitte Herdr. Puis elle propose de relancer Herdr dans cette fenêtre (`[o/N]`) ; sinon elle met `herdr` dans le presse-papiers (avec `clip`, `pbcopy`, `wl-copy`, `xclip` ou `xsel`, le premier qui fonctionne), à coller dans un terminal.
 
-La fenêtre attend Entrée avant de se fermer, erreur comprise. Tant qu'elle est ouverte, un nouveau clic sur Update dit qu'une mise à jour est en cours au lieu d'en ouvrir une deuxième.
+La fenêtre attend Entrée avant de se fermer, erreur comprise. Tant qu'elle est ouverte, un nouveau clic sur Update dit qu'une mise à jour est en cours au lieu d'en ouvrir une deuxième. Sans affichage graphique (en SSH), ou quand le terminal se ferme aussitôt, le pane `Tools` le dit en rouge : lancez `herdr update` hors de Herdr.
 
 **Settings** (`s`) ouvre un écran de réglages dans un popup de 70 % de la largeur du terminal et 80 % de sa hauteur ; la liste défile quand elle ne tient pas (une flèche en haut à droite le signale). Haut et bas (ou `j`/`k`) choisissent une ligne ; gauche et droite (ou `h`/`l`), Entrée ou Espace la changent, et chaque changement est enregistré aussitôt ; Échap ou `q` ferme l'écran.
 

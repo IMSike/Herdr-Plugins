@@ -41,9 +41,26 @@ pub fn open_window() -> Result<(), String> {
     let mut child = command
         .spawn()
         .map_err(|e| format!("fenêtre de mise à jour impossible : {e}"))?;
+    // A terminal that cannot open its window ends at once, in error; one
+    // that hands the window to a server of its own ends at once too, fine.
+    let started = std::time::Instant::now();
+    while started.elapsed() < WINDOW_CHECK {
+        match child.try_wait() {
+            Ok(Some(status)) if !status.success() => {
+                return Err(format!(
+                    "la fenêtre de mise à jour s'est fermée ({status}) : lancez « herdr update » hors de Herdr"
+                ));
+            }
+            Ok(Some(_)) | Err(_) => return Ok(()),
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(50)),
+        }
+    }
     std::thread::spawn(move || child.wait());
     Ok(())
 }
+
+/// How long the window's terminal is watched for an early end.
+const WINDOW_CHECK: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// A new console window running `me update` (Windows).
 #[cfg(windows)]
@@ -69,11 +86,15 @@ fn terminal_window(me: &std::path::Path) -> Result<Command, String> {
         &["foot"],
         &["xterm", "-e"],
     ];
-    let terminal = TERMINALS
+    // Over SSH, without a display, no terminal can open a window.
+    if std::env::var_os("DISPLAY").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_none() {
+        return Err("pas d'affichage graphique : lancez « herdr update » hors de Herdr".into());
+    }
+    let (terminal, path) = TERMINALS
         .iter()
-        .find(|t| crate::launch::find_on_path(t[0]).is_some())
+        .find_map(|t| Some((t, crate::launch::find_on_path(t[0])?)))
         .ok_or("aucun terminal trouvé : lancez « herdr update » hors de Herdr")?;
-    let mut command = Command::new(terminal[0]);
+    let mut command = Command::new(path);
     command.args(&terminal[1..]).arg(me).arg("update");
     Ok(command)
 }
