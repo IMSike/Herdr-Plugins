@@ -374,7 +374,7 @@ impl State {
                     // Back: two steps forward among three.
                     value = value.next();
                 }
-                self.set_number("memory_unit", value.name().into(), |n| {
+                self.set_number("memory_unit", herdr_api::name_of(&value).into(), |n| {
                     n.memory_unit = value
                 })
             }
@@ -383,14 +383,14 @@ impl State {
                     IconLayout::Single => IconLayout::Double,
                     IconLayout::Double => IconLayout::Single,
                 };
-                self.switch_menu("layout", value.name(), |m| m.layout = value)
+                self.switch_menu("layout", &herdr_api::name_of(&value), |m| m.layout = value)
             }
             Item::Totals => {
                 let value = match self.menu.totals {
                     TotalsStyle::Line => TotalsStyle::Bars,
                     TotalsStyle::Bars => TotalsStyle::Line,
                 };
-                self.switch_menu("totals", value.name(), |m| m.totals = value)
+                self.switch_menu("totals", &herdr_api::name_of(&value), |m| m.totals = value)
             }
             Item::Ttl => {
                 let current = self.sidebar.as_ref()?.ttl_seconds;

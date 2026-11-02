@@ -31,15 +31,6 @@ pub enum MemoryUnit {
 }
 
 impl MemoryUnit {
-    /// As the settings files write it.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::M => "M",
-            Self::Mo => "Mo",
-            Self::MB => "MB",
-        }
-    }
-
     /// The next one, for a settings screen.
     pub fn next(self) -> Self {
         match self {

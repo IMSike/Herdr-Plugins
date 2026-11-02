@@ -54,26 +54,6 @@ pub enum TotalsStyle {
     Bars,
 }
 
-impl TotalsStyle {
-    /// The name `menu.toml` gives it.
-    pub fn name(self) -> &'static str {
-        match self {
-            TotalsStyle::Line => "line",
-            TotalsStyle::Bars => "bars",
-        }
-    }
-}
-
-impl IconLayout {
-    /// The name `menu.toml` gives it.
-    pub fn name(self) -> &'static str {
-        match self {
-            IconLayout::Single => "single",
-            IconLayout::Double => "double",
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Entry {

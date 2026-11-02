@@ -138,6 +138,15 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
         })
 }
 
+/// The name a settings file gives `value`, a choice among names (`"M"`,
+/// `"double"`): the one serde writes, so that the two never differ.
+pub fn name_of<T: Serialize>(value: &T) -> String {
+    match serde_json::to_value(value) {
+        Ok(serde_json::Value::String(name)) => name,
+        _ => String::new(),
+    }
+}
+
 /// A JSON file's content; `None` when it is missing or unreadable.
 pub fn read_json<T: DeserializeOwned>(path: &Path) -> Option<T> {
     serde_json::from_slice(&std::fs::read(path).ok()?).ok()
@@ -222,6 +231,13 @@ mod tests {
         drop(held);
         assert!(Lock::take(&path).unwrap().is_some());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn names_are_those_of_the_files() {
+        assert_eq!(name_of(&MemoryUnit::Mo), "Mo");
+        assert_eq!(name_of(&MemoryUnit::MB), "MB");
+        assert_eq!(name_of(&1), "");
     }
 
     #[test]
