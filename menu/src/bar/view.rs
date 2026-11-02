@@ -179,7 +179,7 @@ const LAUNCH_AGAIN_AFTER: Duration = Duration::from_secs(1);
 
 /// The buttons of a page: each with its row, its first column and its text.
 fn buttons(page: Page, width: u16) -> Vec<(Button, u16, u16, &'static str)> {
-    let len = cells;
+    let len = text_cells;
     match page {
         Page::Tools => Vec::new(),
         Page::Disk => vec![(Button::Back, 0, 1, BACK)],
@@ -200,7 +200,7 @@ fn buttons(page: Page, width: u16) -> Vec<(Button, u16, u16, &'static str)> {
 }
 
 /// The cells `text` takes on screen (see `ui::width`).
-fn cells(text: &str) -> u16 {
+fn text_cells(text: &str) -> u16 {
     u16::try_from(crate::ui::width(text)).unwrap_or(u16::MAX)
 }
 
@@ -208,7 +208,7 @@ fn button_at(page: Page, width: u16, row: u16, column: u16) -> Option<Button> {
     buttons(page, width)
         .into_iter()
         .find(|&(_, r, left, text)| {
-            r == row && column >= left && column < left.saturating_add(cells(text))
+            r == row && column >= left && column < left.saturating_add(text_cells(text))
         })
         .map(|(button, ..)| button)
 }
@@ -705,8 +705,8 @@ fn draw_bars(
     let value_width = texts.iter().map(|t| t.chars().count()).max().unwrap_or(0);
     // `CPU 󰍹 :`: the glyph keeps a space after it, a terminal may draw it
     // over two cells.
-    const LABEL: usize = 7;
-    let bar = usize::from(width).saturating_sub(1 + LABEL + 1 + 1 + value_width + 1);
+    const LABEL_CELLS: usize = 7;
+    let bar = usize::from(width).saturating_sub(1 + LABEL_CELLS + 1 + 1 + value_width + 1);
     for ((y, gauge), text) in (row..rows).zip(&gauges).zip(&texts) {
         let kind = if gauge.cpu { "CPU" } else { "RAM" };
         let label = if gauge.machine {
@@ -717,13 +717,13 @@ fn draw_bars(
         let level = gauge.level(totals.colors);
         let value = format!("{text:>value_width$}");
         // Too narrow for the label: the value alone.
-        if 1 + LABEL + 1 + value_width > usize::from(width) {
+        if 1 + LABEL_CELLS + 1 + value_width > usize::from(width) {
             let value = fit(text, usize::from(width));
             queue!(out, MoveTo(centered(0, width, &value), y))?;
             draw_figure(out, &value, level, true)?;
             continue;
         }
-        let pad = LABEL.saturating_sub(label.chars().count());
+        let pad = LABEL_CELLS.saturating_sub(label.chars().count());
         queue!(
             out,
             MoveTo(1, y),
@@ -741,16 +741,16 @@ fn draw_bars(
     Ok(())
 }
 
-/// A thin bar of `cells` cells, filled by half cells as far as the gauge
+/// A thin bar of `width` cells, filled by half cells as far as the gauge
 /// goes, each filled cell in the color its place takes in the gradient of
 /// the thresholds; the empty part in the dimmed color of its level's zone.
-fn draw_gauge(out: &mut impl Write, gauge: &Gauge, cells: usize) -> io::Result<()> {
-    let filled = gauge.fill.unwrap_or(0.0).clamp(0.0, 1.0) * cells as f64;
+fn draw_gauge(out: &mut impl Write, gauge: &Gauge, width: usize) -> io::Result<()> {
+    let filled = gauge.fill.unwrap_or(0.0).clamp(0.0, 1.0) * width as f64;
     let mut current = None;
-    for cell in 0..cells {
+    for cell in 0..width {
         let covered = (filled - cell as f64).clamp(0.0, 1.0);
         let halves = (covered * 2.0).round() as usize;
-        let at = (cell as f64 + 0.5) / cells as f64 * gauge.full;
+        let at = (cell as f64 + 0.5) / width as f64 * gauge.full;
         let (symbol, color) = match halves {
             0 => ('─', zone(at, &gauge.thresholds)),
             1 => ('╸', gradient(at, &gauge.thresholds)),

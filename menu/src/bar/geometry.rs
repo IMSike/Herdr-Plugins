@@ -45,19 +45,22 @@ impl Grid {
         let (per_row, slot) = match layout {
             IconLayout::Single => {
                 let per_row = count.max(1);
-                (per_row, (width / cells(per_row)).clamp(1, MAX_ICON_SLOT))
+                (
+                    per_row,
+                    (width / count_cells(per_row)).clamp(1, MAX_ICON_SLOT),
+                )
             }
             IconLayout::Double => {
                 let per_row = count.div_ceil(2).max(1);
                 let longest = entries
                     .iter()
-                    .map(|e| cells(crate::ui::width(&e.label)))
+                    .map(|e| count_cells(crate::ui::width(&e.label)))
                     .max()
                     .unwrap_or(0);
                 let slot = longest
                     .saturating_add(2)
                     .max(MIN_SLOT)
-                    .min(width / cells(per_row));
+                    .min(width / count_cells(per_row));
                 (per_row, slot.max(1))
             }
         };
@@ -77,7 +80,7 @@ impl Grid {
 
     /// Rows the entries take: each row of icons and the row of names under it.
     pub fn rows(&self) -> u16 {
-        cells(self.count.div_ceil(self.per_row).max(1)).saturating_mul(2)
+        count_cells(self.count.div_ceil(self.per_row).max(1)).saturating_mul(2)
     }
 
     /// The first column of entry `i`'s slot, and the row of its icon.
@@ -86,13 +89,13 @@ impl Grid {
         let first = line * self.per_row;
         let start = self.start(first);
         (
-            start.saturating_add(self.slot.saturating_mul(cells(i - first))),
-            cells(line).saturating_mul(2),
+            start.saturating_add(self.slot.saturating_mul(count_cells(i - first))),
+            count_cells(line).saturating_mul(2),
         )
     }
 
     fn start(&self, first: usize) -> u16 {
-        let in_line = cells((self.count - first).min(self.per_row));
+        let in_line = count_cells((self.count - first).min(self.per_row));
         self.width.saturating_sub(self.slot.saturating_mul(in_line)) / 2
     }
 
@@ -114,13 +117,13 @@ impl Grid {
 
 /// A count as screen cells: past what a screen holds, it stays the most
 /// one can (a cast would wrap, to zero for a divisor).
-fn cells(count: usize) -> u16 {
+fn count_cells(count: usize) -> u16 {
     u16::try_from(count).unwrap_or(u16::MAX)
 }
 
 /// The column `text` starts at, centered in `width` columns from `start`.
 pub fn centered(start: u16, width: u16, text: &str) -> u16 {
-    let len = cells(crate::ui::width(text));
+    let len = count_cells(crate::ui::width(text));
     start.saturating_add(width.saturating_sub(len) / 2)
 }
 
