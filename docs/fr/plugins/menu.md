@@ -195,4 +195,4 @@ Les commandes tournent sous votre compte, avec votre environnement, comme tout p
 
 ## Désactiver
 
-Pour retirer une entrée intégrée, listez dans `menu.toml` les entrées à garder. Pour désactiver tout le menu, retirez la touche de `config.toml`, puis `herdr plugin disable imsike.menu` (ou `herdr plugin uninstall imsike.menu`) : les panes `Tools` se ferment avec leur explorateur ou au redémarrage suivant. `menu.toml` reste dans le dossier de configuration, et les fichiers des chiffres dans le dossier d'état, jusqu'à ce que vous les supprimiez.
+Pour retirer une entrée intégrée, listez dans `menu.toml` les entrées à garder. Pour désactiver tout le menu, retirez la touche de `config.toml`, puis `herdr plugin disable imsike.menu` (ou `herdr plugin uninstall imsike.menu`) : les panes `Tools` se ferment avec leur explorateur ou au redémarrage suivant. `menu.toml` reste dans le dossier de configuration, et les fichiers des chiffres (`stats-<hash>.json`, avec leur verrou `stats-<hash>.lock`) et le verrou de la mise à jour (`update.lock`) dans le dossier d'état, jusqu'à ce que vous les supprimiez.
