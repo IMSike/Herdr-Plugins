@@ -113,13 +113,14 @@ fn replace(dir: &Path, source: &Path, target: &Path) -> Result<(), String> {
     if is_same_file_content(source, target).map_err(|e| e.to_string())? {
         return Ok(());
     }
-    // Named after this process: an install that took over a stale lock
-    // while another one still copied does not share its file.
+    // Named after this process: what an install killed midway left (removed
+    // above once stale) is not mixed with this copy.
     let partial = target.with_extension(format!("{}.partial", std::process::id()));
     fs::copy(source, &partial).map_err(|e| e.to_string())?;
     // A running binary cannot be overwritten on Windows, but can be renamed.
+    // Elsewhere the rename below replaces it, the running one included.
     let old = target.with_extension(format!("{}.old", unix_millis()));
-    let moved_aside = fs::rename(target, &old).is_ok();
+    let moved_aside = cfg!(windows) && fs::rename(target, &old).is_ok();
     if let Err(e) = fs::rename(&partial, target) {
         // An antivirus may still hold the new copy: put the old one back.
         let _ = fs::remove_file(&partial);
