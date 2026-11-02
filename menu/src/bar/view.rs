@@ -374,7 +374,10 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
                 );
                 std::thread::spawn(move || {
                     let tab = my_tab(&me);
-                    if tab.is_some_and(|tab| !has_its_place(&tab.iter().collect::<Vec<_>>())) {
+                    let known = super::registry::Bars::new();
+                    if tab
+                        .is_some_and(|tab| !has_its_place(&tab.iter().collect::<Vec<_>>(), &known))
+                    {
                         let _ = checked.send(false);
                         return;
                     }

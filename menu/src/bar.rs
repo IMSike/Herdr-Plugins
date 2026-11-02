@@ -7,7 +7,9 @@
 //! The bar opens with the explorer (`pane.created` event) and closes when the
 //! explorer is gone or when no other pane is left beside them (`pane.closed`
 //! event), so that the explorer can close its tab as it does on its own.
-//! `prefix+space` closes and reopens it.
+//! `prefix+space` closes and reopens it. A bar is known by its label and by
+//! the file it leaves in the state folder (see `registry`): a pane renamed
+//! `Tools` is never taken for one.
 //!
 //! Herdr only splits to the right or downwards: the bar opens below the
 //! explorer, then swaps places with it. Herdr gives a side of a split a tenth
@@ -15,12 +17,14 @@
 
 mod colors;
 mod geometry;
+mod registry;
 mod view;
 
 use crate::config::Menu;
 use crate::herdr::{self, Context, Pane};
 use crossterm::terminal;
 use geometry::{Layout, ratio_change};
+use registry::Bars;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -99,17 +103,19 @@ pub fn toggle(context: &Context) -> Result<bool, String> {
         return Ok(false);
     };
     let panes = herdr::tab_panes(workspace, tab)?;
-    let bars: Vec<&Pane> = panes.iter().filter(|p| label_is(p, LABEL)).collect();
+    let known = Bars::new();
+    let bars: Vec<&Pane> = panes.iter().filter(|p| known.is(p)).collect();
     if !bars.is_empty() {
         for bar in bars {
             herdr::close(&bar.pane_id)?;
+            known.forget(&bar.pane_id);
         }
         return Ok(true);
     }
     let Some(explorer) = panes.iter().find(|p| label_is(p, EXPLORER)) else {
         return Ok(false);
     };
-    open_above(explorer)?;
+    open_above(explorer, &known)?;
     Ok(true)
 }
 
@@ -123,7 +129,8 @@ pub fn on_pane_created() -> Result<(), String> {
         return Ok(());
     }
     let panes = herdr::tab_panes(&explorer.workspace_id, &explorer.tab_id)?;
-    let bars: Vec<Pane> = panes.into_iter().filter(|p| label_is(p, LABEL)).collect();
+    let known = Bars::new();
+    let bars: Vec<Pane> = panes.into_iter().filter(|p| known.is(p)).collect();
     let count = bars.len();
     let dead = dead(bars);
     if dead.len() < count {
@@ -131,8 +138,9 @@ pub fn on_pane_created() -> Result<(), String> {
     }
     for bar in dead {
         let _ = herdr::close(&bar.pane_id);
+        known.forget(&bar.pane_id);
     }
-    open_above(&explorer)
+    open_above(&explorer, &known)
 }
 
 /// `pane.closed`: the bars of the workspace that lost their place close at once.
@@ -142,11 +150,17 @@ pub fn on_pane_closed() -> Result<(), String> {
         return Ok(());
     };
     let panes = herdr::workspace_panes(&workspace)?;
-    for bar in panes.iter().filter(|p| label_is(p, LABEL)) {
+    let known = Bars::new();
+    for bar in panes.iter().filter(|p| known.is(p)) {
         let tab: Vec<&Pane> = panes.iter().filter(|p| p.tab_id == bar.tab_id).collect();
-        if !has_its_place(&tab) {
+        if !has_its_place(&tab, &known) {
             let _ = herdr::close(&bar.pane_id);
+            known.forget(&bar.pane_id);
         }
+    }
+    // The closed pane may have been a bar.
+    if let Ok(all) = herdr::all_panes() {
+        known.keep_only(&all);
     }
     Ok(())
 }
@@ -154,12 +168,13 @@ pub fn on_pane_closed() -> Result<(), String> {
 /// Closes the bars Herdr restored as plain shells after a restart; the
 /// explorer reopens with a new bar.
 pub fn startup() -> Result<(), String> {
-    let bars = herdr::all_panes()?
-        .into_iter()
-        .filter(|p| label_is(p, LABEL))
-        .collect();
+    let all = herdr::all_panes()?;
+    let known = Bars::new();
+    known.keep_only(&all);
+    let bars = all.into_iter().filter(|p| known.is(p)).collect();
     for bar in dead(bars) {
         let _ = herdr::close(&bar.pane_id);
+        known.forget(&bar.pane_id);
     }
     Ok(())
 }
@@ -200,7 +215,7 @@ fn settled(pane: &str) -> bool {
 }
 
 /// Opens the bar below the explorer and swaps them, leaving the focus where it was.
-fn open_above(explorer: &Pane) -> Result<(), String> {
+fn open_above(explorer: &Pane, known: &Bars) -> Result<(), String> {
     let focused = layout_of(&explorer.pane_id).and_then(|l| l.focused_pane_id);
     let options = json!({
         "placement": "split",
@@ -210,6 +225,7 @@ fn open_above(explorer: &Pane) -> Result<(), String> {
     });
     let bar = herdr::open_plugin_pane("bar", options, &[])?
         .ok_or("le pane Tools n'a pas d'identifiant")?;
+    known.add(&bar);
     herdr_api::request(
         "pane.swap",
         json!({ "source_pane_id": bar, "target_pane_id": explorer.pane_id }),
@@ -225,16 +241,18 @@ fn open_above(explorer: &Pane) -> Result<(), String> {
     Ok(())
 }
 
-/// A pane that is neither the bar nor one of the explorer's.
-fn is_terminal(pane: &Pane) -> bool {
-    pane.label
-        .as_deref()
-        .is_none_or(|l| l != LABEL && !EXPLORER_PANES.contains(&l))
+/// A pane that is neither a bar nor one of the explorer's.
+fn is_terminal(pane: &Pane, known: &Bars) -> bool {
+    !known.is(pane)
+        && pane
+            .label
+            .as_deref()
+            .is_none_or(|l| !EXPLORER_PANES.contains(&l))
 }
 
 /// The bar stays while its tab has the explorer and a pane of its own.
-fn has_its_place(tab: &[&Pane]) -> bool {
-    tab.iter().any(|p| label_is(p, EXPLORER)) && tab.iter().any(|p| is_terminal(p))
+fn has_its_place(tab: &[&Pane], known: &Bars) -> bool {
+    tab.iter().any(|p| label_is(p, EXPLORER)) && tab.iter().any(|p| is_terminal(p, known))
 }
 
 /// The panes of the bar's tab; `None` when Herdr does not answer.
@@ -251,9 +269,10 @@ fn folders(me: &str) -> (Option<PathBuf>, Option<PathBuf>) {
         .iter()
         .find(|p| label_is(p, EXPLORER))
         .and_then(|p| p.cwd.clone());
+    let known = Bars::new();
     let terminal = tab
         .iter()
-        .find(|p| is_terminal(p))
+        .find(|p| is_terminal(p, &known))
         .and_then(|p| p.cwd.clone());
     (explorer, terminal)
 }
@@ -262,8 +281,11 @@ fn folders(me: &str) -> (Option<PathBuf>, Option<PathBuf>) {
 /// why `menu.toml` was ignored: it is shown first, in place of the totals.
 pub fn run(menu: Menu, error: Option<String>) -> Result<(), String> {
     let me = herdr_api::var(herdr_api::env::PANE_ID)?;
+    let known = Bars::new();
+    known.add(&me);
     let result = view::show(&me, menu, error).map_err(|e| e.to_string());
     let _ = herdr::close(&me);
+    known.forget(&me);
     result
 }
 
@@ -322,13 +344,14 @@ mod tests {
             agent: None,
             agent_status: None,
         };
-        assert!(is_terminal(&pane(None)));
-        assert!(is_terminal(&pane(Some("lazygit"))));
-        assert!(!is_terminal(&pane(Some(LABEL))));
-        assert!(!is_terminal(&pane(Some("Preview"))));
+        let known = Bars::by_label();
+        assert!(is_terminal(&pane(None), &known));
+        assert!(is_terminal(&pane(Some("lazygit")), &known));
+        assert!(!is_terminal(&pane(Some(LABEL)), &known));
+        assert!(!is_terminal(&pane(Some("Preview")), &known));
         let (explorer, terminal) = (pane(Some(EXPLORER)), pane(None));
-        assert!(has_its_place(&[&explorer, &terminal]));
-        assert!(!has_its_place(&[&explorer]));
-        assert!(!has_its_place(&[&terminal]));
+        assert!(has_its_place(&[&explorer, &terminal], &known));
+        assert!(!has_its_place(&[&explorer], &known));
+        assert!(!has_its_place(&[&terminal], &known));
     }
 }
