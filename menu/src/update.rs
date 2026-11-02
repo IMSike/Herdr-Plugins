@@ -13,6 +13,8 @@ use std::process::{Command, Stdio};
 /// click opens no second update.
 const LOCK: &str = "update.lock";
 const ALREADY_RUNNING: &str = "une mise à jour est déjà en cours dans une autre fenêtre";
+/// How long the window's terminal is watched for an early end.
+const WINDOW_CHECK: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// The update's lock; `Ok(None)` while another update holds it, an error
 /// when it cannot be taken (the update runs without it).
@@ -55,9 +57,6 @@ pub fn open_window() -> Result<(), String> {
     std::thread::spawn(move || child.wait());
     Ok(())
 }
-
-/// How long the window's terminal is watched for an early end.
-const WINDOW_CHECK: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// A new console window running `me update` (Windows), opened by `start`:
 /// the window's console is the update's input and output, whatever handles
