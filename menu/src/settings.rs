@@ -320,6 +320,19 @@ impl State {
         }))
     }
 
+    /// Sets a choice of `menu.toml` to `name`, and the menu as `apply` does.
+    fn switch_menu(
+        &mut self,
+        key: &str,
+        name: &str,
+        apply: impl FnOnce(&mut Menu),
+    ) -> Result<String, String> {
+        self.set_menu(key, name.into()).map(|()| {
+            apply(&mut self.menu);
+            saved(&[config::FILE_NAME])
+        })
+    }
+
     /// Turns a yes-or-no setting of `sidebar.toml` over.
     fn toggle_sidebar(
         &mut self,
@@ -370,20 +383,14 @@ impl State {
                     IconLayout::Single => IconLayout::Double,
                     IconLayout::Double => IconLayout::Single,
                 };
-                self.set_menu("layout", value.name().into()).map(|()| {
-                    self.menu.layout = value;
-                    saved(&[config::FILE_NAME])
-                })
+                self.switch_menu("layout", value.name(), |m| m.layout = value)
             }
             Item::Totals => {
                 let value = match self.menu.totals {
                     TotalsStyle::Line => TotalsStyle::Bars,
                     TotalsStyle::Bars => TotalsStyle::Line,
                 };
-                self.set_menu("totals", value.name().into()).map(|()| {
-                    self.menu.totals = value;
-                    saved(&[config::FILE_NAME])
-                })
+                self.switch_menu("totals", value.name(), |m| m.totals = value)
             }
             Item::Ttl => {
                 let current = self.sidebar.as_ref()?.ttl_seconds;
