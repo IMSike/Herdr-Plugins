@@ -89,7 +89,7 @@ pub(crate) fn menu_config() -> (config::Menu, Option<String>) {
 }
 
 pub(crate) fn config_dir() -> Option<PathBuf> {
-    std::env::var_os(herdr_api::env::CONFIG_DIR).map(PathBuf::from)
+    herdr_api::config_dir().ok()
 }
 
 /// A choice: the entry as the menu showed it, and the folder to start in.

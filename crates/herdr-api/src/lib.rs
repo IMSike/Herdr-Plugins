@@ -72,6 +72,13 @@ pub fn state_dir() -> Result<PathBuf, String> {
         .ok_or_else(|| absent(env::STATE_DIR))
 }
 
+/// The plugin's config folder.
+pub fn config_dir() -> Result<PathBuf, String> {
+    std::env::var_os(env::CONFIG_DIR)
+        .map(PathBuf::from)
+        .ok_or_else(|| absent(env::CONFIG_DIR))
+}
+
 fn absent(name: &str) -> String {
     format!("{name} absent")
 }

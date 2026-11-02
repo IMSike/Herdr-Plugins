@@ -453,12 +453,10 @@ fn next_seq(path: &Path) -> u64 {
 /// The plugin's config folder: from Herdr in a hook or an action, from
 /// what `install` kept in the tab bar entry.
 fn config_dir(state_dir: &Path) -> Option<PathBuf> {
-    std::env::var_os(herdr_api::env::CONFIG_DIR)
-        .map(PathBuf::from)
-        .or_else(|| {
-            let text = fs::read_to_string(state_dir.join(CONFIG_DIR_FILE)).ok()?;
-            Some(PathBuf::from(text.trim()))
-        })
+    herdr_api::config_dir().ok().or_else(|| {
+        let text = fs::read_to_string(state_dir.join(CONFIG_DIR_FILE)).ok()?;
+        Some(PathBuf::from(text.trim()))
+    })
 }
 
 #[cfg(test)]

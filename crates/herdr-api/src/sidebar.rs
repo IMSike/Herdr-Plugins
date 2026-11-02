@@ -49,9 +49,7 @@ pub fn state_dir() -> Result<PathBuf, String> {
 
 /// The sidebar's config folder, beside this plugin's, as its state folder.
 pub fn config_dir() -> Result<PathBuf, String> {
-    let mine = std::env::var_os(crate::env::CONFIG_DIR)
-        .ok_or_else(|| crate::absent(crate::env::CONFIG_DIR))?;
-    beside(Path::new(&mine))
+    beside(&crate::config_dir()?)
 }
 
 /// The sidebar's folder beside `mine`, a folder of this plugin's.
