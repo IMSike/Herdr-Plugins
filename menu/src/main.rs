@@ -387,21 +387,8 @@ mod tests {
 
     #[test]
     fn an_empty_answer_takes_the_default() {
-        assert!(
-            is_yes(
-                "
-", true
-            ) && !is_yes(
-                "
-", false
-            )
-        );
-        assert!(
-            is_yes(
-                " Oui
-", false
-            ) && is_yes("y", false)
-        );
+        assert!(is_yes("\n", true) && !is_yes("\n", false));
+        assert!(is_yes(" Oui\n", false) && is_yes("y", false));
         assert!(!is_yes("non", true) && !is_yes("x", true));
     }
 
