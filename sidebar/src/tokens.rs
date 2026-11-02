@@ -51,7 +51,7 @@ pub fn agent(
     tokens
 }
 
-/// `4% 853M  1`; the CPU share is missing on the first run.
+/// `4% 853M  1`; the CPU share is missing on the first run.
 pub fn figures(
     cpu: Option<f64>,
     usage: &Usage,
