@@ -99,15 +99,10 @@ fn terminal_window(me: &std::path::Path) -> Result<Command, String> {
     Ok(command)
 }
 
-fn herdr(args: &[&str]) -> Command {
-    let mut command = Command::new(herdr::binary());
-    command.args(args);
-    command
-}
-
-/// Runs `herdr <args>` with its output on screen.
+/// Runs `herdr <args>` with its output on screen, and this window's input.
 fn herdr_shown(args: &[&str]) -> Result<(), String> {
-    let status = herdr(args)
+    let status = herdr::command(args)
+        .stdin(Stdio::inherit())
         .status()
         .map_err(|e| format!("impossible de lancer « herdr {} » : {e}", args.join(" ")))?;
     if status.success() {
