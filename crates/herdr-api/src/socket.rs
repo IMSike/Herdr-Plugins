@@ -10,7 +10,6 @@ use std::time::{Duration, Instant};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
-const SOCKET_ENV: &str = crate::env::SOCKET_PATH;
 /// A request Herdr has not answered by then is given up: a plugin never
 /// hangs on a busy or stuck server.
 const TIMEOUT: Duration = Duration::from_secs(3);
@@ -66,7 +65,7 @@ fn failure(message: String) -> Error {
 
 /// Sends one request and returns its `result`.
 pub fn request(method: &str, params: Value) -> Result<Value, Error> {
-    let path = crate::var(SOCKET_ENV).map_err(failure)?;
+    let path = crate::var(crate::env::SOCKET_PATH).map_err(failure)?;
     let line = json!({ "id": method, "method": method, "params": params }).to_string();
     let answer = exchange(path, line).map_err(|e| failure(format!("{method} : {e}")))?;
     let mut value: Value = serde_json::from_str(&answer)
@@ -106,8 +105,8 @@ fn talk<S: io::Read + Write>(mut stream: S, line: &str) -> io::Result<String> {
 
 /// Neither a Unix socket's connect nor a named pipe opened as a file has a
 /// timeout: the whole exchange runs on a thread of its own, given up after
-/// `TIMEOUT` or at the run's deadline (on Windows the thread ends with the
-/// process, or when Herdr answers).
+/// `TIMEOUT` or at the run's deadline. The thread then ends too: on its
+/// socket's timeouts on Unix, by its read or write being cancelled on Windows.
 fn exchange(path: String, line: String) -> io::Result<String> {
     let mut deadline = Instant::now() + TIMEOUT;
     if let Some(&limit) = DEADLINE.get() {
@@ -121,14 +120,75 @@ fn exchange(path: String, line: String) -> io::Result<String> {
         ));
     }
     let (sender, receiver) = std::sync::mpsc::channel();
+    let pending = std::sync::Arc::new(Pending::default());
+    let talking = pending.clone();
     std::thread::spawn(move || {
-        let answer = connect(&path, deadline).and_then(|stream| talk(stream, &line));
+        let answer = connect(&path, deadline).and_then(|stream| talking.talk(&stream, &line));
         WAITING.fetch_sub(1, Ordering::SeqCst);
         let _ = sender.send(answer);
     });
     receiver
         .recv_timeout(deadline.saturating_duration_since(Instant::now()))
-        .unwrap_or_else(|_| Err(io::Error::new(io::ErrorKind::TimedOut, "pas de réponse")))
+        .unwrap_or_else(|_| {
+            pending.cancel();
+            Err(io::Error::new(io::ErrorKind::TimedOut, "pas de réponse"))
+        })
+}
+
+/// The exchange of a thread, which the thread that waits for it can end.
+#[derive(Default)]
+struct Pending {
+    /// The pipe's handle while the exchange runs on it, and whether it was
+    /// cancelled.
+    #[cfg(windows)]
+    state: std::sync::Mutex<(Option<usize>, bool)>,
+}
+
+impl Pending {
+    /// The socket's own timeouts end the exchange.
+    #[cfg(unix)]
+    fn talk(&self, stream: &std::os::unix::net::UnixStream, line: &str) -> io::Result<String> {
+        talk(stream, line)
+    }
+
+    #[cfg(unix)]
+    fn cancel(&self) {}
+
+    /// The handle is cleared before the pipe closes: `cancel` never acts on
+    /// a closed handle, which Windows may have given to another file.
+    #[cfg(windows)]
+    fn talk(&self, pipe: &std::fs::File, line: &str) -> io::Result<String> {
+        use std::os::windows::io::AsRawHandle;
+        let state = || self.state.lock().unwrap_or_else(|e| e.into_inner());
+        {
+            let mut state = state();
+            if state.1 {
+                return Err(io::Error::new(io::ErrorKind::TimedOut, "pas de réponse"));
+            }
+            state.0 = Some(pipe.as_raw_handle() as usize);
+        }
+        let answer = talk(pipe, line);
+        state().0 = None;
+        answer
+    }
+
+    /// Cancels the read or write the exchange is blocked in; one not started
+    /// yet does not start.
+    #[cfg(windows)]
+    fn cancel(&self) {
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn CancelIoEx(file: *mut std::ffi::c_void, overlapped: *mut std::ffi::c_void) -> i32;
+        }
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.1 = true;
+        if let Some(handle) = state.0 {
+            // SAFETY: the handle is the pipe's, still open: `talk` clears it,
+            // under this lock, before the pipe closes. A null OVERLAPPED
+            // cancels every operation on the handle, synchronous ones included.
+            unsafe { CancelIoEx(handle as *mut std::ffi::c_void, std::ptr::null_mut()) };
+        }
+    }
 }
 
 /// Once connected, the socket's own timeouts end the thread too when Herdr
