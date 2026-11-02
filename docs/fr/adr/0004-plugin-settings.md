@@ -13,7 +13,7 @@ Options étudiées :
 
 | Option | Avantages | Inconvénients |
 |---|---|---|
-| Un fichier TOML par plugin dans son dossier de configuration, et une entrée du menu qui ouvre les fichiers dans un éditeur | Texte simple, commenté, versionnable (OS-Setup) ; Herdr et les plugins valident ; peu de code | Pas de formulaire ; une faute n'est signalée qu'à la lecture du fichier |
+| Un fichier TOML par plugin dans son dossier de configuration, et une entrée du menu qui ouvre les fichiers dans un éditeur | Texte simple, commenté, versionnable (OS-Setup) ; l'éditeur ne valide rien, mais Herdr et les plugins valident ; peu de code | Pas de formulaire ; une faute n'est signalée qu'à la lecture du fichier |
 | Un écran de réglages (TUI) dans le menu | Guidé, chaque valeur vérifiée à la saisie | Beaucoup de code pour peu de réglages ; à tenir à jour avec les réglages de chaque plugin |
 | Les réglages dans le `config.toml` de Herdr | Un seul fichier | Herdr refuse les clés inconnues ; un plugin ne doit jamais écrire ce fichier |
 

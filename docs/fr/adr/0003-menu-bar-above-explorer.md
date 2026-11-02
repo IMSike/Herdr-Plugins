@@ -11,7 +11,7 @@ Cette colonne n'est pas une zone de Herdr : l'explorateur est un pane `split` or
 
 Options étudiées :
 
-| Option | Pour | Contre |
+| Option | Avantages | Inconvénients |
 |---|---|---|
 | Une pull request à herdr-explorer qui ajoute les icônes à son pane | Un seul pane ; un seul plugin à suivre | Dépend d'un autre mainteneur ; mêle un menu d'outils à un explorateur de fichiers |
 | Un pane de ce plugin empilé au-dessus de l'explorateur, trouvé par son nom | Reste dans ce dépôt ; le popup demeure là où il n'y a pas d'explorateur | Repose sur le nom du pane de l'explorateur (`Explorer`), pas sur une API ; l'explorateur cesse de garder sa largeur tant que le pane est là ; au moins un dixième de la colonne en hauteur |

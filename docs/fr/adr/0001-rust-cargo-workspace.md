@@ -11,7 +11,7 @@ Herdr installe un plugin avec `herdr plugin install <owner>/<repo>[/<sous-dossie
 
 Options étudiées pour le langage :
 
-| Option | Pour | Contre |
+| Option | Avantages | Inconvénients |
 |---|---|---|
 | Rust | Le langage de Herdr (ses types d'API se lisent dans ses sources) ; quelques Mo en mémoire, sans ramasse-miettes ; crates mûres pour les processus et l'API Windows ; un binaire natif | Apprentissage exigeant ; premier build lent ; demande les Build Tools MSVC sous Windows ; `plugin install` compile avec `cargo` sur chaque machine |
 | Go | Simple ; builds rapides ; compilation croisée triviale ; bonnes bibliothèques de TUI | Ramasse-miettes, environ 10 à 20 Mo en mémoire ; `plugin install` compile avec `go` sur chaque machine |

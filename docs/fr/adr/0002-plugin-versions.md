@@ -11,7 +11,7 @@ Le dépôt est versionné comme OS-Setup et CC-Plugins : chaque push sur `main` 
 
 Options étudiées :
 
-| Option | Pour | Contre |
+| Option | Avantages | Inconvénients |
 |---|---|---|
 | Une version par plugin, incrémentée à la main | L'historique de chaque plugin se lit seul | Un second schéma de version ; facile à oublier, et seulement informatif puisque les mises à jour suivent les commits |
 | La version du dépôt, écrite dans les manifestes par le workflow de release | `herdr plugin list` montre de quelle version vient un plugin | Le workflow commite sur `main`, qui a alors un commit absent de `dev` : il faut le reporter sur `dev` (avance rapide si `dev` n'a pas bougé, sinon commit de fusion, rebase avec push forcé ou commit en double), et `dev` bouge sur GitHub après chaque release |
