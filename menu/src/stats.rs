@@ -134,15 +134,25 @@ pub fn load(file: &Path, root: &Path) -> Option<Measured> {
     (normalized(&measured.root) == normalized(root)).then_some(measured)
 }
 
-/// The lock of the folder whose figures go to `file`, held while a bar
-/// measures it: another bar of the same folder waits for its figures
-/// instead of walking the folder too. `None` while another bar holds it;
-/// `Some(None)` when the state folder cannot be written (measure without).
-pub fn reading_lock(file: &Path) -> Option<Option<herdr_api::Lock>> {
+/// The lock of a folder's reading, held while a bar measures it: another
+/// bar of the same folder waits for its figures instead of walking the
+/// folder too.
+pub enum ReadingLock {
+    /// This bar holds it until the figures are kept (released when dropped).
+    Held { _lock: herdr_api::Lock },
+    /// No lock to take (no state folder, or one that cannot be written):
+    /// the bar measures without.
+    Unavailable,
+    /// Another bar holds it.
+    Elsewhere,
+}
+
+/// The lock of the folder whose figures go to `file`.
+pub fn reading_lock(file: &Path) -> ReadingLock {
     match herdr_api::Lock::take(&file.with_extension("lock")) {
-        Ok(Some(lock)) => Some(Some(lock)),
-        Ok(None) => None,
-        Err(_) => Some(None),
+        Ok(Some(lock)) => ReadingLock::Held { _lock: lock },
+        Ok(None) => ReadingLock::Elsewhere,
+        Err(_) => ReadingLock::Unavailable,
     }
 }
 

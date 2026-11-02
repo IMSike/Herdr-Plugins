@@ -93,8 +93,10 @@ fn measure_in_background(me: String) -> Measurer {
             }
             // Another bar of the folder measures it: its figures come
             // through the file.
-            let lock = file.as_deref().map(stats::reading_lock);
-            if lock.as_ref().is_some_and(Option::is_none) {
+            let lock = file
+                .as_deref()
+                .map_or(stats::ReadingLock::Unavailable, stats::reading_lock);
+            if matches!(lock, stats::ReadingLock::Elsewhere) {
                 match asked.recv_timeout(OTHER_READING_CHECK_EVERY) {
                     Ok(()) | Err(mpsc::RecvTimeoutError::Timeout) => {}
                     Err(mpsc::RecvTimeoutError::Disconnected) => return,
