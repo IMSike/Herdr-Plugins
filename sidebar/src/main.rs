@@ -8,7 +8,7 @@
 //!   process tree, reports the tokens and leaves the totals in `totals.json`
 //!   for the `Tools` pane; it prints them for the tab bar only when the
 //!   settings ask (an empty output hides the entry).
-//! - `event` (agent and workspace hooks) places the agents in the tree
+//! - `event` (agent, workspace, tab and pane hooks) places the agents in the tree
 //!   right away; their figures wait for the next `tick`.
 //! - `show` prints the tokens without reporting them.
 

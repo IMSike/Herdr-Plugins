@@ -31,3 +31,17 @@ command = ["target/release/herdr-sidebar", "event"]
 [[events]]
 on = "workspace.created"
 command = ["target/release/herdr-sidebar", "event"]
+
+# A tab renamed or moved, or a pane closed, changes the agents' places and
+# lines in the tree.
+[[events]]
+on = "tab.renamed"
+command = ["target/release/herdr-sidebar", "event"]
+
+[[events]]
+on = "tab.moved"
+command = ["target/release/herdr-sidebar", "event"]
+
+[[events]]
+on = "pane.closed"
+command = ["target/release/herdr-sidebar", "event"]
