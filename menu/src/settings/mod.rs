@@ -5,7 +5,7 @@
 pub mod files;
 mod store;
 
-use crate::config::{self, Layout, Menu, TotalsStyle};
+use crate::config::{self, IconLayout, Menu, TotalsStyle};
 use crate::ui::{Frame, Screen, fit, is_control};
 use crossterm::cursor::MoveTo;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind};
@@ -226,8 +226,8 @@ impl State {
             Item::Layout => (
                 "Icônes",
                 match self.menu.layout {
-                    Layout::Single => "une ligne, nom au survol",
-                    Layout::Double => "deux lignes, avec les noms",
+                    IconLayout::Single => "une ligne, nom au survol",
+                    IconLayout::Double => "deux lignes, avec les noms",
                 }
                 .into(),
             ),
@@ -379,8 +379,8 @@ impl State {
             }
             Item::Layout => {
                 let value = match self.menu.layout {
-                    Layout::Single => Layout::Double,
-                    Layout::Double => Layout::Single,
+                    IconLayout::Single => IconLayout::Double,
+                    IconLayout::Double => IconLayout::Single,
                 };
                 self.set_menu("layout", value.name().into()).map(|()| {
                     self.menu.layout = value;

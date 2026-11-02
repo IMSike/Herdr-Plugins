@@ -1,7 +1,7 @@
 //! Where the bar draws and what a click hits, and how far to move the split
 //! it tops to keep its height: arithmetic on sizes and Herdr's layout only.
 
-use crate::config::{Entry, Layout as IconLayout, Menu, TotalsStyle};
+use crate::config::{Entry, IconLayout, Menu, TotalsStyle};
 use serde::Deserialize;
 
 /// Narrowest column of one entry with its name under it.

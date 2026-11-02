@@ -35,7 +35,7 @@ pub enum Action {
 /// How the `Tools` pane lays out its icons.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Layout {
+pub enum IconLayout {
     /// One row of icons; the name of the one under the pointer below it.
     Single,
     /// Two rows of icons, each with its name below it.
@@ -64,12 +64,12 @@ impl TotalsStyle {
     }
 }
 
-impl Layout {
+impl IconLayout {
     /// The name `menu.toml` gives it.
     pub fn name(self) -> &'static str {
         match self {
-            Layout::Single => "single",
-            Layout::Double => "double",
+            IconLayout::Single => "single",
+            IconLayout::Double => "double",
         }
     }
 }
@@ -113,7 +113,7 @@ pub struct Menu {
     pub entries: Vec<Entry>,
     /// How the `Tools` pane writes its figures.
     pub numbers: NumberFormat,
-    pub layout: Layout,
+    pub layout: IconLayout,
     pub totals: TotalsStyle,
 }
 
@@ -122,7 +122,7 @@ impl Default for Menu {
         Self {
             entries: defaults(),
             numbers: NumberFormat::default(),
-            layout: Layout::default(),
+            layout: IconLayout::default(),
             totals: TotalsStyle::default(),
         }
     }
@@ -137,7 +137,7 @@ struct File {
     cpu_decimal: bool,
     memory_unit: MemoryUnit,
     memory_space: bool,
-    layout: Layout,
+    layout: IconLayout,
     totals: TotalsStyle,
 }
 
@@ -151,7 +151,7 @@ impl Default for File {
             cpu_decimal: numbers.cpu_decimal,
             memory_unit: numbers.memory_unit,
             memory_space: numbers.memory_space,
-            layout: Layout::default(),
+            layout: IconLayout::default(),
             totals: TotalsStyle::default(),
         }
     }
@@ -286,7 +286,7 @@ mod tests {
         assert!(entries[0].popup && !entries[1].popup);
         assert_eq!(entries[2].action, Some(Action::Update));
         assert!(menu.numbers.decimal_comma && menu.numbers.percent_space);
-        assert_eq!(menu.layout, Layout::Single);
+        assert_eq!(menu.layout, IconLayout::Single);
     }
 
     #[test]
@@ -327,7 +327,7 @@ mod tests {
         let menu = parse("# Only comments.\ndecimal_comma = false\n").unwrap();
         assert_eq!(menu.entries, defaults());
         assert!(!menu.numbers.decimal_comma);
-        assert_eq!(menu.layout, Layout::Double);
+        assert_eq!(menu.layout, IconLayout::Double);
     }
 
     #[test]

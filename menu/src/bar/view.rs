@@ -7,7 +7,7 @@ use super::{
     FIGURES_TOP, FIRST_FIT_AFTER, MESSAGE_FOR, OTHER_READING_CHECK_EVERY, REFRESH, SETTLE,
     WAKE_EVERY, fit_height, folders, has_its_place, my_tab,
 };
-use crate::config::{self, Action, Entry, Layout as IconLayout, Menu, TotalsStyle};
+use crate::config::{self, Action, Entry, IconLayout, Menu, TotalsStyle};
 use crate::herdr;
 use crate::settings::files;
 use crate::stats::{self, Measured, Stats};
