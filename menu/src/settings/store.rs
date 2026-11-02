@@ -12,7 +12,12 @@ pub fn set(path: &Path, template: &str, key: &str, value: Value) -> Result<(), S
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => template.to_string(),
         Err(e) => return Err(format!("{} : {e}", path.display())),
     };
-    let text = with_value(&text, key, value)?;
+    write(path, &with_value(&text, key, value)?)
+}
+
+/// Writes `text` to the file at `path`, its folder created when missing;
+/// the error names the path.
+pub fn write(path: &Path, text: &str) -> Result<(), String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("{} : {e}", dir.display()))?;
     }

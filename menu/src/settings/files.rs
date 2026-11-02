@@ -116,11 +116,7 @@ fn create_if_missing(path: &Path, template: &str) -> Result<(), String> {
     if path.exists() {
         return Ok(());
     }
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| format!("{} : {e}", dir.display()))?;
-    }
-    herdr_api::write_atomic(path, template.as_bytes())
-        .map_err(|e| format!("{} : {e}", path.display()))
+    super::store::write(path, template)
 }
 
 /// How the files are opened.
