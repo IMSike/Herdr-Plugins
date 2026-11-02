@@ -64,12 +64,25 @@ pub fn open_window() -> Result<(), String> {
 /// once the window is open.
 #[cfg(windows)]
 fn terminal_window(me: &std::path::Path) -> Result<Command, String> {
+    use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     let mut command = Command::new("cmd");
-    // The empty title: `start` takes a first quoted word for one.
-    command.args(["/c", "start", ""]).arg(me).arg("update");
-    std::os::windows::process::CommandExt::creation_flags(&mut command, CREATE_NO_WINDOW);
+    command.env(SELF_ENV, me).raw_arg(window_line());
+    command.creation_flags(CREATE_NO_WINDOW);
     Ok(command)
+}
+
+/// The variable that hands `cmd` the program's path.
+#[cfg(windows)]
+const SELF_ENV: &str = "HERDR_MENU_SELF";
+
+/// `cmd`'s command line. `cmd` reads `%…%` in its line as a variable, and
+/// `&` or `^` outside quotes as its own: the path, which may hold any of
+/// them, comes in a variable, whose value `cmd` does not read again, and in
+/// quotes. The empty title: `start` takes a first quoted word for one.
+#[cfg(windows)]
+fn window_line() -> String {
+    format!("/c start \"\" \"%{SELF_ENV}%\" update")
 }
 
 /// The first terminal emulator found, running `me update`.
