@@ -9,8 +9,23 @@ use serde_json::Value;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
+/// Held by the update that runs, in the plugin's state folder: a second
+/// click opens no second update.
+const LOCK: &str = "update.lock";
+const ALREADY_RUNNING: &str = "une mise à jour est déjà en cours dans une autre fenêtre";
+
+/// The update's lock; `Ok(None)` while another update holds it, an error
+/// when it cannot be taken (the update runs without it).
+fn lock() -> Result<Option<herdr_api::Lock>, String> {
+    let file = herdr_api::state_dir()?.join(LOCK);
+    herdr_api::Lock::take(&file).map_err(|e| format!("verrou impossible : {e}"))
+}
+
 /// Opens the window that runs the update, and returns at once.
 pub fn open_window() -> Result<(), String> {
+    if matches!(lock(), Ok(None)) {
+        return Err(ALREADY_RUNNING.into());
+    }
     let me = std::env::current_exe().map_err(|e| e.to_string())?;
     let mut command = terminal_window(&me)?;
     command.env_remove(INSIDE_HERDR);
@@ -99,7 +114,11 @@ fn restart_needed(status: &Value) -> bool {
 /// `herdr-menu update`, in the window `open_window` opened. The window
 /// closes with it, so it ends on a key press.
 pub fn run() -> Result<(), String> {
-    let result = update();
+    let result = match lock() {
+        Ok(None) => Err(ALREADY_RUNNING.to_string()),
+        Ok(lock) => update(lock),
+        Err(_) => update(None),
+    };
     let message = match &result {
         Ok(message) => message.clone(),
         Err(e) => format!("Erreur : {e}"),
@@ -108,8 +127,8 @@ pub fn run() -> Result<(), String> {
     result.map(|_| ())
 }
 
-/// The update; what to tell once done.
-fn update() -> Result<String, String> {
+/// The update, holding `lock`; what to tell once done.
+fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
     let before = status()?;
     // Where the server can hand its sessions over, nothing stops.
     let handoff = before["server"]["capabilities"]["live_handoff"] == true;
@@ -149,6 +168,9 @@ fn update() -> Result<String, String> {
         "\nServeur arrêté. Relancer Herdr dans cette fenêtre ? [o/N] ",
         false,
     ) {
+        // Herdr runs in this window for as long as it is used: the update
+        // is over.
+        drop(lock);
         herdr_shown(&[])?;
         return Ok("Herdr s'est fermé.".into());
     }

@@ -19,10 +19,11 @@ use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetFor
 use crossterm::terminal;
 use herdr_api::NumberFormat;
 use herdr_api::sidebar::{Gauge, Level, MACHINE_GLYPH, Totals};
+use std::collections::HashSet;
 use std::io::{self, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, mpsc};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant, SystemTime};
 
 /// What the measuring thread tells the bar.
@@ -158,6 +159,8 @@ const RELOAD_ICON: &str = "\u{F0453}";
 const READ_EVERY: Duration = Duration::from_secs(2);
 /// Totals older than this are no longer shown: the sidebar stopped.
 const TOTALS_FOR_AT_MOST: Duration = Duration::from_secs(30);
+/// How long an entry, once started, does not start again.
+const LAUNCH_AGAIN_AFTER: Duration = Duration::from_secs(1);
 
 /// The buttons of a page: each with its row, its first column and its text.
 fn buttons(page: Page, width: u16) -> Vec<(Button, u16, u16, &'static str)> {
@@ -224,6 +227,9 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
     // run on threads too; a check sends whether the bar keeps its place.
     let (place_checked, place_news) = mpsc::channel::<bool>();
     let (reloaded, reloads) = mpsc::channel::<Result<String, String>>();
+    // The keys of the entries starting, and started less than
+    // `LAUNCH_AGAIN_AFTER` ago: a double click or a held key starts once.
+    let launching: Arc<Mutex<HashSet<char>>> = Arc::default();
     let mut measured_at = None;
     // When the message gives its place back.
     let mut message_until = Instant::now() + MESSAGE_FOR;
@@ -436,11 +442,21 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
             measurer = Some(measure_in_background(me.to_string()));
             continue;
         }
-        let (me, failed) = (me.to_string(), launch_failed.clone());
+        let key = entry.key;
+        let starting = || launching.lock().unwrap_or_else(|e| e.into_inner());
+        if !starting().insert(key) {
+            continue;
+        }
+        let (me, failed, launching) = (me.to_string(), launch_failed.clone(), launching.clone());
         std::thread::spawn(move || {
             if let Err(error) = launch(&me, &entry) {
                 let _ = failed.send(error);
             }
+            std::thread::sleep(LAUNCH_AGAIN_AFTER);
+            launching
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&key);
         });
     }
 }
