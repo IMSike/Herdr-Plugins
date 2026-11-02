@@ -13,7 +13,7 @@ use crossterm::terminal::{
 };
 use crossterm::{execute, queue};
 use std::io::{self, Write};
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthChar;
 
 /// First screen row of the entry list.
 const LIST_TOP: u16 = 2;
@@ -223,16 +223,31 @@ fn draw(
     Ok(out)
 }
 
-/// The cells `text` takes on screen: two for a wide character (CJK), none
-/// for a combining one.
+/// The cells `text` takes on screen, as `fit` shows it: two for a wide
+/// character (CJK), none for a combining one.
 pub(crate) fn width(text: &str) -> usize {
-    UnicodeWidthStr::width(text)
+    text.chars()
+        .map(shown)
+        .map(|c| c.width().unwrap_or(0))
+        .sum()
 }
 
-/// `text` cut to `width` cells.
+/// How a character is shown: a control character (an escape, a line break,
+/// in a label or a message) would act on the terminal instead, so it shows
+/// as `�`, a tab as a space.
+fn shown(c: char) -> char {
+    match c {
+        '\t' => ' ',
+        c if c.is_control() => '\u{FFFD}',
+        c => c,
+    }
+}
+
+/// `text` cut to `width` cells, its control characters shown (see `shown`).
 pub(crate) fn fit(text: &str, width: usize) -> String {
     let mut used = 0;
     text.chars()
+        .map(shown)
         .take_while(|c| {
             used += c.width().unwrap_or(0);
             used <= width
@@ -259,6 +274,9 @@ mod tests {
         // A wide character takes two cells, and is not cut in half.
         assert_eq!(pad("日本", 5), "日本 ");
         assert_eq!(fit("日本", 3), "日");
+        // Nothing acts on the terminal.
+        assert_eq!(fit("a\u{1b}[2Jb\tc\n", 10), "a\u{FFFD}[2Jb c\u{FFFD}");
+        assert_eq!(width("a\u{1b}b"), 3);
     }
 
     #[test]

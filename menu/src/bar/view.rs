@@ -598,7 +598,7 @@ fn draw_tools(out: &mut impl Write, view: &View, width: u16, rows: u16) -> io::R
         let hovered = view.hover == Some(i);
         let color = if hovered { Color::Yellow } else { Color::Reset };
         // The icon (one cell in most fonts) over the middle of the name.
-        let icon = entry.icon();
+        let icon = fit(&entry.icon(), usize::from(slot));
         queue!(
             out,
             MoveTo(centered(left, slot, &icon), top),
