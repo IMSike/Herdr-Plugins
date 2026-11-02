@@ -497,7 +497,7 @@ fn tell_the_bar() {
 /// `herdr-menu settings`, in its popup.
 pub fn run() -> Result<(), String> {
     let files = Files::find();
-    let (menu, menu_error) = config::load(crate::config_dir().as_deref());
+    let (menu, menu_error) = crate::menu_config();
     let (sidebar, sidebar_error) = match &files.sidebar {
         // Shown as the sidebar uses them: the defaults when it ignores the
         // file, and why.

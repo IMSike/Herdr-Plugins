@@ -216,7 +216,7 @@ fn open_above(explorer: &Pane) -> Result<(), String> {
     )?;
     // Down to its height at once, before its program draws: it opens with half
     // of the column. Its border is one row; the bar corrects it once it runs.
-    let want = geometry::wanted_rows(&crate::config::load(crate::config_dir().as_deref()).0);
+    let want = geometry::wanted_rows(&crate::menu_config().0);
     fit_height_to(&bar, want, |height| height.saturating_sub(1));
     // The swap moves the focus to the bar: give it back.
     if let Some(focused) = focused {

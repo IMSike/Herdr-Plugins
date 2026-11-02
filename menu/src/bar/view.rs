@@ -325,7 +325,7 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
             let changed = modified(menu_file.as_deref());
             if changed != menu_changed {
                 menu_changed = changed;
-                let (menu, error) = config::load(crate::config_dir().as_deref());
+                let (menu, error) = crate::menu_config();
                 if (menu.layout, menu.totals) != (view.menu.layout, view.menu.totals) {
                     check_at = Some(Instant::now());
                 }

@@ -82,7 +82,9 @@ fn main() -> ExitCode {
     }
 }
 
-fn menu_config() -> (config::Menu, Option<String>) {
+/// The user's menu, from the configuration folder Herdr gives the plugin
+/// (see `config::load`).
+pub(crate) fn menu_config() -> (config::Menu, Option<String>) {
     config::load(config_dir().as_deref())
 }
 
