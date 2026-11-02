@@ -702,7 +702,7 @@ fn draw_bars(
         .iter()
         .map(|g| g.text.clone().unwrap_or_else(|| "–".into()))
         .collect();
-    let value_width = texts.iter().map(|t| t.chars().count()).max().unwrap_or(0);
+    let value_width = texts.iter().map(|t| crate::ui::width(t)).max().unwrap_or(0);
     // `CPU 󰍹 :`: the glyph keeps a space after it, a terminal may draw it
     // over two cells.
     const LABEL_CELLS: usize = 7;
@@ -715,7 +715,11 @@ fn draw_bars(
             format!("{kind} :")
         };
         let level = gauge.level(totals.colors);
-        let value = format!("{text:>value_width$}");
+        // Right-aligned by cells: `format!` pads by characters.
+        let value = format!(
+            "{}{text}",
+            " ".repeat(value_width.saturating_sub(crate::ui::width(text)))
+        );
         // Too narrow for the label: the value alone.
         if 1 + LABEL_CELLS + 1 + value_width > usize::from(width) {
             let value = fit(text, usize::from(width));
@@ -723,7 +727,7 @@ fn draw_bars(
             draw_figure(out, &value, level, true)?;
             continue;
         }
-        let pad = LABEL_CELLS.saturating_sub(label.chars().count());
+        let pad = LABEL_CELLS.saturating_sub(crate::ui::width(&label));
         queue!(
             out,
             MoveTo(1, y),
