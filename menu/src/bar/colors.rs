@@ -21,14 +21,7 @@ pub fn gradient(value: f64, thresholds: &Thresholds) -> Color {
             } else {
                 1.0
             };
-            let (a, b) = (level_rgb(low), level_rgb(high));
-            let mix =
-                |x: u8, y: u8| (f64::from(x) + (f64::from(y) - f64::from(x)) * t).round() as u8;
-            return Color::Rgb {
-                r: mix(a.0, b.0),
-                g: mix(a.1, b.1),
-                b: mix(a.2, b.2),
-            };
+            return mix(level_rgb(low), level_rgb(high), t);
         }
     }
     level_color(Level::Red)
@@ -42,13 +35,16 @@ const ZONE_TINT: f64 = 0.45;
 /// The color of the empty part of a bar at `value`: its level's, dimmed
 /// toward the track, so the bar shows where each threshold falls.
 pub fn zone(value: f64, thresholds: &Thresholds) -> Color {
-    let (a, b) = (TRACK, level_rgb(Level::of(value, thresholds)));
-    let mix =
-        |x: u8, y: u8| (f64::from(x) + (f64::from(y) - f64::from(x)) * ZONE_TINT).round() as u8;
+    mix(TRACK, level_rgb(Level::of(value, thresholds)), ZONE_TINT)
+}
+
+/// The color `t` of the way from `a` to `b` (0 to 1).
+fn mix(a: (u8, u8, u8), b: (u8, u8, u8), t: f64) -> Color {
+    let channel = |x: u8, y: u8| (f64::from(x) + (f64::from(y) - f64::from(x)) * t).round() as u8;
     Color::Rgb {
-        r: mix(a.0, b.0),
-        g: mix(a.1, b.1),
-        b: mix(a.2, b.2),
+        r: channel(a.0, b.0),
+        g: channel(a.1, b.1),
+        b: channel(a.2, b.2),
     }
 }
 
