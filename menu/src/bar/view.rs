@@ -231,6 +231,11 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
     let files_flag = herdr_api::state_dir()
         .ok()
         .map(|dir| files::opened_flag(&dir, me));
+    // One left by a bar of the same pane id that closed before reading it
+    // is not for this one.
+    if let Some(flag) = &files_flag {
+        let _ = std::fs::remove_file(flag);
+    }
     // The disk figures are measured while their page is open only.
     let mut measurer: Option<Measurer> = None;
     // Launches run on threads of their own: the bar keeps answering while a
