@@ -39,7 +39,7 @@ pub const MACHINE_CPU_LEVELS: Thresholds = [50.0, 70.0, 90.0];
 /// Default thresholds of the machine's memory in use (percent of its memory).
 pub const MACHINE_MEMORY_LEVELS: Thresholds = [60.0, 75.0, 90.0];
 /// Bytes in a GiB, the unit of the memory thresholds.
-pub const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
+const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
 /// The totals of the last run, in the sidebar's state folder.
 const TOTALS_FILE: &str = "totals.json";
 /// Nerd Font monitor glyph (nf-md-monitor), before the whole machine's figures.
@@ -219,7 +219,7 @@ impl Totals {
         parts
     }
 
-    pub fn file(state_dir: &Path) -> PathBuf {
+    fn file(state_dir: &Path) -> PathBuf {
         state_dir.join(TOTALS_FILE)
     }
 
@@ -236,8 +236,19 @@ impl Totals {
 /// The sidebar's state folder, beside this plugin's: Herdr gives each
 /// plugin a folder named after its id, in the same place.
 pub fn state_dir() -> Result<PathBuf, String> {
-    let mine = crate::state_dir()?;
-    let parent = mine.parent().ok_or("dossier d'état sans parent")?;
+    beside(&crate::state_dir()?)
+}
+
+/// The sidebar's config folder, beside this plugin's, as its state folder.
+pub fn config_dir() -> Result<PathBuf, String> {
+    let mine = std::env::var_os(crate::env::CONFIG_DIR)
+        .ok_or_else(|| crate::absent(crate::env::CONFIG_DIR))?;
+    beside(Path::new(&mine))
+}
+
+/// The sidebar's folder beside `mine`, a folder of this plugin's.
+fn beside(mine: &Path) -> Result<PathBuf, String> {
+    let parent = mine.parent().ok_or("dossier du plugin sans parent")?;
     Ok(parent.join(ID))
 }
 

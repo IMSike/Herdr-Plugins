@@ -84,7 +84,7 @@ pub fn unix_millis() -> u64 {
 /// Whether the file was last written more than `age` ago. A date in the
 /// future (written before the clock was set back) counts as old: otherwise
 /// the file would stay young until the clock caught up.
-pub fn is_older_than(metadata: &std::fs::Metadata, age: Duration) -> bool {
+fn is_older_than(metadata: &std::fs::Metadata, age: Duration) -> bool {
     metadata
         .modified()
         .is_ok_and(|modified| modified.elapsed().ok().is_none_or(|elapsed| elapsed > age))

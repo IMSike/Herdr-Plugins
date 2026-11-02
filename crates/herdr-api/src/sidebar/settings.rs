@@ -108,7 +108,7 @@ impl Settings {
         }
     }
 
-    pub fn parse(text: &str) -> Result<Self, String> {
+    fn parse(text: &str) -> Result<Self, String> {
         let settings: Self = toml::from_str(text).map_err(|e| e.message().to_string())?;
         if settings.ttl_seconds == 0 {
             return Err("ttl_seconds doit valoir au moins 1".into());
