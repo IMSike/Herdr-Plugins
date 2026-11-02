@@ -20,13 +20,15 @@ use crossterm::terminal;
 use herdr_api::NumberFormat;
 use herdr_api::sidebar::{Gauge, Level, MACHINE_GLYPH, Totals};
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant, SystemTime};
 
 /// What the measuring thread tells the bar.
 enum Measure {
+    /// The explorer's folder is unknown: nothing to measure.
+    NoFolder,
     Started,
     Done(Measured),
     /// The figures could not be kept in the state folder.
@@ -51,16 +53,22 @@ impl Drop for Measurer {
 /// Measures the folder in the background whenever its figures are due (see
 /// `stats::lifetime`) or asked for. Figures kept in the plugin's state folder,
 /// by this bar or another one of the folder, are shown without a reading.
-/// The thread ends with the page, a reading under way included.
-fn measure_in_background(root: PathBuf) -> Measurer {
+/// The thread ends with the page, a reading under way included. The folder
+/// is the explorer's of the bar `me`'s tab, asked from the thread: the bar
+/// never waits for Herdr.
+fn measure_in_background(me: String) -> Measurer {
     let (send, news) = mpsc::channel();
     let (ask, asked) = mpsc::channel::<()>();
     let stop = Arc::new(AtomicBool::new(false));
     let stopped = Arc::clone(&stop);
-    let file = herdr_api::state_dir()
-        .ok()
-        .map(|dir| stats::cache_file(&dir, &root));
     std::thread::spawn(move || {
+        let Some(root) = folders(&me).0 else {
+            let _ = send.send(Measure::NoFolder);
+            return;
+        };
+        let file = herdr_api::state_dir()
+            .ok()
+            .map(|dir| stats::cache_file(&dir, &root));
         let mut last: Option<Measured> = None;
         let mut manual = false;
         loop {
@@ -212,6 +220,10 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
     // Launches run on threads of their own: the bar keeps answering while a
     // popup waits for the previous one to close. They send back their error.
     let (launch_failed, launch_errors) = mpsc::channel::<String>();
+    // The checks of the bar's place and the reloads of Herdr's configuration
+    // run on threads too; a check sends whether the bar keeps its place.
+    let (place_checked, place_news) = mpsc::channel::<bool>();
+    let (reloaded, reloads) = mpsc::channel::<Result<String, String>>();
     let mut measured_at = None;
     // When the message gives its place back.
     let mut message_until = Instant::now() + MESSAGE_FOR;
@@ -235,6 +247,10 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
     loop {
         for news in measurer.iter().flat_map(|m| m.news.try_iter()) {
             match news {
+                Measure::NoFolder => {
+                    view.message = Some(("dossier de l'explorateur inconnu".into(), Color::Red));
+                    message_until = Instant::now() + MESSAGE_FOR;
+                }
                 Measure::Started => view.measuring = true,
                 Measure::Done(measured) => {
                     view.measuring = false;
@@ -250,6 +266,20 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
         }
         for error in launch_errors.try_iter() {
             view.message = Some((error, Color::Red));
+            message_until = Instant::now() + MESSAGE_FOR;
+        }
+        if place_news.try_iter().any(|kept| !kept) {
+            return Ok(());
+        }
+        for result in reloads.try_iter() {
+            let (message, color) = match result {
+                Ok(message) => {
+                    view.page = Page::Tools;
+                    (message, Color::Green)
+                }
+                Err(e) => (e, Color::Red),
+            };
+            view.message = Some((message, color));
             message_until = Instant::now() + MESSAGE_FOR;
         }
         if Instant::now() >= read_at {
@@ -301,11 +331,19 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
         if !event::poll(until_check.min(WAKE_EVERY))? {
             if check_at.is_some_and(|at| Instant::now() >= at) {
                 check_at = None;
-                let tab = my_tab(me);
-                if tab.is_some_and(|tab| !has_its_place(&tab.iter().collect::<Vec<_>>())) {
-                    return Ok(());
-                }
-                fit_height(me, wanted_rows(&view.menu));
+                let (me, rows, checked) = (
+                    me.to_string(),
+                    wanted_rows(&view.menu),
+                    place_checked.clone(),
+                );
+                std::thread::spawn(move || {
+                    let tab = my_tab(&me);
+                    if tab.is_some_and(|tab| !has_its_place(&tab.iter().collect::<Vec<_>>())) {
+                        let _ = checked.send(false);
+                        return;
+                    }
+                    fit_height(&me, rows);
+                });
             }
             continue;
         }
@@ -380,15 +418,10 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
                 measurer = None;
             }
             Some(Button::Reload) => {
-                let (message, color) = match files::reload() {
-                    Ok(message) => {
-                        view.page = Page::Tools;
-                        (message, Color::Green)
-                    }
-                    Err(e) => (e, Color::Red),
-                };
-                view.message = Some((message, color));
-                message_until = Instant::now() + MESSAGE_FOR;
+                let reloaded = reloaded.clone();
+                std::thread::spawn(move || {
+                    let _ = reloaded.send(files::reload());
+                });
             }
             None => {}
         }
@@ -400,11 +433,7 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
         if entry.action == Some(Action::Disk) {
             view.page = Page::Disk;
             view.hover = None;
-            measurer = folders(me).0.map(measure_in_background);
-            if measurer.is_none() {
-                view.message = Some(("dossier de l'explorateur inconnu".into(), Color::Red));
-                message_until = Instant::now() + MESSAGE_FOR;
-            }
+            measurer = Some(measure_in_background(me.to_string()));
             continue;
         }
         let (me, failed) = (me.to_string(), launch_failed.clone());
