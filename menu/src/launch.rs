@@ -20,10 +20,10 @@ pub fn command(argv: &[String]) -> Result<Command, String> {
     Ok(command)
 }
 
+/// A name with its extension (`code.cmd`) is looked up on `PATH` too.
 #[cfg(windows)]
 fn program(name: &str) -> Result<std::ffi::OsString, String> {
-    let bare = Path::new(name);
-    if bare.extension().is_some() || bare.components().count() > 1 {
+    if Path::new(name).components().count() > 1 {
         return Ok(name.into());
     }
     // Rust's own search does not look in the current folder.
@@ -41,26 +41,36 @@ fn program(name: &str) -> Result<std::ffi::OsString, String> {
         .ok_or_else(|| format!("« {name} » introuvable dans le PATH"))
 }
 
+/// The extensions of the programs Windows runs, in the order it tries them.
+const WINDOWS_PROGRAMS: [&str; 4] = ["exe", "cmd", "bat", "com"];
+
 /// Where the program `name` is on `PATH`, if it is there.
 pub fn find_on_path(name: &str) -> Option<PathBuf> {
-    let extensions: &[&str] = if cfg!(windows) {
-        &["exe", "cmd", "bat"]
-    } else {
-        &[""]
-    };
+    let files = file_names(name, cfg!(windows));
     // An empty or relative entry would be looked up from the current folder.
     std::env::split_paths(&std::env::var_os("PATH")?)
         .filter(|dir| dir.is_absolute())
         .find_map(|dir| {
-            extensions.iter().find_map(|ext| {
-                let file = if ext.is_empty() {
-                    dir.join(name)
-                } else {
-                    dir.join(format!("{name}.{ext}"))
-                };
-                is_program(&file).then_some(file)
-            })
+            files
+                .iter()
+                .map(|file| dir.join(file))
+                .find(|file| is_program(file))
         })
+}
+
+/// The file names the program `name` may have: on Windows, with each
+/// extension of a program, unless it has one already.
+fn file_names(name: &str, windows: bool) -> Vec<String> {
+    let has_one = Path::new(name).extension().is_some_and(|ext| {
+        WINDOWS_PROGRAMS.contains(&ext.to_string_lossy().to_lowercase().as_str())
+    });
+    if !windows || has_one {
+        return vec![name.to_string()];
+    }
+    WINDOWS_PROGRAMS
+        .iter()
+        .map(|ext| format!("{name}.{ext}"))
+        .collect()
 }
 
 /// A file that can run: on Unix, one with an execute bit.
@@ -143,6 +153,17 @@ pub fn detach_command(mut command: Command) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_windows_program_keeps_its_own_extension() {
+        assert_eq!(file_names("code", false), ["code"]);
+        assert_eq!(
+            file_names("code", true),
+            ["code.exe", "code.cmd", "code.bat", "code.com"]
+        );
+        assert_eq!(file_names("code.CMD", true), ["code.CMD"]);
+        assert_eq!(file_names("v1.2", true)[0], "v1.2.exe");
+    }
 
     #[test]
     fn leaves_out_only_the_panes_variables() {
