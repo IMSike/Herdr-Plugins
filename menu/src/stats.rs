@@ -7,6 +7,7 @@ pub use format::{age_label, files_line, size_line};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -152,12 +153,12 @@ pub fn save(file: &Path, measured: &Measured) -> Result<(), String> {
 /// Walks the folder without following links; unreadable folders are skipped.
 /// Stops early, the figures incomplete, past the limit or once `stop` is set.
 pub fn measure(root: &Path, limit: Limit, stop: &AtomicBool) -> Stats {
+    let deadline = Instant::now() + limit.time;
     let mut stats = Stats {
-        disk: disk_size(root),
+        disk: disk_size(root, deadline),
         complete: true,
         ..Stats::default()
     };
-    let deadline = Instant::now() + limit.time;
     let mut entries_read = 0u64;
     let mut stack: Vec<(PathBuf, bool)> = vec![(root.to_path_buf(), false)];
     while let Some((dir, in_git)) = stack.pop() {
@@ -195,14 +196,33 @@ pub fn measure(root: &Path, limit: Limit, stop: &AtomicBool) -> Stats {
     stats
 }
 
-/// The disk whose mount point holds `path` the most closely.
-fn disk_size(path: &Path) -> Option<u64> {
-    let disks = sysinfo::Disks::new_with_refreshed_list().ok()?;
-    disks
-        .iter()
-        .filter(|d| is_under(path, d.mount_point()))
-        .max_by_key(|d| d.mount_point().components().count())
-        .map(|d| d.total_space())
+/// The size of the disk whose mount point holds `path` the most closely.
+/// Listing the disks asks each one, a network share that no longer answers
+/// included: the list is made on a thread of its own, waited for until
+/// `deadline`, and only one such thread runs at a time (a stuck one is not
+/// joined by others).
+fn disk_size(path: &Path, deadline: Instant) -> Option<u64> {
+    static LISTING: AtomicBool = AtomicBool::new(false);
+    if LISTING.swap(true, Ordering::SeqCst) {
+        return None;
+    }
+    let (send, size) = mpsc::channel();
+    let path = path.to_path_buf();
+    std::thread::spawn(move || {
+        let disks = sysinfo::Disks::new_with_refreshed_list();
+        LISTING.store(false, Ordering::SeqCst);
+        let found = disks.ok().and_then(|disks| {
+            disks
+                .iter()
+                .filter(|d| is_under(&path, d.mount_point()))
+                .max_by_key(|d| d.mount_point().components().count())
+                .map(|d| d.total_space())
+        });
+        let _ = send.send(found);
+    });
+    size.recv_timeout(deadline.saturating_duration_since(Instant::now()))
+        .ok()
+        .flatten()
 }
 
 /// Whether `path` is `mount` or inside it, by whole components: `/data2` is
