@@ -1,4 +1,7 @@
-//! The menu drawn in its popup: one row per entry, chosen by key, arrows or click.
+//! The screens drawn in a pane: the terminal taken over (`Screen`), a frame
+//! drawn in one write (`Frame`), text cut to the cells it takes (`fit`,
+//! `width`), and the popup menu: one row per entry, chosen by key, arrows or
+//! click.
 
 use crate::config::Entry;
 use crossterm::cursor::{Hide, MoveTo, Show};

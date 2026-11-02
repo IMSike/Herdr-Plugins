@@ -1,6 +1,6 @@
 [package]
 name = "herdr-menu"
-description = "Herdr plugin: a menu (a Tools pane above the file explorer, or a popup) that opens a tool (lazygit, gh-dash…) in a large popup"
+description = "Herdr plugin: a menu that opens a tool (lazygit, gh-dash…) in a large popup, updates Herdr and sets the plugins: a Tools pane of icons above the file explorer, or a popup"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
