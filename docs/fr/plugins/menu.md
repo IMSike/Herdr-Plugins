@@ -124,7 +124,7 @@ En tête de `menu.toml`, avant les entrées ; l'écran des réglages les change 
 
 Le dossier n'est mesuré que pendant que cette page est affichée : revenir arrête la mesure.
 
-**Update** (`u`) ouvre une fenêtre de terminal à part, hors de Herdr : Herdr refuse de se mettre à jour depuis l'un de ses panes. Sous Windows, c'est une nouvelle fenêtre de console ; ailleurs, le premier terminal trouvé parmi `x-terminal-emulator`, `gnome-terminal`, `konsole`, `xfce4-terminal`, `kitty`, `alacritty`, `wezterm`, `foot` et `xterm`. Dans cette fenêtre :
+**Update** (`u`) ouvre une fenêtre de terminal à part, hors de Herdr : Herdr refuse de se mettre à jour depuis l'un de ses panes. Sous Windows, c'est une nouvelle fenêtre de console (ouverte par `cmd /c start`) ; ailleurs, le premier terminal trouvé parmi `x-terminal-emulator`, `gnome-terminal`, `konsole`, `xfce4-terminal`, `kitty`, `alacritty`, `wezterm`, `foot` et `xterm`. Dans cette fenêtre :
 
 1. `herdr update` installe la dernière version de Herdr (avec `--handoff` quand le serveur sait passer ses sessions à la nouvelle version, ce qu'il ne sait pas faire sous Windows).
 2. `herdr status --json` indique si le serveur en cours est encore l'ancienne version. Sinon, la fenêtre dit que Herdr est à jour : le client déjà ouvert garde son ancienne version jusqu'à ce que vous vous détachiez (`prefix+q`) et relanciez `herdr`.

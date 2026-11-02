@@ -28,11 +28,8 @@ pub fn open_window() -> Result<(), String> {
     }
     let me = std::env::current_exe().map_err(|e| e.to_string())?;
     let mut command = terminal_window(&me)?;
-    command.env_remove(INSIDE_HERDR);
-    // The new console window is the update's input and output on Windows:
-    // given null ones, it would show nothing and read no answer.
-    #[cfg(not(windows))]
     command
+        .env_remove(INSIDE_HERDR)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -62,13 +59,17 @@ pub fn open_window() -> Result<(), String> {
 /// How long the window's terminal is watched for an early end.
 const WINDOW_CHECK: std::time::Duration = std::time::Duration::from_secs(1);
 
-/// A new console window running `me update` (Windows).
+/// A new console window running `me update` (Windows), opened by `start`:
+/// the window's console is the update's input and output, whatever handles
+/// the bar's pane would pass on. `cmd` itself opens no window, and ends
+/// once the window is open.
 #[cfg(windows)]
 fn terminal_window(me: &std::path::Path) -> Result<Command, String> {
-    const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
-    let mut command = Command::new(me);
-    command.arg("update");
-    std::os::windows::process::CommandExt::creation_flags(&mut command, CREATE_NEW_CONSOLE);
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut command = Command::new("cmd");
+    // The empty title: `start` takes a first quoted word for one.
+    command.args(["/c", "start", ""]).arg(me).arg("update");
+    std::os::windows::process::CommandExt::creation_flags(&mut command, CREATE_NO_WINDOW);
     Ok(command)
 }
 
