@@ -26,7 +26,6 @@ const WINDOW_EDITORS: &[&str] = &[
     "zed",
     "subl",
     "sublime_text",
-    "notepad",
     "notepad++",
     "gedit",
     "gnome-text-editor",
