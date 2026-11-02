@@ -25,8 +25,8 @@ pub fn write(path: &Path, text: &str) -> Result<(), String> {
 }
 
 /// `text` with `key` set: in place when the file sets it, on its
-/// commented-out line (`# key = …`, before any table) when it has one, else
-/// added to the top level.
+/// commented-out line (`# key = …`, before any table, commented out or
+/// not) when it has one, else added to the top level.
 pub fn with_value(text: &str, key: &str, value: Value) -> Result<String, String> {
     let mut doc: DocumentMut = text
         .parse()
@@ -44,7 +44,7 @@ pub fn with_value(text: &str, key: &str, value: Value) -> Result<String, String>
     let lines: Vec<&str> = text.split('\n').collect();
     let first_table = lines
         .iter()
-        .position(|l| l.trim_start().starts_with('['))
+        .position(|l| is_table(l))
         .unwrap_or(lines.len());
     if let Some(at) = lines[..first_table]
         .iter()
@@ -57,6 +57,14 @@ pub fn with_value(text: &str, key: &str, value: Value) -> Result<String, String>
     }
     doc.insert(key, Item::Value(value));
     Ok(doc.to_string())
+}
+
+/// Whether `line` starts a table (`[name]`, `[[name]]`), or would once
+/// uncommented (`# [[entries]]`): the lines below it belong to the table.
+fn is_table(line: &str) -> bool {
+    let line = line.trim();
+    let line = line.strip_prefix('#').map_or(line, str::trim);
+    line.starts_with('[') && line.ends_with(']')
 }
 
 #[cfg(test)]
@@ -81,9 +89,11 @@ mod tests {
             set,
             "# Help.\nlayout = \"single\"\n\n# [[entries]]\n# key = \"l\"\n"
         );
-        // `key` is only commented out below the entries' example: added.
+        // `key` is only commented out in the entries' example, below its
+        // table: added, the example left as it is.
         let added = with_value(text, "key", "x".into()).unwrap();
-        assert!(added.contains("\nkey = \"x\""));
+        assert!(added.starts_with("key = \"x\"\n"), "{added:?}");
+        assert!(added.contains("# key = \"l\""));
     }
 
     #[test]
