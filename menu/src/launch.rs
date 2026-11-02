@@ -81,13 +81,36 @@ pub fn detach(entry: &Entry, cwd: Option<&Path>) -> Result<(), String> {
         .map_err(|e| format!("impossible de lancer « {} » : {e}", entry.label))
 }
 
-/// Starts `argv` without waiting for it.
+/// Starts `argv` without waiting for it, outside the bar's pane (see
+/// `leave_the_pane`).
 pub fn spawn_detached(argv: &[String], cwd: Option<&Path>) -> Result<(), String> {
     let mut command = command(argv)?;
     if let Some(cwd) = cwd {
         command.current_dir(cwd);
     }
+    leave_the_pane(&mut command);
     detach_command(command)
+}
+
+/// Leaves out the variables that only hold in the menu's pane: which pane it
+/// is, the plugin's own (`HERDR_PLUGIN_*`, `HERDR_MENU_*`), the binary that
+/// runs this Herdr, and the one by which Herdr tells its panes. A program
+/// started from the menu runs outside that pane: it would otherwise act on
+/// it, or take itself for one of the plugin's commands.
+pub fn leave_the_pane(command: &mut Command) {
+    for (name, _) in std::env::vars_os() {
+        if is_the_panes(&name.to_string_lossy()) {
+            command.env_remove(&name);
+        }
+    }
+}
+
+fn is_the_panes(name: &str) -> bool {
+    use herdr_api::env::{BIN_PATH, INSIDE, PANE_ID};
+    let name = name.to_uppercase();
+    name.starts_with("HERDR_PLUGIN_")
+        || name.starts_with("HERDR_MENU_")
+        || [INSIDE, PANE_ID, BIN_PATH].contains(&name.as_str())
 }
 
 /// Starts `command` without waiting for it: its output goes nowhere, and it
@@ -115,4 +138,29 @@ pub fn detach_command(mut command: Command) -> Result<(), String> {
     // Reaped in the background, so that it leaves no zombie while the bar runs.
     std::thread::spawn(move || child.wait());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn leaves_out_only_the_panes_variables() {
+        for name in [
+            "HERDR_PANE_ID",
+            "HERDR_ENV",
+            "HERDR_PLUGIN_STATE_DIR",
+            "HERDR_MENU_BAR",
+        ] {
+            assert!(is_the_panes(name), "{name}");
+        }
+        for name in [
+            "HERDR_SOCKET_PATH",
+            "HERDR_CONFIG_PATH",
+            "PATH",
+            "HERDR_ENVX",
+        ] {
+            assert!(!is_the_panes(name), "{name}");
+        }
+    }
 }

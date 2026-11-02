@@ -100,9 +100,13 @@ fn terminal_window(me: &std::path::Path) -> Result<Command, String> {
     Ok(command)
 }
 
-/// Runs `herdr <args>` with its output on screen, and this window's input.
+/// Runs `herdr <args>` with its output on screen, and this window's input,
+/// without the variables of the bar's pane: Herdr started again here would
+/// hand them to every pane it opens.
 fn herdr_shown(args: &[&str]) -> Result<(), String> {
-    let status = herdr::command(args)
+    let mut command = herdr::command(args);
+    crate::launch::leave_the_pane(&mut command);
+    let status = command
         .stdin(Stdio::inherit())
         .status()
         .map_err(|e| format!("impossible de lancer « herdr {} » : {e}", args.join(" ")))?;
