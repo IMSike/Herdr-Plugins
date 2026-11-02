@@ -11,6 +11,49 @@ use std::path::PathBuf;
 
 /// The folder of the files, in the state folder.
 const DIR: &str = "bars";
+/// What starts the lock of a tab's bars, in the state folder.
+const TAB_LOCK_PREFIX: &str = "opening-";
+
+/// The lock of a tab's bars, held from listing them to opening or closing
+/// one: `prefix+space` and the explorer's `pane.created` hook never both
+/// open one.
+pub enum TabLock {
+    Held {
+        _lock: herdr_api::Lock,
+    },
+    /// No lock to take (no state folder, or one that cannot be written):
+    /// go on without.
+    Unavailable,
+    /// Another run lists or changes the tab's bars.
+    Busy,
+}
+
+/// Removes the locks of the tabs that are no longer among `live`, every
+/// pane Herdr has.
+pub fn forget_tab_locks(live: &[Pane]) {
+    let Ok(dir) = herdr_api::state_dir() else {
+        return;
+    };
+    let live: HashSet<String> = live
+        .iter()
+        .map(|p| format!("{TAB_LOCK_PREFIX}{}.lock", Bars::file_name(&p.tab_id)))
+        .collect();
+    herdr_api::remove_stale(&dir, std::time::Duration::ZERO, |name| {
+        name.starts_with(TAB_LOCK_PREFIX) && !live.contains(name)
+    });
+}
+
+pub fn lock_tab(tab_id: &str) -> TabLock {
+    let Ok(dir) = herdr_api::state_dir() else {
+        return TabLock::Unavailable;
+    };
+    let file = dir.join(format!("{TAB_LOCK_PREFIX}{}.lock", Bars::file_name(tab_id)));
+    match herdr_api::Lock::take(&file) {
+        Ok(Some(lock)) => TabLock::Held { _lock: lock },
+        Ok(None) => TabLock::Busy,
+        Err(_) => TabLock::Unavailable,
+    }
+}
 
 pub struct Bars {
     /// `None` without a state folder: a bar is then known by its label alone.

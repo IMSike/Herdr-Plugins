@@ -24,7 +24,7 @@ use crate::config::Menu;
 use crate::herdr::{self, Context, Pane};
 use crossterm::terminal;
 use geometry::{Layout, ratio_change};
-use registry::Bars;
+use registry::{Bars, TabLock, forget_tab_locks, lock_tab};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -102,6 +102,11 @@ pub fn toggle(context: &Context) -> Result<bool, String> {
     let (Some(workspace), Some(tab)) = (&context.workspace_id, &context.tab_id) else {
         return Ok(false);
     };
+    // Another run opens or closes the tab's bar: that is what was asked.
+    let _lock = match lock_tab(tab) {
+        TabLock::Busy => return Ok(true),
+        lock => lock,
+    };
     let panes = herdr::tab_panes(workspace, tab)?;
     let known = Bars::new();
     let bars: Vec<&Pane> = panes.iter().filter(|p| known.is(p)).collect();
@@ -128,6 +133,11 @@ pub fn on_pane_created() -> Result<(), String> {
     if !label_is(&explorer, EXPLORER) || !settled(&explorer.pane_id) {
         return Ok(());
     }
+    // `prefix+space` opens or closes the tab's bar meanwhile: it decides.
+    let _lock = match lock_tab(&explorer.tab_id) {
+        TabLock::Busy => return Ok(()),
+        lock => lock,
+    };
     let panes = herdr::tab_panes(&explorer.workspace_id, &explorer.tab_id)?;
     let known = Bars::new();
     let bars: Vec<Pane> = panes.into_iter().filter(|p| known.is(p)).collect();
@@ -171,6 +181,7 @@ pub fn startup() -> Result<(), String> {
     let all = herdr::all_panes()?;
     let known = Bars::new();
     known.keep_only(&all);
+    forget_tab_locks(&all);
     let bars = all.into_iter().filter(|p| known.is(p)).collect();
     for bar in dead(bars) {
         let _ = herdr::close(&bar.pane_id);
