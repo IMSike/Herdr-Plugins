@@ -133,7 +133,7 @@ The folder is only measured while this page is shown: going back stops the measu
 
 The window waits for Enter before closing, an error included. While it is open, another click on Update says that an update is under way instead of opening a second one. Without a graphical display (over SSH), or when the terminal closes at once, the `Tools` pane says so in red: run `herdr update` outside Herdr.
 
-**Settings** (`s`) opens a settings screen in a popup of 70% of the terminal's width and 80% of its height; the list scrolls when it does not fit (an arrow in the top right corner says so). Up and down (or `j`/`k`) choose a line; left and right (or `h`/`l`), Enter or Space change it, and each change is saved at once; with the mouse, hovering a line chooses it, a click changes it and the wheel moves the choice; Escape, `q` or Ctrl+C closes the screen. When the file stays ignored after a change (another of its settings is invalid), the screen says so in red, with the reason.
+**Settings** (`s`) opens a settings screen in a popup of 70% of the terminal's width and 80% of its height; the list scrolls when it does not fit (an arrow in the top right corner says so). Up and down (or `j`/`k`) choose a line; left and right (or `h`/`l`), Enter or Space change it, and each change is saved at once; with the mouse, hovering a line chooses it, a click changes it and the wheel moves the choice; Escape, `q` or Ctrl+C closes the screen. A file that is a link (deployed by stow or chezmoi, say) stays a link: the file it points to is written. When the file stays ignored after a change (another of its settings is invalid), the screen says so in red, with the reason.
 
 | Line | Effect | File |
 |---|---|---|

@@ -109,15 +109,33 @@ pub fn remove_stale(dir: &Path, age: Duration, matches: impl Fn(&str) -> bool) {
 
 /// Writes `bytes` to `path` through a file of this process, renamed over it:
 /// a reader sees the old content or the new one, never half of it, and two
-/// processes writing at once do not mix their content.
+/// processes writing at once do not mix their content. A link (a settings
+/// file deployed by stow or chezmoi) stays a link: the file it points to is
+/// written, keeping its permissions.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    let linked = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink());
+    // A link to nothing is replaced, as a missing file would be created.
+    let target = linked
+        .then(|| std::fs::canonicalize(path).ok())
+        .flatten()
+        .unwrap_or_else(|| path.to_path_buf());
+    let mut name = target.file_name().unwrap_or_default().to_os_string();
     name.push(format!(".{}.partial", std::process::id()));
-    let partial = path.with_file_name(name);
+    let partial = target.with_file_name(name);
     std::fs::write(&partial, bytes)?;
-    std::fs::rename(&partial, path).inspect_err(|_| {
-        let _ = std::fs::remove_file(&partial);
-    })
+    // On Windows, the only permission is read-only, which would keep the
+    // partial file from being removed.
+    let kept = if cfg!(unix) {
+        std::fs::metadata(&target).map_or(Ok(()), |m| {
+            std::fs::set_permissions(&partial, m.permissions())
+        })
+    } else {
+        Ok(())
+    };
+    kept.and_then(|()| std::fs::rename(&partial, &target))
+        .inspect_err(|_| {
+            let _ = std::fs::remove_file(&partial);
+        })
 }
 
 /// A JSON file's content; `None` when it is missing or unreadable.
@@ -170,6 +188,25 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), b"new");
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_stays_a_link() {
+        let dir = std::env::temp_dir().join(format!("herdr-api-link-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (target, link) = (dir.join("dotfile.toml"), dir.join("menu.toml"));
+        std::fs::write(&target, b"old").unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        write_atomic(&link, b"new").unwrap();
+        assert!(
+            std::fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(std::fs::read(&target).unwrap(), b"new");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
