@@ -122,7 +122,7 @@ En tête de `menu.toml`, avant les entrées ; l'écran des réglages les change 
 - la taille totale de ses fichiers, tous fichiers compris (`.git` et dossiers de build aussi), et la part qu'elle représente de son disque. Un fichier lié plusieurs fois (liens durs, comme ceux de pnpm) compte à chaque fois, et un fichier cloud non téléchargé (OneDrive) compte pour sa taille entière ;
 - son nombre de fichiers, hors `.git`, l'âge des chiffres à partir d'une heure (`· 3 h`), et une icône : un clic sur les chiffres, ou `r`, mesure à nouveau le dossier (`…` pendant la lecture).
 
-Le dossier n'est mesuré que pendant que cette page est affichée : revenir arrête la mesure. Un dossier qui ne répond pas à temps (un partage réseau disparu) est signalé en rouge, et aucun chiffre n'est gardé pour lui : `r` réessaie.
+Le dossier n'est mesuré que pendant que cette page est affichée : revenir arrête la mesure. Un dossier qui ne répond pas à temps (un partage réseau disparu) est signalé en rouge, et aucun chiffre n'est gardé pour lui ; de même pour un explorateur dont Herdr ne donne pas le dossier. Dans les deux cas, `r` réessaie.
 
 **Update** (`u`) ouvre une fenêtre de terminal à part, hors de Herdr : Herdr refuse de se mettre à jour depuis l'un de ses panes. Sous Windows, c'est une nouvelle fenêtre de console (ouverte par `cmd /c start`) ; ailleurs, le premier terminal trouvé parmi `x-terminal-emulator`, `gnome-terminal`, `konsole`, `xfce4-terminal`, `kitty`, `alacritty`, `wezterm`, `foot` et `xterm`. Dans cette fenêtre :
 

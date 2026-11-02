@@ -431,8 +431,10 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
             }
             _ => {}
         }
-        if measure_again && let Some(m) = &measurer {
-            let _ = m.ask.send(());
+        // A measuring thread that ended (the explorer's folder was unknown)
+        // starts again.
+        if measure_again && measurer.as_ref().is_none_or(|m| m.ask.send(()).is_err()) {
+            measurer = Some(measure_in_background(me.to_string()));
         }
         match pressed {
             Some(Button::Back) => {

@@ -122,7 +122,7 @@ At the top of `menu.toml`, before the entries; the settings screen changes them 
 - the total size of its files, every file included (`.git` and build folders too), and its share of the disk it is on. A file linked several times (hard links, as pnpm makes) counts each time, and a cloud file not downloaded (OneDrive) counts at its full size;
 - its number of files, those of `.git` left out, how old the figures are from an hour on (`· 3 h`), and an icon: a click on the figures, or `r`, measures the folder again (`…` while it is read).
 
-The folder is only measured while this page is shown: going back stops the measuring. A folder that does not answer in time (a network share gone) is said so in red, and no figures are kept for it: `r` tries again.
+The folder is only measured while this page is shown: going back stops the measuring. A folder that does not answer in time (a network share gone) is said so in red, and no figures are kept for it; so is an explorer whose folder Herdr does not give. Either way, `r` tries again.
 
 **Update** (`u`) opens a terminal window of its own, outside Herdr: Herdr refuses to update from one of its panes. On Windows it is a new console window (opened by `cmd /c start`); elsewhere, the first terminal found among `x-terminal-emulator`, `gnome-terminal`, `konsole`, `xfce4-terminal`, `kitty`, `alacritty`, `wezterm`, `foot` and `xterm`. In it:
 
