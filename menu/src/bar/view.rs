@@ -636,7 +636,7 @@ fn draw_line(
     }
     let parts = totals.parts(numbers);
     let whole: String = parts.iter().map(|(text, _)| text.as_str()).collect();
-    if whole.chars().count() > usize::from(width) {
+    if crate::ui::width(&whole) > usize::from(width) {
         let text = fit(&whole, usize::from(width));
         return queue!(out, MoveTo(centered(0, width, &text), row), Print(text));
     }

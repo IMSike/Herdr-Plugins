@@ -13,6 +13,7 @@ use crossterm::terminal::{
 };
 use crossterm::{execute, queue};
 use std::io::{self, Write};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// First screen row of the entry list.
 const LIST_TOP: u16 = 2;
@@ -210,16 +211,28 @@ fn draw(
     out.show()
 }
 
-/// Cuts `text` to `width` characters.
-pub(crate) fn fit(text: &str, width: usize) -> String {
-    text.chars().take(width).collect()
+/// The cells `text` takes on screen: two for a wide character (CJK), none
+/// for a combining one.
+pub(crate) fn width(text: &str) -> usize {
+    UnicodeWidthStr::width(text)
 }
 
-/// Cuts or pads `text` to exactly `width` characters, so a highlight spans the row.
+/// `text` cut to `width` cells.
+pub(crate) fn fit(text: &str, width: usize) -> String {
+    let mut used = 0;
+    text.chars()
+        .take_while(|c| {
+            used += c.width().unwrap_or(0);
+            used <= width
+        })
+        .collect()
+}
+
+/// Cuts or pads `text` to exactly `width` cells, so a highlight spans the row.
 fn pad(text: &str, width: usize) -> String {
     let text = fit(text, width);
-    let len = text.chars().count();
-    format!("{text}{}", " ".repeat(width - len))
+    let used = self::width(&text);
+    format!("{text}{}", " ".repeat(width.saturating_sub(used)))
 }
 
 #[cfg(test)]
@@ -227,10 +240,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pad_and_fit_count_characters() {
+    fn pad_and_fit_count_cells() {
         assert_eq!(pad("é", 3), "é  ");
         assert_eq!(pad("abcdef", 3), "abc");
         assert_eq!(fit("Échap", 2), "Éc");
+        // A wide character takes two cells, and is not cut in half.
+        assert_eq!(pad("日本", 5), "日本 ");
+        assert_eq!(fit("日本", 3), "日");
     }
 
     #[test]

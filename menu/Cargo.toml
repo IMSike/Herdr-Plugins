@@ -16,3 +16,4 @@ herdr-api.workspace = true
 toml.workspace = true
 toml_edit.workspace = true
 sysinfo = { workspace = true, features = ["disk", "system"] }
+unicode-width = { version = "0.2.3", default-features = false }

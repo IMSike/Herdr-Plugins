@@ -51,7 +51,7 @@ impl Grid {
                 let per_row = count.div_ceil(2).max(1);
                 let longest = entries
                     .iter()
-                    .map(|e| e.label.chars().count() as u16)
+                    .map(|e| crate::ui::width(&e.label) as u16)
                     .max()
                     .unwrap_or(0);
                 let slot = (longest + 2).max(MIN_SLOT).min(width / per_row as u16);
@@ -108,7 +108,7 @@ impl Grid {
 
 /// The column `text` starts at, centered in `width` columns from `start`.
 pub fn centered(start: u16, width: u16, text: &str) -> u16 {
-    let len = text.chars().count() as u16;
+    let len = crate::ui::width(text) as u16;
     start + width.saturating_sub(len) / 2
 }
 
