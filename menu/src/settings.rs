@@ -330,10 +330,27 @@ impl State {
         self.set_in_sidebar(key, value.into(), |s| *field(s) = value)
     }
 
-    /// Changes `item` by one step (`forward` or back); `Some(true)` when the
-    /// screen should close.
-    fn change(&mut self, item: Item, forward: bool) -> Option<bool> {
-        let result = match item {
+    /// Changes `item` by one step (`forward` or back); whether the screen
+    /// should close.
+    fn change(&mut self, item: Item, forward: bool) -> bool {
+        if item == Item::OpenFiles {
+            match files::open(&self.files) {
+                Ok(_) => {
+                    tell_the_bar();
+                    return true;
+                }
+                Err(e) => self.show(Err(e)),
+            }
+        } else if let Some(result) = self.step(item, forward) {
+            self.show(result);
+        }
+        false
+    }
+
+    /// What changing `item` by one step did, to show; `None` when there is
+    /// nothing to show (no sidebar, a value to type).
+    fn step(&mut self, item: Item, forward: bool) -> Option<Result<String, String>> {
+        Some(match item {
             Item::DecimalComma => self.toggle_number("decimal_comma", |n| &mut n.decimal_comma),
             Item::PercentSpace => self.toggle_number("percent_space", |n| &mut n.percent_space),
             Item::CpuDecimal => self.toggle_number("cpu_decimal", |n| &mut n.cpu_decimal),
@@ -397,17 +414,10 @@ impl State {
                 self.typing = Some(text.join(" "));
                 return None;
             }
-            Item::OpenFiles => match files::open(&self.files) {
-                Ok(_) => {
-                    tell_the_bar();
-                    return Some(true);
-                }
-                Err(e) => Err(e),
-            },
+            // See `change`: it closes the screen.
+            Item::OpenFiles => return None,
             Item::Reload => files::reload(),
-        };
-        self.show(result);
-        None
+        })
     }
 
     /// Saves what was typed for `item`.
@@ -532,23 +542,23 @@ fn show(state: &mut State) -> io::Result<()> {
         let close = match event {
             // Ctrl+L and the like are no l: only Ctrl+C means something.
             Event::Key(key) if key.kind == KeyEventKind::Press && is_control(key.modifiers) => {
-                (key.code == KeyCode::Char('c')).then_some(true)
+                key.code == KeyCode::Char('c')
             }
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-                KeyCode::Esc | KeyCode::Char('q') => Some(true),
+                KeyCode::Esc | KeyCode::Char('q') => true,
                 KeyCode::Up | KeyCode::Char('k') => {
                     state.selected = (state.selected + items.len() - 1) % items.len();
-                    None
+                    false
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
                     state.selected = (state.selected + 1) % items.len();
-                    None
+                    false
                 }
                 KeyCode::Left | KeyCode::Char('h') => state.change(item, false),
                 KeyCode::Right | KeyCode::Char('l') | KeyCode::Enter | KeyCode::Char(' ') => {
                     state.change(item, true)
                 }
-                _ => None,
+                _ => false,
             },
             Event::Mouse(mouse) => {
                 let (_, height) = terminal::size()?;
@@ -562,7 +572,7 @@ fn show(state: &mut State) -> io::Result<()> {
                 match (mouse.kind, item_at) {
                     (MouseEventKind::Moved, Some(i)) => {
                         state.selected = i;
-                        None
+                        false
                     }
                     (MouseEventKind::Down(MouseButton::Left), Some(i)) => {
                         state.selected = i;
@@ -570,18 +580,18 @@ fn show(state: &mut State) -> io::Result<()> {
                     }
                     (MouseEventKind::ScrollDown, _) => {
                         state.selected = (state.selected + 1).min(items.len() - 1);
-                        None
+                        false
                     }
                     (MouseEventKind::ScrollUp, _) => {
                         state.selected = state.selected.saturating_sub(1);
-                        None
+                        false
                     }
-                    _ => None,
+                    _ => false,
                 }
             }
-            _ => None,
+            _ => false,
         };
-        if close == Some(true) {
+        if close {
             return Ok(());
         }
     }
