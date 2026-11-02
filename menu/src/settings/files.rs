@@ -79,13 +79,12 @@ fn herdr_output(args: &[&str]) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-/// The sidebar's config folder, when it is installed: beside this plugin's,
-/// as Herdr names each plugin's folder after its id.
+/// The sidebar's config folder, when it is installed.
 fn sidebar_config_dir() -> Option<PathBuf> {
     if !herdr::has_plugin(sidebar::ID).unwrap_or(false) {
         return None;
     }
-    Some(crate::config_dir()?.parent()?.join(sidebar::ID))
+    sidebar::config_dir().ok()
 }
 
 /// Herdr's `config.toml`: `HERDR_CONFIG_PATH`, else the path Herdr's help
