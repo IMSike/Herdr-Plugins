@@ -4,7 +4,7 @@
 
 ## Pour commencer
 
-Prérequis : Git, [Herdr](https://herdr.dev) 0.9.5 ou plus récent, le toolchain Rust, 1.88 ou plus récent ([rustup](https://rustup.rs)) et, sous Windows, les Build Tools de Visual Studio avec la charge de travail C++.
+Prérequis : Git, [Herdr](https://herdr.dev) 0.9.5 ou plus récent, le toolchain Rust, 1.89 ou plus récent ([rustup](https://rustup.rs)) et, sous Windows, les Build Tools de Visual Studio avec la charge de travail C++.
 
 ```sh
 git clone https://github.com/IMSike/Herdr-Plugins.git
@@ -15,7 +15,7 @@ cargo clippy --locked --all-targets -- -D warnings  # lints
 cargo test --locked                                 # les tests de chaque crate
 ```
 
-Le workflow [Plugins](.github/workflows/validate.yml) lance les mêmes vérifications sous Linux et Windows à chaque push sur `main` ou `dev` et pour chaque pull request, et vérifie que le workspace compile avec Rust 1.88, la plus ancienne version qu'il déclare (`rust-version`) : relevez les deux ensemble.
+Le workflow [Plugins](.github/workflows/validate.yml) lance les mêmes vérifications sous Linux et Windows à chaque push sur `main` ou `dev` et pour chaque pull request, et vérifie que le workspace compile avec Rust 1.89, la plus ancienne version qu'il déclare (`rust-version`) : relevez les deux ensemble.
 
 Un plugin en développement est lié plutôt qu'installé : `herdr plugin link <chemin absolu du dossier du plugin>`. La liaison ne lance aucune étape de build : compilez-le d'abord vous-même ; `herdr plugin unlink <id-du-plugin>` le retire sans toucher aux fichiers. Lisez d'abord [Ajouter un plugin](docs/fr/adding-plugins.md).
 

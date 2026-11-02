@@ -49,12 +49,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Rust 1.88
-        run: rustup toolchain install 1.88 --profile minimal
+      - name: Rust 1.89
+        run: rustup toolchain install 1.89 --profile minimal
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: rust-1.88
+          key: rust-1.89
 
       - name: Compile check
-        run: cargo +1.88 check --locked --all-targets
+        run: cargo +1.89 check --locked --all-targets
