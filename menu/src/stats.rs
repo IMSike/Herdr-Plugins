@@ -1,5 +1,6 @@
-//! What the bar shows under its icons: the size of the workspace folder, its
-//! share of its disk, and its number of files.
+//! What the bar's Disk page shows: the size of the workspace folder (the
+//! explorer's), its share of its disk, and its number of files, measured in
+//! the background and kept in the plugin's state folder.
 
 mod format;
 

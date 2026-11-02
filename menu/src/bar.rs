@@ -1,8 +1,8 @@
 //! The bar (the `Tools` pane, called the bar in the code): a short pane of
 //! clickable icons stacked above the file explorer
-//! of gcaudan/herdr-explorer, in its column, with figures on the workspace
-//! folder under them. It stands in for the popup menu in a tab that shows the
-//! explorer.
+//! of gcaudan/herdr-explorer, in its column, with the sidebar's totals under
+//! them; its Disk page shows figures on the workspace folder. It stands in
+//! for the popup menu in a tab that shows the explorer.
 //!
 //! The bar opens with the explorer (`pane.created` event) and closes when the
 //! explorer is gone or when no other pane is left beside them (`pane.closed`
