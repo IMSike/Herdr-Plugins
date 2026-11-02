@@ -3,8 +3,8 @@
 
 use std::fmt;
 use std::io::{self, BufRead, BufReader, Write};
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use serde::de::DeserializeOwned;
@@ -20,6 +20,14 @@ const MAX_WAITING: usize = 4;
 static WAITING: AtomicUsize = AtomicUsize::new(0);
 /// When the run must be over, if it has a limit: no request lasts past it.
 static DEADLINE: OnceLock<Instant> = OnceLock::new();
+/// A cancel can come between the moment an exchange takes the pipe and the
+/// moment it blocks on it, and then finds nothing to cancel: it is tried
+/// again this often, for at most `CANCEL_TRIES` times, while the exchange
+/// holds the pipe.
+#[cfg(windows)]
+const CANCEL_AGAIN_EVERY: Duration = Duration::from_millis(10);
+#[cfg(windows)]
+const CANCEL_TRIES: u32 = 100;
 
 /// Requests end by `deadline` at the latest (the first one set holds): a
 /// run with a time limit of its own is not held up past it.
@@ -120,7 +128,7 @@ fn exchange(path: String, line: String) -> io::Result<String> {
         ));
     }
     let (sender, receiver) = std::sync::mpsc::channel();
-    let pending = std::sync::Arc::new(Pending::default());
+    let pending = Arc::new(Pending::default());
     let talking = pending.clone();
     std::thread::spawn(move || {
         let answer = connect(&path, deadline).and_then(|stream| talking.talk(&stream, &line));
@@ -152,7 +160,7 @@ impl Pending {
     }
 
     #[cfg(unix)]
-    fn cancel(&self) {}
+    fn cancel(self: &Arc<Self>) {}
 
     /// The handle is cleared before the pipe closes: `cancel` never acts on
     /// a closed handle, which Windows may have given to another file.
@@ -173,21 +181,43 @@ impl Pending {
     }
 
     /// Cancels the read or write the exchange is blocked in; one not started
-    /// yet does not start.
+    /// yet does not start. While the exchange still holds the pipe, the
+    /// cancel is tried again on a thread of its own (see `CANCEL_AGAIN_EVERY`):
+    /// the caller does not wait for it.
     #[cfg(windows)]
-    fn cancel(&self) {
+    fn cancel(self: &Arc<Self>) {
+        if !self.cancel_once() {
+            return;
+        }
+        let pending = Arc::clone(self);
+        std::thread::spawn(move || {
+            for _ in 0..CANCEL_TRIES {
+                std::thread::sleep(CANCEL_AGAIN_EVERY);
+                if !pending.cancel_once() {
+                    return;
+                }
+            }
+        });
+    }
+
+    /// Cancels what the exchange is blocked in, if anything; `true` while it
+    /// still holds the pipe.
+    #[cfg(windows)]
+    fn cancel_once(&self) -> bool {
         #[link(name = "kernel32")]
         unsafe extern "system" {
             fn CancelIoEx(file: *mut std::ffi::c_void, overlapped: *mut std::ffi::c_void) -> i32;
         }
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.1 = true;
-        if let Some(handle) = state.0 {
-            // SAFETY: the handle is the pipe's, still open: `talk` clears it,
-            // under this lock, before the pipe closes. A null OVERLAPPED
-            // cancels every operation on the handle, synchronous ones included.
-            unsafe { CancelIoEx(handle as *mut std::ffi::c_void, std::ptr::null_mut()) };
-        }
+        let Some(handle) = state.0 else {
+            return false;
+        };
+        // SAFETY: the handle is the pipe's, still open: `talk` clears it,
+        // under this lock, before the pipe closes. A null OVERLAPPED cancels
+        // every operation on the handle, synchronous ones included.
+        unsafe { CancelIoEx(handle as *mut std::ffi::c_void, std::ptr::null_mut()) };
+        true
     }
 }
 
