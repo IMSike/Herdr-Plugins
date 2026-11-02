@@ -129,6 +129,31 @@ pub fn write_json<T: Serialize>(path: &Path, value: &T) -> io::Result<()> {
     write_atomic(path, &bytes)
 }
 
+/// A lock held by one process at a time, through the system: released when
+/// dropped, or when its process ends, killed midway included. Its file stays:
+/// removed, it could be locked by one process while another one creates and
+/// locks a new one.
+#[derive(Debug)]
+pub struct Lock {
+    _file: std::fs::File,
+}
+
+impl Lock {
+    /// Takes the lock at `path`; `None` while another process holds it.
+    pub fn take(path: &Path) -> io::Result<Option<Self>> {
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path)?;
+        match file.try_lock() {
+            Ok(()) => Ok(Some(Self { _file: file })),
+            Err(std::fs::TryLockError::WouldBlock) => Ok(None),
+            Err(std::fs::TryLockError::Error(e)) => Err(e),
+        }
+    }
+}
+
 /// How the plugins write their figures, as their settings choose.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NumberFormat {
@@ -300,6 +325,21 @@ mod tests {
         write_atomic(&path, b"new").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"new");
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn one_process_holds_the_lock_at_a_time() {
+        let dir = std::env::temp_dir().join(format!("herdr-api-lock-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("a.lock");
+        // A file left behind does not hold the lock.
+        std::fs::write(&path, "left").unwrap();
+        let held = Lock::take(&path).unwrap();
+        assert!(held.is_some());
+        assert!(Lock::take(&path).unwrap().is_none());
+        drop(held);
+        assert!(Lock::take(&path).unwrap().is_some());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
