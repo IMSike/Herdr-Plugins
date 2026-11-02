@@ -32,6 +32,8 @@ enum Measure {
     NoFolder,
     Started,
     Done(Measured),
+    /// The reading ended before the folder's first entry: it did not answer.
+    NoAnswer,
     /// The figures could not be kept in the state folder.
     Unsaved(String),
 }
@@ -110,6 +112,17 @@ fn measure_in_background(me: String) -> Measurer {
             let stats = stats::measure(&root, limit, &stopped);
             if stopped.load(Ordering::Relaxed) {
                 return;
+            }
+            // Cut short before the folder's first entry, the reading tells
+            // nothing: kept, it would stand for the folder for a day. The
+            // next one waits for a click.
+            if !stats.complete && stats.entries == 0 {
+                drop(lock);
+                if send.send(Measure::NoAnswer).is_err() || asked.recv().is_err() {
+                    return;
+                }
+                manual = true;
+                continue;
             }
             let measured = Measured::now(&root, stats);
             if let Some(file) = &file
@@ -262,6 +275,11 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
                     view.measuring = false;
                     view.stats = Some(measured.stats);
                     measured_at = Some(measured.at);
+                }
+                Measure::NoAnswer => {
+                    view.measuring = false;
+                    view.message = Some(("le dossier ne répond pas".into(), Color::Red));
+                    message_until = Instant::now() + MESSAGE_FOR;
                 }
                 Measure::Unsaved(error) => {
                     view.message =

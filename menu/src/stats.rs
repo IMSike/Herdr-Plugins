@@ -196,11 +196,15 @@ pub fn measure(root: &Path, limit: Limit, stop: &AtomicBool) -> Stats {
     stats
 }
 
+/// The longest wait for the list of the disks: a network share that no
+/// longer answers costs a reading this much, not its whole time.
+const DISKS_FOR_AT_MOST: Duration = Duration::from_millis(500);
+
 /// The size of the disk whose mount point holds `path` the most closely.
 /// Listing the disks asks each one, a network share that no longer answers
 /// included: the list is made on a thread of its own, waited for until
-/// `deadline`, and only one such thread runs at a time (a stuck one is not
-/// joined by others).
+/// `deadline` or for `DISKS_FOR_AT_MOST`, and only one such thread runs at
+/// a time (a stuck one is not joined by others).
 fn disk_size(path: &Path, deadline: Instant) -> Option<u64> {
     static LISTING: AtomicBool = AtomicBool::new(false);
     if LISTING.swap(true, Ordering::SeqCst) {
@@ -220,9 +224,10 @@ fn disk_size(path: &Path, deadline: Instant) -> Option<u64> {
         });
         let _ = send.send(found);
     });
-    size.recv_timeout(deadline.saturating_duration_since(Instant::now()))
-        .ok()
-        .flatten()
+    let wait = deadline
+        .saturating_duration_since(Instant::now())
+        .min(DISKS_FOR_AT_MOST);
+    size.recv_timeout(wait).ok().flatten()
 }
 
 /// Whether `path` is `mount` or inside it, by whole components: `/data2` is
