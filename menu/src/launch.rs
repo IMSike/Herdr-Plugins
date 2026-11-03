@@ -91,7 +91,7 @@ pub fn detach(entry: &Entry, cwd: Option<&Path>) -> Result<(), String> {
         .map_err(|e| format!("impossible de lancer « {} » : {e}", entry.label))
 }
 
-/// Starts `argv` without waiting for it, outside the bar's pane (see
+/// Starts `argv` without waiting for it, outside the plugin's pane (see
 /// `leave_the_pane`).
 pub fn spawn_detached(argv: &[String], cwd: Option<&Path>) -> Result<(), String> {
     let mut command = command(argv)?;
@@ -102,11 +102,13 @@ pub fn spawn_detached(argv: &[String], cwd: Option<&Path>) -> Result<(), String>
     detach_command(command)
 }
 
-/// Leaves out the variables that only hold in the menu's pane: which pane it
-/// is, its workspace, its tab and the folder it started in, the plugin's own (`HERDR_PLUGIN_*`, `HERDR_MENU_*`), the binary that
-/// runs this Herdr, and the one by which Herdr tells its panes. A program
-/// started from the menu runs outside that pane: it would otherwise act on
-/// it, or take itself for one of the plugin's commands.
+/// Leaves out the variables that only hold in the plugin's pane (the
+/// `Tools` pane, a popup): which pane it is, its workspace, its tab and the
+/// folder it started in, the plugin's own (`HERDR_PLUGIN_*`,
+/// `HERDR_MENU_*`), the binary that runs this Herdr, and the one by which
+/// Herdr tells its panes. A program started from the plugin runs outside
+/// that pane: it would otherwise act on it, or take itself for one of the
+/// plugin's commands.
 pub fn leave_the_pane(command: &mut Command) {
     for (name, _) in std::env::vars_os() {
         if is_the_panes(&name.to_string_lossy()) {
@@ -130,11 +132,11 @@ pub fn detach_command(mut command: Command) -> Result<(), String> {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    // A group of its own: closing the bar's pane hangs up the pane's group,
+    // A group of its own: closing the plugin's pane hangs up the pane's group,
     // not the program it started.
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut command, 0);
-    // Nor does it end with the console of the bar's pane on Windows.
+    // Nor does it end with the console of the plugin's pane on Windows.
     #[cfg(windows)]
     {
         const DETACHED_PROCESS: u32 = 0x0000_0008;
@@ -145,7 +147,7 @@ pub fn detach_command(mut command: Command) -> Result<(), String> {
         );
     }
     let mut child = command.spawn().map_err(|e| e.to_string())?;
-    // Reaped in the background, so that it leaves no zombie while the bar runs.
+    // Reaped in the background, so that it leaves no zombie while the pane runs.
     std::thread::spawn(move || child.wait());
     Ok(())
 }
