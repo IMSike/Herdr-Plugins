@@ -148,7 +148,7 @@ fn is_same_file_content(source: &Path, target: &Path) -> io::Result<bool> {
 enum Mode {
     /// Run by the tab bar entry: report, save the sample and the totals.
     Tick,
-    /// Run by a hook (agent, workspace): place the agents only.
+    /// Run by a hook (agent, workspace, tab, pane): place the agents only.
     Event,
     /// Print the tokens instead of reporting them, for a manual check.
     Show,
