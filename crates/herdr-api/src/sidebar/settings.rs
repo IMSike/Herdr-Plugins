@@ -101,11 +101,7 @@ impl Settings {
     /// The settings of the file `path`, the defaults when it does not exist;
     /// `Err` says why it is ignored.
     pub fn read(path: &Path) -> Result<Self, String> {
-        match std::fs::read_to_string(path) {
-            Ok(text) => Self::parse(&text).map_err(|e| format!("{SETTINGS_FILE} ignoré : {e}")),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
-            Err(e) => Err(format!("{SETTINGS_FILE} illisible : {e}")),
-        }
+        crate::read_settings(path, SETTINGS_FILE, Self::parse)
     }
 
     fn parse(text: &str) -> Result<Self, String> {

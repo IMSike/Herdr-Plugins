@@ -158,6 +158,21 @@ pub fn name_of<T: Serialize>(value: &T) -> String {
     }
 }
 
+/// The settings of the file `path`, named `name` in messages, as `parse`
+/// reads them; the defaults when it does not exist. `Err` says why the file
+/// is ignored.
+pub fn read_settings<T: Default>(
+    path: &Path,
+    name: &str,
+    parse: impl FnOnce(&str) -> Result<T, String>,
+) -> Result<T, String> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => parse(&text).map_err(|e| format!("{name} ignoré : {e}")),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(T::default()),
+        Err(e) => Err(format!("{name} illisible : {e}")),
+    }
+}
+
 /// A JSON file's content; `None` when it is missing or unreadable.
 pub fn read_json<T: DeserializeOwned>(path: &Path) -> Option<T> {
     serde_json::from_slice(&std::fs::read(path).ok()?).ok()

@@ -213,16 +213,9 @@ pub fn load(config_dir: Option<&Path>) -> (Menu, Option<String>) {
     let Some(dir) = config_dir else {
         return (Menu::default(), None);
     };
-    match std::fs::read_to_string(dir.join(FILE_NAME)) {
-        Ok(text) => match parse(&text) {
-            Ok(menu) => (menu, None),
-            Err(e) => (Menu::default(), Some(format!("{FILE_NAME} ignoré : {e}"))),
-        },
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (Menu::default(), None),
-        Err(e) => (
-            Menu::default(),
-            Some(format!("{FILE_NAME} illisible : {e}")),
-        ),
+    match herdr_api::read_settings(&dir.join(FILE_NAME), FILE_NAME, parse) {
+        Ok(menu) => (menu, None),
+        Err(e) => (Menu::default(), Some(e)),
     }
 }
 
