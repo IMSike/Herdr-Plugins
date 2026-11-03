@@ -235,6 +235,10 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
     let menu_file = crate::config_dir().map(|dir| dir.join(config::FILE_NAME));
     let mut menu_changed = modified(menu_file.as_deref());
     let sidebar_state = herdr_api::sidebar::state_dir().ok();
+    // The totals, read again only once the sidebar wrote them again.
+    let totals_file = sidebar_state.as_deref().map(Totals::file);
+    let mut totals_changed = None;
+    let mut totals: Option<Totals> = None;
     let files_flag = herdr_api::state_dir()
         .ok()
         .map(|dir| files::opened_flag(&dir, me));
@@ -320,9 +324,13 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
         }
         if Instant::now() >= read_at {
             read_at = Instant::now() + READ_EVERY;
-            view.totals = sidebar_state
-                .as_deref()
-                .and_then(Totals::load)
+            let changed = modified(totals_file.as_deref());
+            if changed != totals_changed {
+                totals_changed = changed;
+                totals = sidebar_state.as_deref().and_then(Totals::load);
+            }
+            view.totals = totals
+                .clone()
                 // Stamped in the future (the clock was set back): not fresh.
                 .filter(|t| {
                     herdr_api::unix_millis()

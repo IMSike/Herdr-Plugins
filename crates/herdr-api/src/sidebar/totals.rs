@@ -185,7 +185,8 @@ impl Totals {
         parts
     }
 
-    fn file(state_dir: &Path) -> PathBuf {
+    /// The file of the totals, in the sidebar's state folder.
+    pub fn file(state_dir: &Path) -> PathBuf {
         state_dir.join(TOTALS_FILE)
     }
 
