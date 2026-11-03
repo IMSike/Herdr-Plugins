@@ -241,32 +241,27 @@ impl State {
         }
     }
 
-    /// Writes `key` to `menu.toml`.
-    fn set_menu(&self, key: &str, value: Value) -> Result<(), String> {
+    /// Writes `key` to `menu.toml`; why the menu still ignores the file,
+    /// if it does (an unknown setting…).
+    fn set_menu(&self, key: &str, value: Value) -> Result<Option<String>, String> {
         let path = self
             .files
             .menu
             .as_ref()
             .ok_or("dossier de configuration du menu inconnu")?;
         store::set(path, files::MENU_TEMPLATE, key, value)?;
-        // A file the menu still ignores (an unknown setting…) is said so.
-        match config::load(path.parent()) {
-            (_, Some(e)) => Err(format!("enregistré, mais {e}")),
-            (_, None) => Ok(()),
-        }
+        Ok(config::load(path.parent()).1)
     }
 
-    /// Writes `key` to `sidebar.toml`, when the sidebar is installed.
-    fn set_sidebar(&self, key: &str, value: Value) -> Result<(), String> {
+    /// Writes `key` to `sidebar.toml`, when the sidebar is installed; why
+    /// the sidebar still ignores the file, if it does.
+    fn set_sidebar(&self, key: &str, value: Value) -> Result<Option<String>, String> {
         match &self.files.sidebar {
             Some(path) => {
                 store::set(path, files::SIDEBAR_TEMPLATE, key, value)?;
-                // A file the sidebar still ignores is said so.
-                Settings::read(path)
-                    .map(|_| ())
-                    .map_err(|e| format!("enregistré, mais {e}"))
+                Ok(Settings::read(path).err())
             }
-            None => Ok(()),
+            None => Ok(None),
         }
     }
 
@@ -278,9 +273,9 @@ impl State {
         value: Value,
         apply: impl FnOnce(&mut NumberFormat),
     ) -> Result<String, String> {
-        self.set_menu(key, value.clone())?;
+        let menu_ignored = self.set_menu(key, value.clone())?;
         apply(&mut self.menu.numbers);
-        self.set_sidebar(key, value).map_err(|e| {
+        let sidebar_ignored = self.set_sidebar(key, value).map_err(|e| {
             format!(
                 "enregistré dans {}, pas dans {} : {e}",
                 config::FILE_NAME,
@@ -290,7 +285,7 @@ impl State {
         let files: Vec<&str> = std::iter::once(config::FILE_NAME)
             .chain(self.sidebar.as_ref().map(|_| sidebar::SETTINGS_FILE))
             .collect();
-        Ok(saved(&files))
+        written(menu_ignored.or(sidebar_ignored), &files)
     }
 
     /// Turns a yes-or-no number format setting over.
@@ -312,11 +307,11 @@ impl State {
         apply: impl FnOnce(&mut Settings),
     ) -> Option<Result<String, String>> {
         self.sidebar.as_ref()?;
-        Some(self.set_sidebar(key, value).map(|()| {
+        Some(self.set_sidebar(key, value).and_then(|ignored| {
             if let Some(s) = &mut self.sidebar {
                 apply(s);
             }
-            saved(&[sidebar::SETTINGS_FILE])
+            written(ignored, &[sidebar::SETTINGS_FILE])
         }))
     }
 
@@ -327,9 +322,9 @@ impl State {
         name: &str,
         apply: impl FnOnce(&mut Menu),
     ) -> Result<String, String> {
-        self.set_menu(key, name.into()).map(|()| {
+        self.set_menu(key, name.into()).and_then(|ignored| {
             apply(&mut self.menu);
-            saved(&[config::FILE_NAME])
+            written(ignored, &[config::FILE_NAME])
         })
     }
 
@@ -468,6 +463,16 @@ impl State {
 /// `enregistré dans menu.toml et sidebar.toml`.
 fn saved(files: &[&str]) -> String {
     format!("enregistré dans {}", files.join(" et "))
+}
+
+/// What the screen says of a setting written to `files`: saved, or saved
+/// but in a file still `ignored` for that reason (an unknown setting…). The
+/// screen shows the new value either way: the file holds it.
+fn written(ignored: Option<String>, files: &[&str]) -> Result<String, String> {
+    match ignored {
+        Some(e) => Err(format!("enregistré, mais {e}")),
+        None => Ok(saved(files)),
+    }
 }
 
 /// The `Tools` pane the screen was opened from switches to its reload view.
@@ -703,6 +708,35 @@ mod tests {
         assert!(parse_levels("50 25 10").is_err());
         assert_eq!(number(10.0), "10");
         assert_eq!(number(2.5), "2.5");
+    }
+
+    #[test]
+    fn a_setting_written_to_an_ignored_file_still_turns_over() {
+        let dir = std::env::temp_dir().join(format!("herdr-menu-ignored-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // Ignored for another reason: an unknown setting.
+        std::fs::write(dir.join(config::FILE_NAME), "unknown = 1\n").unwrap();
+        std::fs::write(dir.join(sidebar::SETTINGS_FILE), "").unwrap();
+        let mut state = State {
+            files: Files {
+                menu: Some(dir.join(config::FILE_NAME)),
+                sidebar: Some(dir.join(sidebar::SETTINGS_FILE)),
+            },
+            menu: Menu::default(),
+            sidebar: Some(Settings::default()),
+            selected: 0,
+            status: None,
+            typing: None,
+        };
+        let before = state.menu.numbers.decimal_comma;
+        let said = state.step(Item::DecimalComma, true).unwrap();
+        let sidebar = Settings::read(&dir.join(sidebar::SETTINGS_FILE));
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(said.unwrap_err().starts_with("enregistré, mais"));
+        // Shown as written, and written to the sidebar's file too.
+        assert_eq!(state.menu.numbers.decimal_comma, !before);
+        assert_eq!(sidebar.unwrap().decimal_comma, !before);
     }
 
     #[test]
