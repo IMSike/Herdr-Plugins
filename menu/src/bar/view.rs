@@ -3,10 +3,7 @@
 
 use super::colors::{gradient, level_color, zone};
 use super::geometry::{Grid, centered, wanted_rows};
-use super::{
-    FIGURES_TOP, FIRST_FIT_AFTER, MESSAGE_FOR, OTHER_READING_CHECK_EVERY, REFRESH, SETTLE,
-    WAKE_EVERY, fit_height, folders, has_its_place, my_tab,
-};
+use super::{fit_height, folders, has_its_place, my_tab};
 use crate::config::{self, Action, Entry, IconLayout, Menu, TotalsStyle};
 use crate::herdr;
 use crate::settings::files;
@@ -25,6 +22,43 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant, SystemTime};
+
+/// Wait after a resize before checking the tab, so that a drag checks once.
+const SETTLE: Duration = Duration::from_millis(400);
+/// How long an error message stands in for the figures.
+const MESSAGE_FOR: Duration = Duration::from_secs(5);
+/// First row of the disk figures: a click there measures the folder again.
+const FIGURES_TOP: u16 = 1;
+/// After the figures: a click measures them again (Nerd Font `nf-md-refresh`).
+const REFRESH: &str = "\u{F0450}";
+/// When the bar first fits its height: once the swap that opened it is done.
+const FIRST_FIT_AFTER: Duration = Duration::from_millis(300);
+/// The longest wait for an event: news of the measuring thread and the
+/// end of a message are shown within this.
+const WAKE_EVERY: Duration = Duration::from_millis(500);
+/// How often a bar checks whether another bar of the folder finished its reading.
+const OTHER_READING_CHECK_EVERY: Duration = Duration::from_secs(1);
+/// How often the totals of the sidebar and `menu.toml` are read again.
+const READ_EVERY: Duration = Duration::from_secs(2);
+/// Totals older than this are no longer shown: the sidebar stopped.
+const TOTALS_FOR_AT_MOST: Duration = Duration::from_secs(30);
+/// How long an entry, once started, does not start again.
+const LAUNCH_AGAIN_AFTER: Duration = Duration::from_secs(1);
+
+/// The glyphs of the back (nf-md-arrow_left) and reload (nf-md-reload)
+/// buttons, for their icon alone and with their name.
+macro_rules! glyph {
+    (back) => {
+        "\u{F004D}"
+    };
+    (reload) => {
+        "\u{F0453}"
+    };
+}
+const BACK_ICON: &str = glyph!(back);
+const RELOAD_ICON: &str = glyph!(reload);
+const BACK: &str = concat!(glyph!(back), " Retour");
+const RELOAD: &str = concat!(glyph!(reload), " Recharger");
 
 /// What the measuring thread tells the bar.
 enum Measure {
@@ -164,18 +198,6 @@ enum Button {
     Back,
     Reload,
 }
-
-/// Back (nf-md-arrow_left) and reload (nf-md-reload) buttons.
-const BACK: &str = "\u{F004D} Retour";
-const RELOAD: &str = "\u{F0453} Recharger";
-const BACK_ICON: &str = "\u{F004D}";
-const RELOAD_ICON: &str = "\u{F0453}";
-/// How often the totals of the sidebar and `menu.toml` are read again.
-const READ_EVERY: Duration = Duration::from_secs(2);
-/// Totals older than this are no longer shown: the sidebar stopped.
-const TOTALS_FOR_AT_MOST: Duration = Duration::from_secs(30);
-/// How long an entry, once started, does not start again.
-const LAUNCH_AGAIN_AFTER: Duration = Duration::from_secs(1);
 
 /// The buttons of a page: each with its row, its first column and its text.
 fn buttons(page: Page, width: u16) -> Vec<(Button, u16, u16, &'static str)> {

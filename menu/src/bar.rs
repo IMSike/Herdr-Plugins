@@ -43,14 +43,6 @@ const EXPLORER_PANES: &[&str] = &[
     "Changes",
     "Editor",
 ];
-/// Wait after a resize before checking the tab, so that a drag checks once.
-const SETTLE: Duration = Duration::from_millis(400);
-/// How long an error message stands in for the figures.
-const MESSAGE_FOR: Duration = Duration::from_secs(5);
-/// First row of the disk figures: a click there measures the folder again.
-const FIGURES_TOP: u16 = 1;
-/// After the figures: a click measures them again (Nerd Font `nf-md-refresh`).
-const REFRESH: &str = "\u{F0450}";
 /// A bar just opened may not run its program yet, nor one slowed down by an
 /// antivirus scanning a new binary: how long to wait for it.
 const STARTING: Duration = Duration::from_secs(5);
@@ -62,13 +54,6 @@ const SETTLE_AT_MOST: Duration = Duration::from_secs(4);
 const SETTLED_FOR: Duration = Duration::from_millis(600);
 /// How often a new explorer's place is read while it settles.
 const SETTLE_CHECK_EVERY: Duration = Duration::from_millis(200);
-/// When the bar first fits its height: once the swap that opened it is done.
-const FIRST_FIT_AFTER: Duration = Duration::from_millis(300);
-/// The longest wait for an event: news of the measuring thread and the
-/// end of a message are shown within this.
-const WAKE_EVERY: Duration = Duration::from_millis(500);
-/// How often a bar checks whether another bar of the folder finished its reading.
-const OTHER_READING_CHECK_EVERY: Duration = Duration::from_secs(1);
 
 fn label_is(pane: &Pane, label: &str) -> bool {
     pane.label.as_deref() == Some(label)
