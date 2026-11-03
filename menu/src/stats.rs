@@ -22,7 +22,6 @@ pub struct Stats {
     /// `false` when the walk stopped at its limit: the figures are a floor.
     pub complete: bool,
     /// Files and folders read: what a reading costs.
-    #[serde(default)]
     pub entries: u64,
 }
 

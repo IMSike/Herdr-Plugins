@@ -237,8 +237,6 @@ fn stopping(panes: usize, agents: usize, working: usize) -> String {
 fn copy_to_clipboard(text: &str) -> bool {
     let tools: &[&[&str]] = if cfg!(windows) {
         &[&["clip"]]
-    } else if cfg!(target_os = "macos") {
-        &[&["pbcopy"]]
     } else {
         &[
             &["wl-copy"],
