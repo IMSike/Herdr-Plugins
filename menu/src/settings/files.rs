@@ -329,6 +329,10 @@ mod tests {
             Editor::WindowPerFile(argv("C:\\Tools\\Notepad.exe"))
         );
         assert_eq!(classify(argv("nvim")), Editor::Terminal(argv("nvim")));
+    }
+
+    #[test]
+    fn the_flag_is_named_after_the_pane() {
         assert_eq!(
             opened_flag(Path::new("s"), "w1:p2"),
             Path::new("s").join("files-open-w1-p2")

@@ -717,9 +717,7 @@ mod tests {
 
     #[test]
     fn a_setting_written_to_an_ignored_file_still_turns_over() {
-        let dir = std::env::temp_dir().join(format!("herdr-menu-ignored-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = herdr_api::TempDir::new("menu-ignored").unwrap();
         // Ignored for another reason: an unknown setting.
         std::fs::write(dir.join(config::FILE_NAME), "unknown = 1\n").unwrap();
         std::fs::write(dir.join(sidebar::SETTINGS_FILE), "").unwrap();
@@ -737,7 +735,6 @@ mod tests {
         let before = state.menu.numbers.decimal_comma;
         let said = state.step(Item::DecimalComma, true).unwrap();
         let sidebar = Settings::read(&dir.join(sidebar::SETTINGS_FILE));
-        let _ = std::fs::remove_dir_all(&dir);
         assert!(said.unwrap_err().starts_with("enregistré, mais"));
         // Shown as written, and written to the sidebar's file too.
         assert_eq!(state.menu.numbers.decimal_comma, !before);

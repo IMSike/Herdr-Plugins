@@ -138,9 +138,9 @@ mod tests {
 
     #[test]
     fn a_bar_is_a_tools_pane_it_recorded() {
-        let dir = std::env::temp_dir().join(format!("herdr-menu-bars-{}", std::process::id()));
+        let dir = herdr_api::TempDir::new("menu-bars").unwrap();
         let bars = Bars {
-            dir: Some(dir.clone()),
+            dir: Some(dir.join(DIR)),
         };
         let (bar, renamed, other) = (
             pane("w1:p1", LABEL),
@@ -159,7 +159,6 @@ mod tests {
         bars.add(&bar.pane_id);
         bars.forget(&bar.pane_id);
         assert!(!bars.is(&bar) && bars.none());
-        let _ = std::fs::remove_dir_all(dir);
         // Without a state folder, the label tells.
         assert!(Bars::by_label().is(&renamed) && !Bars::by_label().none());
     }

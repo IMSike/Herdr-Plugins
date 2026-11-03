@@ -247,8 +247,7 @@ mod tests {
 
     #[test]
     fn counts_files_outside_git_and_sizes_all() {
-        let root = std::env::temp_dir().join(format!("herdr-menu-stats-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+        let root = herdr_api::TempDir::new("menu-stats").unwrap();
         std::fs::create_dir_all(root.join(".git/objects")).unwrap();
         std::fs::create_dir_all(root.join("src")).unwrap();
         std::fs::write(root.join("src/a.rs"), "12345").unwrap();
@@ -260,7 +259,6 @@ mod tests {
         };
         let cut = measure(&root, small, &AtomicBool::new(false));
         let stopped = measure(&root, Limit::default(), &AtomicBool::new(true));
-        let _ = std::fs::remove_dir_all(&root);
         // .git, objects, x, src, a.rs
         assert_eq!(
             (stats.bytes, stats.files, stats.complete, stats.entries),
@@ -290,8 +288,7 @@ mod tests {
 
     #[test]
     fn figures_are_kept_per_folder() {
-        let dir = std::env::temp_dir().join(format!("herdr-menu-cache-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = herdr_api::TempDir::new("menu-cache").unwrap();
         let (a, b) = (Path::new("/work/a"), Path::new("/work/b"));
         assert_ne!(cache_file(&dir, a), cache_file(&dir, b));
         let measured = Measured::now(a, Stats::default());
@@ -299,7 +296,6 @@ mod tests {
         let loaded = load(&cache_file(&dir, a), a);
         // Another folder never reads it, even under its file name.
         let other = load(&cache_file(&dir, a), b);
-        let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(loaded, Some(measured.clone()));
         assert_eq!(other, None);
         let older = Measured {

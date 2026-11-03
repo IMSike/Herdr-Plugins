@@ -191,13 +191,11 @@ cpu_levels = [5, 20.5, 60]
 
     #[test]
     fn a_file_that_cannot_be_used_says_why() {
-        let dir = std::env::temp_dir().join(format!("herdr-api-settings-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        assert_eq!(Settings::load(Some(&dir)), Ok(Settings::default()));
+        let dir = crate::TempDir::new("api-settings").unwrap();
+        assert_eq!(Settings::load(Some(&*dir)), Ok(Settings::default()));
         std::fs::write(dir.join(SETTINGS_FILE), "unknown = 1\n").unwrap();
-        let error = Settings::load(Some(&dir)).unwrap_err();
+        let error = Settings::load(Some(&*dir)).unwrap_err();
         assert!(error.starts_with("sidebar.toml ignoré"), "{error}");
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     /// Uncommented, the template gives the defaults, and it has a line for

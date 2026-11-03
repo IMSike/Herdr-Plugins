@@ -503,8 +503,7 @@ mod tests {
 
     #[test]
     fn tells_a_copy_from_another_file() {
-        let dir = std::env::temp_dir().join(format!("herdr-sidebar-copy-{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = herdr_api::TempDir::new("sidebar-copy").unwrap();
         let (a, b) = (dir.join("a"), dir.join("b"));
         fs::write(&a, "binary").unwrap();
         assert!(!is_same_file_content(&a, &b).unwrap());
@@ -512,6 +511,5 @@ mod tests {
         assert!(is_same_file_content(&a, &b).unwrap());
         fs::write(&b, "binarz").unwrap();
         assert!(!is_same_file_content(&a, &b).unwrap());
-        fs::remove_dir_all(&dir).unwrap();
     }
 }

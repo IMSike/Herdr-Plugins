@@ -180,6 +180,40 @@ pub fn read_settings<T: Default>(
     }
 }
 
+/// A folder of its own in the system's temporary folder, for tests: removed
+/// with all it holds when dropped, by a test that fails too.
+pub struct TempDir(PathBuf);
+
+impl TempDir {
+    /// `herdr-<name>-<pid>`, empty.
+    pub fn new(name: &str) -> io::Result<Self> {
+        let dir = std::env::temp_dir().join(format!("herdr-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir)?;
+        Ok(Self(dir))
+    }
+}
+
+impl std::ops::Deref for TempDir {
+    type Target = Path;
+
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl AsRef<Path> for TempDir {
+    fn as_ref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 /// A JSON file's content; `None` when it is missing or unreadable.
 pub fn read_json<T: DeserializeOwned>(path: &Path) -> Option<T> {
     serde_json::from_slice(&std::fs::read(path).ok()?).ok()
@@ -243,21 +277,18 @@ mod tests {
 
     #[test]
     fn writes_over_the_old_content() {
-        let dir = std::env::temp_dir().join(format!("herdr-api-test-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = TempDir::new("api-test").unwrap();
         let path = dir.join("sample.json");
         write_atomic(&path, b"old").unwrap();
         write_atomic(&path, b"new").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"new");
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[cfg(unix)]
     #[test]
     fn a_link_stays_a_link() {
-        let dir = std::env::temp_dir().join(format!("herdr-api-link-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = TempDir::new("api-link").unwrap();
         let (target, link) = (dir.join("dotfile.toml"), dir.join("menu.toml"));
         std::fs::write(&target, b"old").unwrap();
         std::os::unix::fs::symlink(&target, &link).unwrap();
@@ -269,13 +300,11 @@ mod tests {
                 .is_symlink()
         );
         assert_eq!(std::fs::read(&target).unwrap(), b"new");
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn one_process_holds_the_lock_at_a_time() {
-        let dir = std::env::temp_dir().join(format!("herdr-api-lock-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = TempDir::new("api-lock").unwrap();
         let path = dir.join("a.lock");
         // A file left behind does not hold the lock.
         std::fs::write(&path, "left").unwrap();
@@ -284,7 +313,6 @@ mod tests {
         assert!(Lock::take(&path).unwrap().is_none());
         drop(held);
         assert!(Lock::take(&path).unwrap().is_some());
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
@@ -296,19 +324,16 @@ mod tests {
 
     #[test]
     fn reads_back_what_it_wrote_as_json() {
-        let dir = std::env::temp_dir().join(format!("herdr-api-json-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = TempDir::new("api-json").unwrap();
         let path = dir.join("a.json");
         write_json(&path, &vec![1, 2]).unwrap();
         assert_eq!(read_json::<Vec<u32>>(&path), Some(vec![1, 2]));
         assert_eq!(read_json::<Vec<u32>>(&dir.join("none.json")), None);
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
     fn removes_only_old_matching_files() {
-        let dir = std::env::temp_dir().join(format!("herdr-api-stale-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = TempDir::new("api-stale").unwrap();
         std::fs::write(dir.join("a.partial"), "").unwrap();
         std::fs::write(dir.join("keep.json"), "").unwrap();
         // Nothing is old enough yet.
@@ -320,7 +345,6 @@ mod tests {
             .unwrap()
             .map(|e| e.unwrap().file_name())
             .collect();
-        std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(left, ["keep.json"]);
     }
 }

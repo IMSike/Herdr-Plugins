@@ -74,10 +74,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn formats() {
+    fn ages_from_an_hour_on() {
         assert_eq!(age_label(3599), None);
         assert_eq!(age_label(3 * 3600), Some("3 h".into()));
         assert_eq!(age_label(50 * 3600), Some("2 j".into()));
+    }
+
+    #[test]
+    fn shares_of_the_disk() {
         let numbers = NumberFormat::default();
         assert_eq!(format_share(0.05, &numbers), "< 0,1%");
         assert_eq!(format_share(0.34, &numbers), "0,3%");
@@ -88,9 +92,18 @@ mod tests {
             ..numbers
         };
         assert_eq!(format_share(0.34, &spaced), "0.3\u{202F}%");
+    }
+
+    #[test]
+    fn thousands_are_grouped() {
         assert_eq!(group_thousands(4210), "4\u{202F}210");
         assert_eq!(group_thousands(999), "999");
         assert_eq!(group_thousands(1_234_567), "1\u{202F}234\u{202F}567");
+    }
+
+    #[test]
+    fn lines_of_the_figures() {
+        let numbers = NumberFormat::default();
         let stats = Stats {
             bytes: 850 * 1024 * 1024,
             files: 1,
