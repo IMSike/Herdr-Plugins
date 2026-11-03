@@ -103,7 +103,7 @@ pub fn spawn_detached(argv: &[String], cwd: Option<&Path>) -> Result<(), String>
 }
 
 /// Leaves out the variables that only hold in the menu's pane: which pane it
-/// is, the plugin's own (`HERDR_PLUGIN_*`, `HERDR_MENU_*`), the binary that
+/// is, its workspace, its tab and the folder it started in, the plugin's own (`HERDR_PLUGIN_*`, `HERDR_MENU_*`), the binary that
 /// runs this Herdr, and the one by which Herdr tells its panes. A program
 /// started from the menu runs outside that pane: it would otherwise act on
 /// it, or take itself for one of the plugin's commands.
@@ -116,11 +116,11 @@ pub fn leave_the_pane(command: &mut Command) {
 }
 
 fn is_the_panes(name: &str) -> bool {
-    use herdr_api::env::{BIN_PATH, INSIDE, PANE_ID};
+    use herdr_api::env::{BIN_PATH, INSIDE, PANE_ID, STARTUP_CWD, TAB_ID, WORKSPACE_ID};
     let name = name.to_uppercase();
     name.starts_with("HERDR_PLUGIN_")
         || name.starts_with("HERDR_MENU_")
-        || [INSIDE, PANE_ID, BIN_PATH].contains(&name.as_str())
+        || [INSIDE, PANE_ID, WORKSPACE_ID, TAB_ID, STARTUP_CWD, BIN_PATH].contains(&name.as_str())
 }
 
 /// Starts `command` without waiting for it: its output goes nowhere, and it
@@ -172,6 +172,8 @@ mod tests {
             "HERDR_ENV",
             "HERDR_PLUGIN_STATE_DIR",
             "HERDR_MENU_BAR",
+            "HERDR_TAB_ID",
+            "herdr_workspace_id",
         ] {
             assert!(is_the_panes(name), "{name}");
         }

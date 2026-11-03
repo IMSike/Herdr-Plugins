@@ -190,7 +190,7 @@ Le plugin ne fait qu'ouvrir le `config.toml` de Herdr : il ne l'écrit jamais ([
 
 - L'écran des réglages est un popup : Herdr attend tant qu'il est ouvert, mais il ne reste ouvert que le temps de changer des réglages. Les éditeurs tournent en dehors, dans leur fenêtre ou dans un onglet.
 - La fenêtre de mise à jour tourne hors de Herdr, sans la variable par laquelle Herdr signale ses panes (`HERDR_ENV`) ; elle continue si le pane `Tools` se ferme.
-- Un programme lancé à part (`popup = false`, un éditeur qui a sa propre fenêtre) et Herdr relancé depuis la fenêtre de mise à jour ne reçoivent aucune des variables qui ne valent que dans le pane `Tools` : `HERDR_ENV`, `HERDR_PANE_ID`, `HERDR_BIN_PATH`, `HERDR_PLUGIN_*` et `HERDR_MENU_*`.
+- Un programme lancé à part (`popup = false`, un éditeur qui a sa propre fenêtre) et Herdr relancé depuis la fenêtre de mise à jour ne reçoivent aucune des variables qui ne valent que dans le pane `Tools` : `HERDR_ENV`, `HERDR_PANE_ID`, `HERDR_WORKSPACE_ID`, `HERDR_TAB_ID`, `HERDR_STARTUP_CWD`, `HERDR_BIN_PATH`, `HERDR_PLUGIN_*` et `HERDR_MENU_*`.
 
 Les commandes tournent sous votre compte, avec votre environnement, comme tout programme lancé dans un pane.
 
