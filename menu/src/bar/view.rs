@@ -2,7 +2,7 @@
 //! figures, or the reload of the configuration files open in an editor.
 
 use super::colors::{gradient, level_color, zone};
-use super::geometry::{Grid, centered, wanted_rows};
+use super::geometry::{Grid, LABEL_CELLS, bar_cells, button_pair, centered, covers, wanted_rows};
 use super::{fit_height, folders, has_its_place, my_tab};
 use crate::config::{self, Action, Entry, IconLayout, Menu, TotalsStyle};
 use crate::herdr;
@@ -18,7 +18,8 @@ use herdr_api::NumberFormat;
 use herdr_api::sidebar::{Gauge, Level, MACHINE_GLYPH, Part, Totals};
 use std::collections::HashSet;
 use std::io::{self, Write};
-use std::path::Path;
+use std::ops::ControlFlow;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant, SystemTime};
@@ -201,37 +202,24 @@ enum Button {
 
 /// The buttons of a page: each with its row, its first column and its text.
 fn buttons(page: Page, width: u16) -> Vec<(Button, u16, u16, &'static str)> {
-    let len = text_cells;
     match page {
         Page::Tools => Vec::new(),
         Page::Disk => vec![(Button::Back, 0, 1, BACK)],
         Page::Files => {
-            // Their icons only when the names do not fit.
-            let (back, reload, gap) = if len(BACK) + 4 + len(RELOAD) <= width {
-                (BACK, RELOAD, 4)
-            } else {
-                (BACK_ICON, RELOAD_ICON, 2)
-            };
-            let left = width.saturating_sub(len(back) + gap + len(reload)) / 2;
+            let [(back_at, back), (reload_at, reload)] =
+                button_pair(width, [BACK, BACK_ICON], [RELOAD, RELOAD_ICON]);
             vec![
-                (Button::Back, 1, left, back),
-                (Button::Reload, 1, left + len(back) + gap, reload),
+                (Button::Back, 1, back_at, back),
+                (Button::Reload, 1, reload_at, reload),
             ]
         }
     }
 }
 
-/// The cells `text` takes on screen (see `ui::width`).
-fn text_cells(text: &str) -> u16 {
-    u16::try_from(crate::ui::width(text)).unwrap_or(u16::MAX)
-}
-
 fn button_at(page: Page, width: u16, row: u16, column: u16) -> Option<Button> {
     buttons(page, width)
         .into_iter()
-        .find(|&(_, r, left, text)| {
-            r == row && column >= left && column < left.saturating_add(text_cells(text))
-        })
+        .find(|&(_, r, left, text)| r == row && covers(left, text, column))
         .map(|(button, ..)| button)
 }
 
@@ -252,106 +240,205 @@ struct View {
     measuring: bool,
 }
 
+/// What an event asks for.
+#[derive(Default)]
+struct Asked {
+    entry: Option<usize>,
+    button: Option<Button>,
+    measure_again: bool,
+}
+
+/// The bar while it runs: what it shows, the files it reads again, and its
+/// links to the threads working for it.
+struct State<'a> {
+    me: &'a str,
+    view: View,
+    /// When the message gives its place back.
+    message_until: Instant,
+    menu_file: Option<PathBuf>,
+    menu_changed: Option<SystemTime>,
+    sidebar_state: Option<PathBuf>,
+    /// The totals, read again only once the sidebar wrote them again.
+    totals_file: Option<PathBuf>,
+    totals_changed: Option<SystemTime>,
+    totals: Option<Totals>,
+    read_at: Instant,
+    files_flag: Option<PathBuf>,
+    /// The disk figures are measured while their page is open only.
+    measurer: Option<Measurer>,
+    measured_at: Option<u64>,
+    /// Launches run on threads of their own: the bar keeps answering while
+    /// a popup waits for the previous one to close. They send back their
+    /// error.
+    launch_failed: mpsc::Sender<String>,
+    launch_errors: mpsc::Receiver<String>,
+    /// The keys of the entries starting, and started less than
+    /// `LAUNCH_AGAIN_AFTER` ago: a double click or a held key starts once.
+    launching: Arc<Mutex<HashSet<char>>>,
+    /// The checks of the bar's place and the reloads of Herdr's
+    /// configuration run on threads too; a check sends whether the bar
+    /// keeps its place.
+    place_checked: mpsc::Sender<bool>,
+    place_news: mpsc::Receiver<bool>,
+    reloaded: mpsc::Sender<Result<String, String>>,
+    reloads: mpsc::Receiver<Result<String, String>>,
+    /// When the bar checks its place next.
+    check_at: Option<Instant>,
+}
+
 pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()> {
     let _screen = Screen::enter()?;
-    let menu_file = crate::config_dir().map(|dir| dir.join(config::FILE_NAME));
-    let mut menu_changed = modified(menu_file.as_deref());
-    let sidebar_state = herdr_api::sidebar::state_dir().ok();
-    // The totals, read again only once the sidebar wrote them again.
-    let totals_file = sidebar_state.as_deref().map(Totals::file);
-    let mut totals_changed = None;
-    let mut totals: Option<Totals> = None;
-    let files_flag = herdr_api::state_dir()
-        .ok()
-        .map(|dir| files::opened_flag(&dir, me));
-    // One left by a bar of the same pane id that closed before reading it
-    // is not for this one.
-    if let Some(flag) = &files_flag {
-        let _ = std::fs::remove_file(flag);
-    }
-    // The disk figures are measured while their page is open only.
-    let mut measurer: Option<Measurer> = None;
-    // Launches run on threads of their own: the bar keeps answering while a
-    // popup waits for the previous one to close. They send back their error.
-    let (launch_failed, launch_errors) = mpsc::channel::<String>();
-    // The checks of the bar's place and the reloads of Herdr's configuration
-    // run on threads too; a check sends whether the bar keeps its place.
-    let (place_checked, place_news) = mpsc::channel::<bool>();
-    let (reloaded, reloads) = mpsc::channel::<Result<String, String>>();
-    // The keys of the entries starting, and started less than
-    // `LAUNCH_AGAIN_AFTER` ago: a double click or a held key starts once.
-    let launching: Arc<Mutex<HashSet<char>>> = Arc::default();
-    let mut measured_at = None;
-    // When the message gives its place back.
-    let mut message_until = Instant::now() + MESSAGE_FOR;
-    let mut view = View {
-        menu,
-        page: Page::Tools,
-        hover: None,
-        hover_button: None,
-        hover_figures: false,
-        message: error.map(|e| (e, Color::Red)),
-        totals: None,
-        stats: None,
-        age: None,
-        measuring: false,
-    };
-    // The first check fits the height once the swap is done.
-    let mut check_at = Some(Instant::now() + FIRST_FIT_AFTER);
-    let mut read_at = Instant::now();
+    let mut state = State::new(me, menu, error);
     // Drawn again only when something changed.
     let mut drawn: Option<(View, (u16, u16))> = None;
     loop {
-        for news in measurer.iter().flat_map(|m| m.news.try_iter()) {
-            match news {
-                Measure::NoFolder => {
-                    view.message = Some(("dossier de l'explorateur inconnu".into(), Color::Red));
-                    message_until = Instant::now() + MESSAGE_FOR;
-                }
-                Measure::Started => view.measuring = true,
-                Measure::Done(measured) => {
-                    view.measuring = false;
-                    view.stats = Some(measured.stats);
-                    measured_at = Some(measured.at);
-                }
-                Measure::NoAnswer => {
-                    view.measuring = false;
-                    view.message = Some(("le dossier ne répond pas".into(), Color::Red));
-                    message_until = Instant::now() + MESSAGE_FOR;
-                }
-                Measure::Unsaved(error) => {
-                    view.message =
-                        Some((format!("chiffres non enregistrés : {error}"), Color::Red));
-                    message_until = Instant::now() + MESSAGE_FOR;
-                }
-            }
-        }
-        for error in launch_errors.try_iter() {
-            view.message = Some((error, Color::Red));
-            message_until = Instant::now() + MESSAGE_FOR;
-        }
-        if place_news.try_iter().any(|kept| !kept) {
+        if state.take_news().is_break() {
             return Ok(());
         }
-        for result in reloads.try_iter() {
-            let (message, color) = match result {
-                Ok(message) => {
-                    view.page = Page::Tools;
-                    (message, Color::Green)
-                }
-                Err(e) => (e, Color::Red),
-            };
-            view.message = Some((message, color));
-            message_until = Instant::now() + MESSAGE_FOR;
+        state.read_again();
+        state.age_and_message();
+        let size = terminal::size()?;
+        if drawn
+            .as_ref()
+            .is_none_or(|(v, s)| *v != state.view || *s != size)
+        {
+            draw(&state.view)?;
+            drawn = Some((state.view.clone(), size));
         }
-        if Instant::now() >= read_at {
-            read_at = Instant::now() + READ_EVERY;
-            let changed = modified(totals_file.as_deref());
-            if changed != totals_changed {
-                totals_changed = changed;
-                totals = sidebar_state.as_deref().and_then(Totals::load);
+        let until_check = state.check_at.map_or(Duration::MAX, |at| {
+            at.saturating_duration_since(Instant::now())
+        });
+        if !event::poll(until_check.min(WAKE_EVERY))? {
+            if state.check_at.is_some_and(|at| Instant::now() >= at) {
+                state.check_at = None;
+                state.check_place();
             }
-            view.totals = totals
+            continue;
+        }
+        let event = event::read()?;
+        if state.on_event(event, size.0).is_break() {
+            return Ok(());
+        }
+    }
+}
+
+impl<'a> State<'a> {
+    fn new(me: &'a str, menu: Menu, error: Option<String>) -> Self {
+        let menu_file = crate::config_dir().map(|dir| dir.join(config::FILE_NAME));
+        let sidebar_state = herdr_api::sidebar::state_dir().ok();
+        let files_flag = herdr_api::state_dir()
+            .ok()
+            .map(|dir| files::opened_flag(&dir, me));
+        // One left by a bar of the same pane id that closed before reading
+        // it is not for this one.
+        if let Some(flag) = &files_flag {
+            let _ = std::fs::remove_file(flag);
+        }
+        let (launch_failed, launch_errors) = mpsc::channel();
+        let (place_checked, place_news) = mpsc::channel();
+        let (reloaded, reloads) = mpsc::channel();
+        Self {
+            me,
+            view: View {
+                menu,
+                page: Page::Tools,
+                hover: None,
+                hover_button: None,
+                hover_figures: false,
+                message: error.map(|e| (e, Color::Red)),
+                totals: None,
+                stats: None,
+                age: None,
+                measuring: false,
+            },
+            message_until: Instant::now() + MESSAGE_FOR,
+            menu_changed: modified(menu_file.as_deref()),
+            menu_file,
+            totals_file: sidebar_state.as_deref().map(Totals::file),
+            sidebar_state,
+            totals_changed: None,
+            totals: None,
+            read_at: Instant::now(),
+            files_flag,
+            measurer: None,
+            measured_at: None,
+            launch_failed,
+            launch_errors,
+            launching: Arc::default(),
+            place_checked,
+            place_news,
+            reloaded,
+            reloads,
+            // The first check fits the height once the swap is done.
+            check_at: Some(Instant::now() + FIRST_FIT_AFTER),
+        }
+    }
+
+    /// Shows `text` in place of the totals or the figures for a while.
+    fn say(&mut self, text: String, color: Color) {
+        self.view.message = Some((text, color));
+        self.message_until = Instant::now() + MESSAGE_FOR;
+    }
+
+    /// What the threads sent; `Break` when the bar lost its place.
+    fn take_news(&mut self) -> ControlFlow<()> {
+        let news: Vec<Measure> = self
+            .measurer
+            .iter()
+            .flat_map(|m| m.news.try_iter())
+            .collect();
+        for news in news {
+            match news {
+                Measure::NoFolder => {
+                    self.say("dossier de l'explorateur inconnu".into(), Color::Red)
+                }
+                Measure::Started => self.view.measuring = true,
+                Measure::Done(measured) => {
+                    self.view.measuring = false;
+                    self.view.stats = Some(measured.stats);
+                    self.measured_at = Some(measured.at);
+                }
+                Measure::NoAnswer => {
+                    self.view.measuring = false;
+                    self.say("le dossier ne répond pas".into(), Color::Red);
+                }
+                Measure::Unsaved(error) => {
+                    self.say(format!("chiffres non enregistrés : {error}"), Color::Red);
+                }
+            }
+        }
+        let errors: Vec<String> = self.launch_errors.try_iter().collect();
+        for error in errors {
+            self.say(error, Color::Red);
+        }
+        if self.place_news.try_iter().any(|kept| !kept) {
+            return ControlFlow::Break(());
+        }
+        let reloads: Vec<_> = self.reloads.try_iter().collect();
+        for result in reloads {
+            match result {
+                Ok(message) => {
+                    self.view.page = Page::Tools;
+                    self.say(message, Color::Green);
+                }
+                Err(e) => self.say(e, Color::Red),
+            }
+        }
+        ControlFlow::Continue(())
+    }
+
+    /// The totals and `menu.toml` every `READ_EVERY`, and the flag of the
+    /// files opened from this bar.
+    fn read_again(&mut self) {
+        if Instant::now() >= self.read_at {
+            self.read_at = Instant::now() + READ_EVERY;
+            let changed = modified(self.totals_file.as_deref());
+            if changed != self.totals_changed {
+                self.totals_changed = changed;
+                self.totals = self.sidebar_state.as_deref().and_then(Totals::load);
+            }
+            self.view.totals = self
+                .totals
                 .clone()
                 // Stamped in the future (the clock was set back): not fresh.
                 .filter(|t| {
@@ -359,98 +446,97 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
                         .checked_sub(t.at_ms)
                         .is_some_and(|age| age <= TOTALS_FOR_AT_MOST.as_millis() as u64)
                 });
-            let changed = modified(menu_file.as_deref());
-            if changed != menu_changed {
-                menu_changed = changed;
+            let changed = modified(self.menu_file.as_deref());
+            if changed != self.menu_changed {
+                self.menu_changed = changed;
                 let (menu, error) = crate::menu_config();
-                if (menu.layout, menu.totals) != (view.menu.layout, view.menu.totals) {
-                    check_at = Some(Instant::now());
+                if (menu.layout, menu.totals) != (self.view.menu.layout, self.view.menu.totals) {
+                    self.check_at = Some(Instant::now());
                 }
-                view.menu = menu;
-                view.hover = None;
+                self.view.menu = menu;
+                self.view.hover = None;
                 if let Some(error) = error {
-                    view.message = Some((error, Color::Red));
-                    message_until = Instant::now() + MESSAGE_FOR;
+                    self.say(error, Color::Red);
                 }
             }
         }
-        if let Some(flag) = &files_flag
+        if let Some(flag) = &self.files_flag
             && std::fs::remove_file(flag).is_ok()
         {
-            view.page = Page::Files;
-            view.message = None;
-            measurer = None;
+            self.view.page = Page::Files;
+            self.view.message = None;
+            self.measurer = None;
         }
-        if view.message.is_some() && Instant::now() >= message_until {
-            view.message = None;
+    }
+
+    /// The figures' age, and the end of the message once its time is up.
+    fn age_and_message(&mut self) {
+        if self.view.message.is_some() && Instant::now() >= self.message_until {
+            self.view.message = None;
         }
-        view.age =
-            measured_at.and_then(|at| stats::age_label(stats::unix_now().saturating_sub(at)));
-        let size = terminal::size()?;
-        if drawn.as_ref().is_none_or(|(v, s)| *v != view || *s != size) {
-            draw(&view)?;
-            drawn = Some((view.clone(), size));
-        }
-        let until_check = check_at.map_or(Duration::MAX, |at| {
-            at.saturating_duration_since(Instant::now())
-        });
-        if !event::poll(until_check.min(WAKE_EVERY))? {
-            if check_at.is_some_and(|at| Instant::now() >= at) {
-                check_at = None;
-                let (me, rows, checked) = (
-                    me.to_string(),
-                    wanted_rows(&view.menu),
-                    place_checked.clone(),
-                );
-                std::thread::spawn(move || {
-                    let tab = my_tab(&me);
-                    let known = super::registry::Bars::new();
-                    if tab.is_some_and(|tab| !has_its_place(tab.iter(), &known)) {
-                        let _ = checked.send(false);
-                        return;
-                    }
-                    fit_height(&me, rows);
-                });
+        self.view.age = self
+            .measured_at
+            .and_then(|at| stats::age_label(stats::unix_now().saturating_sub(at)));
+    }
+
+    /// Checks, on a thread, that the bar keeps its place, then fits its
+    /// height.
+    fn check_place(&self) {
+        let (me, rows, checked) = (
+            self.me.to_string(),
+            wanted_rows(&self.view.menu),
+            self.place_checked.clone(),
+        );
+        std::thread::spawn(move || {
+            let tab = my_tab(&me);
+            let known = super::registry::Bars::new();
+            if tab.is_some_and(|tab| !has_its_place(tab.iter(), &known)) {
+                let _ = checked.send(false);
+                return;
             }
-            continue;
-        }
-        let (width, _) = terminal::size()?;
-        let grid = Grid::new(width, &view.menu.entries, view.menu.layout);
-        // What the event asks for: an entry, a button, a new reading.
-        let mut chosen = None;
-        let mut pressed = None;
-        let mut measure_again = false;
-        match event::read()? {
-            Event::Resize(..) => check_at = Some(Instant::now() + SETTLE),
+            fit_height(&me, rows);
+        });
+    }
+
+    /// Answers a key, a click, the pointer or a resize; `Break` when the
+    /// bar closes.
+    fn on_event(&mut self, event: Event, width: u16) -> ControlFlow<()> {
+        let view = &mut self.view;
+        let mut asked = Asked::default();
+        match event {
+            Event::Resize(..) => self.check_at = Some(Instant::now() + SETTLE),
             Event::Key(key) if key.kind == KeyEventKind::Press => {
                 if crate::ui::is_control(key.modifiers) {
                     if key.code == KeyCode::Char('c') {
-                        return Ok(());
+                        return ControlFlow::Break(());
                     }
-                    continue;
+                    return ControlFlow::Continue(());
                 }
                 match (view.page, key.code) {
                     // An entry's own key wins over `q`.
                     (Page::Tools, KeyCode::Char(c))
                         if view.menu.entries.iter().any(|e| e.key == c) =>
                     {
-                        chosen = view.menu.entries.iter().position(|e| e.key == c);
+                        asked.entry = view.menu.entries.iter().position(|e| e.key == c);
                     }
-                    (Page::Tools, KeyCode::Esc | KeyCode::Char('q')) => return Ok(()),
+                    (Page::Tools, KeyCode::Esc | KeyCode::Char('q')) => {
+                        return ControlFlow::Break(());
+                    }
                     (_, KeyCode::Esc | KeyCode::Char('q') | KeyCode::Backspace) => {
-                        pressed = Some(Button::Back);
+                        asked.button = Some(Button::Back);
                     }
                     (Page::Files, KeyCode::Char('r') | KeyCode::Enter) => {
-                        pressed = Some(Button::Reload);
+                        asked.button = Some(Button::Reload);
                     }
-                    (Page::Disk, KeyCode::Char('r')) => measure_again = true,
+                    (Page::Disk, KeyCode::Char('r')) => asked.measure_again = true,
                     _ => {}
                 }
             }
             Event::Mouse(mouse) => {
                 let button = button_at(view.page, width, mouse.row, mouse.column);
                 let hit = match view.page {
-                    Page::Tools => grid.at(mouse.row, mouse.column),
+                    Page::Tools => Grid::new(width, &view.menu.entries, view.menu.layout)
+                        .at(mouse.row, mouse.column),
                     _ => None,
                 };
                 // Not while a message stands in for the figures.
@@ -460,9 +546,11 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
                     && mouse.row >= FIGURES_TOP;
                 match mouse.kind {
                     MouseEventKind::Down(MouseButton::Left) => {
-                        chosen = hit;
-                        pressed = button;
-                        measure_again = on_figures;
+                        asked = Asked {
+                            entry: hit,
+                            button,
+                            measure_again: on_figures,
+                        };
                     }
                     MouseEventKind::Moved => {
                         view.hover = hit;
@@ -474,43 +562,61 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
             }
             _ => {}
         }
+        self.answer(asked);
+        ControlFlow::Continue(())
+    }
+
+    fn answer(&mut self, asked: Asked) {
         // A measuring thread that ended (the explorer's folder was unknown)
         // starts again.
-        if measure_again && measurer.as_ref().is_none_or(|m| m.ask.send(()).is_err()) {
-            measurer = Some(measure_in_background(me.to_string()));
+        if asked.measure_again
+            && self
+                .measurer
+                .as_ref()
+                .is_none_or(|m| m.ask.send(()).is_err())
+        {
+            self.measurer = Some(measure_in_background(self.me.to_string()));
         }
-        match pressed {
+        match asked.button {
             Some(Button::Back) => {
-                view.page = Page::Tools;
-                view.message = None;
-                view.hover_button = None;
-                measurer = None;
+                self.view.page = Page::Tools;
+                self.view.message = None;
+                self.view.hover_button = None;
+                self.measurer = None;
             }
             Some(Button::Reload) => {
-                let reloaded = reloaded.clone();
+                let reloaded = self.reloaded.clone();
                 std::thread::spawn(move || {
                     let _ = reloaded.send(files::reload());
                 });
             }
             None => {}
         }
-        let Some(i) = chosen else {
-            continue;
-        };
-        view.message = None;
-        let entry = view.menu.entries[i].clone();
+        if let Some(i) = asked.entry {
+            self.choose(i);
+        }
+    }
+
+    /// Opens the `Disk` page, or starts the entry on a thread.
+    fn choose(&mut self, i: usize) {
+        self.view.message = None;
+        let entry = self.view.menu.entries[i].clone();
         if entry.action == Some(Action::Disk) {
-            view.page = Page::Disk;
-            view.hover = None;
-            measurer = Some(measure_in_background(me.to_string()));
-            continue;
+            self.view.page = Page::Disk;
+            self.view.hover = None;
+            self.measurer = Some(measure_in_background(self.me.to_string()));
+            return;
         }
         let key = entry.key;
-        let starting = || launching.lock().unwrap_or_else(|e| e.into_inner());
+        let starting = || self.launching.lock().unwrap_or_else(|e| e.into_inner());
         if !starting().insert(key) {
-            continue;
+            return;
         }
-        let (me, failed, launching) = (me.to_string(), launch_failed.clone(), launching.clone());
+        let (me, failed, launching) = (
+            self.me.to_string(),
+            self.launch_failed.clone(),
+            self.launching.clone(),
+        );
         std::thread::spawn(move || {
             if let Err(error) = launch(&me, &entry) {
                 let _ = failed.send(error);
@@ -735,10 +841,7 @@ fn draw_bars(
         .map(|g| g.text.clone().unwrap_or_else(|| "–".into()))
         .collect();
     let value_width = texts.iter().map(|t| crate::ui::width(t)).max().unwrap_or(0);
-    // `CPU 󰍹 :`: the glyph keeps a space after it, a terminal may draw it
-    // over two cells.
-    const LABEL_CELLS: usize = 7;
-    let bar = usize::from(width).saturating_sub(1 + LABEL_CELLS + 1 + 1 + value_width + 1);
+    let bar = bar_cells(width, value_width);
     for ((y, gauge), text) in (row..rows).zip(&gauges).zip(&texts) {
         let kind = if gauge.cpu { "CPU" } else { "RAM" };
         let label = if gauge.machine {
@@ -753,12 +856,12 @@ fn draw_bars(
             " ".repeat(value_width.saturating_sub(crate::ui::width(text)))
         );
         // Too narrow for the label: the value alone.
-        if 1 + LABEL_CELLS + 1 + value_width > usize::from(width) {
+        let Some(bar) = bar else {
             let value = fit(text, usize::from(width));
             queue!(out, MoveTo(centered(0, width, &value), y))?;
             draw_figure(out, &value, level, true)?;
             continue;
-        }
+        };
         let pad = LABEL_CELLS.saturating_sub(crate::ui::width(&label));
         queue!(
             out,
@@ -768,7 +871,7 @@ fn draw_bars(
             SetAttribute(Attribute::Reset),
             Print(" ".repeat(pad + 1))
         )?;
-        if bar >= 3 {
+        if bar > 0 {
             draw_gauge(out, gauge, bar)?;
             queue!(out, Print(" "))?;
         }

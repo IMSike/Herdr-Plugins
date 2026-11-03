@@ -121,10 +121,56 @@ fn count_cells(count: usize) -> u16 {
     u16::try_from(count).unwrap_or(u16::MAX)
 }
 
+/// The cells `text` takes on screen (see `ui::width`).
+fn text_cells(text: &str) -> u16 {
+    count_cells(crate::ui::width(text))
+}
+
 /// The column `text` starts at, centered in `width` columns from `start`.
 pub fn centered(start: u16, width: u16, text: &str) -> u16 {
-    let len = count_cells(crate::ui::width(text));
-    start.saturating_add(width.saturating_sub(len) / 2)
+    start.saturating_add(width.saturating_sub(text_cells(text)) / 2)
+}
+
+/// Whether `text`, drawn from column `left`, covers `column`.
+pub fn covers(left: u16, text: &str, column: u16) -> bool {
+    column >= left && column < left.saturating_add(text_cells(text))
+}
+
+/// Two buttons side by side, centered in `width`: each given as its name
+/// and its icon, drawn by name 4 cells apart when they fit, else by icon 2
+/// apart. The first column of each, and its text.
+pub fn button_pair<'a>(
+    width: u16,
+    [first, first_icon]: [&'a str; 2],
+    [second, second_icon]: [&'a str; 2],
+) -> [(u16, &'a str); 2] {
+    let len = text_cells;
+    let (first, second, gap) = if len(first) + 4 + len(second) <= width {
+        (first, second, 4)
+    } else {
+        (first_icon, second_icon, 2)
+    };
+    let left = width.saturating_sub(len(first) + gap + len(second)) / 2;
+    [(left, first), (left + len(first) + gap, second)]
+}
+
+/// The cells of a totals' label (`CPU 󰍹 :`): the glyph keeps a space after
+/// it, a terminal may draw it over two cells.
+pub const LABEL_CELLS: usize = 7;
+/// The narrowest bar drawn.
+const MIN_BAR: usize = 3;
+
+/// The cells of the totals' bars, in `width` columns, the widest value
+/// taking `value_cells`: a cell, the label, a space, the bar, a space,
+/// the value, a cell. `Some(0)` when there is no room for a bar, `None`
+/// when there is none for the label either: the value alone.
+pub fn bar_cells(width: u16, value_cells: usize) -> Option<usize> {
+    let width = usize::from(width);
+    if 1 + LABEL_CELLS + 1 + value_cells > width {
+        return None;
+    }
+    let bar = width.saturating_sub(1 + LABEL_CELLS + 1 + 1 + value_cells + 1);
+    Some(if bar >= MIN_BAR { bar } else { 0 })
 }
 
 #[derive(Deserialize)]
@@ -280,6 +326,27 @@ mod tests {
         assert_eq!(single.at(0, 8), Some(1));
         assert_eq!(single.at(2, 8), None);
         assert_eq!(single.at(0, 38), None);
+    }
+
+    #[test]
+    fn two_buttons_by_name_or_by_icon() {
+        let named = button_pair(20, ["< Back", "<"], ["Reload", "R"]);
+        // 6 + 4 + 6 = 16 cells, from column 2.
+        assert_eq!(named, [(2, "< Back"), (12, "Reload")]);
+        let icons = button_pair(10, ["< Back", "<"], ["Reload", "R"]);
+        assert_eq!(icons, [(3, "<"), (6, "R")]);
+        assert!(covers(12, "Reload", 12) && covers(12, "Reload", 17));
+        assert!(!covers(12, "Reload", 11) && !covers(12, "Reload", 18));
+    }
+
+    #[test]
+    fn the_bars_take_what_the_label_and_value_leave() {
+        // 1 + 7 + 1 + bar + 1 + 4 + 1.
+        assert_eq!(bar_cells(30, 4), Some(15));
+        assert_eq!(bar_cells(17, 4), Some(0));
+        assert_eq!(bar_cells(18, 4), Some(3));
+        assert_eq!(bar_cells(13, 4), Some(0));
+        assert_eq!(bar_cells(12, 4), None);
     }
 
     #[test]
