@@ -39,7 +39,7 @@ The icons are laid out one of two ways, set by `layout` (see [Settings](#setting
 - `double` (default): two rows of icons, each with its name under it.
 - `single`: one row of icons; the row under it shows the name of the icon under the mouse, and nothing otherwise.
 
-Under the icons, the CPU and memory of Herdr's processes, then of the machine, as the [sidebar](sidebar.md) measures them, in bold, shown one of two ways, set by `totals`:
+Under the icons, the CPU and memory of Herdr's processes (every pane of every workspace, not the current workspace's alone), then of the machine, as the [sidebar](sidebar.md) measures them, in bold, shown one of two ways, set by `totals`:
 
 - `line` (default): one row, `2% 3,1G · 󰍹 10% 22,4G`.
 - `bars`: four rows, `CPU :`, `RAM :`, `CPU 󰍹 :`, `RAM 󰍹 :`, each with a bar as wide as the pane allows, then its value. A thin bar (`━━━━╸────`) fills by half cells with the share of the machine (Herdr's memory: of the machine's memory), each cell in the color its place takes in a gradient from green to red through the [thresholds](sidebar.md#threshold-colors) of its figure; its empty part is tinted, dimmed, with the color of each threshold's zone, so the bar shows how far the next threshold is. Herdr's CPU share is missing on the sidebar's first run: its bar stays empty, with `–`.

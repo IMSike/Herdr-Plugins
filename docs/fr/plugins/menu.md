@@ -39,7 +39,7 @@ Les icônes se disposent de deux façons, selon `layout` (voir [Réglages](#rég
 - `double` (par défaut) : deux lignes d'icônes, chacune avec son nom en dessous.
 - `single` : une ligne d'icônes ; la ligne du dessous affiche le nom de l'icône sous la souris, et rien sinon.
 
-Sous les icônes, le CPU et la mémoire des processus de Herdr, puis de la machine, tels que la [sidebar](sidebar.md) les mesure, en gras, affichés de deux façons, selon `totals` :
+Sous les icônes, le CPU et la mémoire des processus de Herdr (tous les panes de tous les workspaces, pas seulement ceux du workspace affiché), puis de la machine, tels que la [sidebar](sidebar.md) les mesure, en gras, affichés de deux façons, selon `totals` :
 
 - `line` (par défaut) : une ligne, `2% 3,1G · 󰍹 10% 22,4G`.
 - `bars` : quatre lignes, `CPU :`, `RAM :`, `CPU 󰍹 :`, `RAM 󰍹 :`, chacune avec une barre aussi large que le pane le permet, puis sa valeur. Une barre fine (`━━━━╸────`) se remplit, par demi-case, de la part de la machine (mémoire de Herdr : de la mémoire de la machine), chaque case dans la couleur que prend sa place dans un dégradé du vert au rouge passant par les [seuils](sidebar.md#couleurs-par-seuil) de son chiffre ; sa partie vide est teintée, en atténué, de la couleur de la zone de chaque seuil, si bien que la barre montre à quelle distance est le seuil suivant. La part de CPU de Herdr manque au premier passage de la sidebar : sa barre reste vide, avec `–`.
