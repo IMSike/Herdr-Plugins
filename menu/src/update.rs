@@ -15,6 +15,9 @@ const LOCK: &str = "update.lock";
 const ALREADY_RUNNING: &str = "une mise à jour est déjà en cours dans une autre fenêtre";
 /// How long the window's terminal is watched for an early end.
 const WINDOW_CHECK: std::time::Duration = std::time::Duration::from_secs(1);
+/// The variable that hands `cmd` the program's path.
+#[cfg(windows)]
+const SELF_ENV: &str = "HERDR_MENU_SELF";
 
 /// The update's lock; `Ok(None)` while another update holds it, an error
 /// when it cannot be taken (the update runs without it).
@@ -71,10 +74,6 @@ fn terminal_window(me: &std::path::Path) -> Result<Command, String> {
     command.creation_flags(CREATE_NO_WINDOW);
     Ok(command)
 }
-
-/// The variable that hands `cmd` the program's path.
-#[cfg(windows)]
-const SELF_ENV: &str = "HERDR_MENU_SELF";
 
 /// `cmd`'s command line. `cmd` reads `%…%` in its line as a variable, and
 /// `&` or `^` outside quotes as its own: the path, which may hold any of

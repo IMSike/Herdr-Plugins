@@ -4,6 +4,11 @@
 use crossterm::style::Color;
 use herdr_api::sidebar::{Level, Thresholds};
 
+/// The empty part of a bar (gruvbox's dark grey).
+const TRACK: (u8, u8, u8) = (0x3c, 0x38, 0x36);
+/// How much of its level's color the empty part of a bar takes.
+const ZONE_TINT: f64 = 0.45;
+
 /// The color of `value` between the thresholds: green at 0, yellow at the
 /// first, orange at the second, red from the third.
 pub fn gradient(value: f64, thresholds: &Thresholds) -> Color {
@@ -26,11 +31,6 @@ pub fn gradient(value: f64, thresholds: &Thresholds) -> Color {
     }
     level_color(Level::Red)
 }
-
-/// The empty part of a bar (gruvbox's dark grey).
-const TRACK: (u8, u8, u8) = (0x3c, 0x38, 0x36);
-/// How much of its level's color the empty part of a bar takes.
-const ZONE_TINT: f64 = 0.45;
 
 /// The color of the empty part of a bar at `value`: its level's, dimmed
 /// toward the track, so the bar shows where each threshold falls.

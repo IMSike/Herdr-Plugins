@@ -34,6 +34,19 @@ impl Screen {
     }
 }
 
+impl Drop for Screen {
+    fn drop(&mut self) {
+        let _ = execute!(
+            io::stdout(),
+            DisableMouseCapture,
+            Show,
+            ResetColor,
+            LeaveAlternateScreen
+        );
+        let _ = terminal::disable_raw_mode();
+    }
+}
+
 /// A screen drawn in one write: a terminal never shows it cleared but not
 /// drawn again yet, which blinks.
 pub struct Frame(Vec<u8>);
@@ -80,19 +93,6 @@ impl Write for Frame {
 /// Ctrl+Alt, which types `@` or `{` on some keyboards.
 pub fn is_control(modifiers: KeyModifiers) -> bool {
     modifiers.contains(KeyModifiers::CONTROL) && !modifiers.contains(KeyModifiers::ALT)
-}
-
-impl Drop for Screen {
-    fn drop(&mut self) {
-        let _ = execute!(
-            io::stdout(),
-            DisableMouseCapture,
-            Show,
-            ResetColor,
-            LeaveAlternateScreen
-        );
-        let _ = terminal::disable_raw_mode();
-    }
 }
 
 /// Shows the menu; returns the index of the chosen entry, or `None` when closed.

@@ -38,8 +38,8 @@ use std::time::{Duration, Instant};
 /// Choice file the `menu` popup writes for the `open` action.
 const CHOICE_ENV: &str = "HERDR_MENU_CHOICE";
 /// The entry (as JSON) and the start folder handed to the `run` popup.
-pub(crate) const ENTRY_ENV: &str = "HERDR_MENU_ENTRY";
-pub(crate) const CWD_ENV: &str = "HERDR_MENU_CWD";
+const ENTRY_ENV: &str = "HERDR_MENU_ENTRY";
+const CWD_ENV: &str = "HERDR_MENU_CWD";
 /// How long the action waits for the menu to start.
 const START_TIMEOUT: Duration = Duration::from_secs(10);
 /// How often the action checks that the menu is still running.
