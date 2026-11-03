@@ -1,5 +1,7 @@
 //! What the plugins of this repository share: requests to the Herdr API
-//! socket, and a few helpers.
+//! socket, the environment Herdr gives them, their files (atomic writes,
+//! locks, settings), the number format, and the sidebar's settings and
+//! totals that the menu reads too.
 
 mod format;
 pub mod sidebar;

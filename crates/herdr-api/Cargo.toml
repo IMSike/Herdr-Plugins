@@ -1,6 +1,6 @@
 [package]
 name = "herdr-api"
-description = "What the plugins of this repository share: the Herdr API socket client and small helpers"
+description = "What the plugins of this repository share: the Herdr API socket client, their files, the number format and the sidebar's settings and totals"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

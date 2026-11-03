@@ -81,12 +81,9 @@ pub struct Totals {
     pub machine_cpu: Option<f64>,
     pub machine_memory: u64,
     /// The machine's memory, in use or not.
-    #[serde(default)]
     pub machine_total: u64,
     /// Whether the figures take the color of their level.
-    #[serde(default)]
     pub colors: bool,
-    #[serde(default)]
     pub thresholds: TotalsThresholds,
 }
 
