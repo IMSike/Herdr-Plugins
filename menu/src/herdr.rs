@@ -122,14 +122,6 @@ pub fn all_panes() -> Result<Vec<Pane>, String> {
     panes(json!({}))
 }
 
-pub fn pane(pane_id: &str) -> Result<Pane, String> {
-    Ok(herdr_api::request_field(
-        "pane.get",
-        json!({ "pane_id": pane_id }),
-        "pane",
-    )?)
-}
-
 /// Whether the plugin `id` is installed.
 pub fn has_plugin(id: &str) -> Result<bool, String> {
     #[derive(Deserialize)]

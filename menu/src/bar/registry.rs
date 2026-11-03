@@ -81,6 +81,14 @@ impl Bars {
         }
     }
 
+    /// Whether no bar is open, as far as the files tell: never without a
+    /// state folder, where bars are known by their label alone.
+    pub fn none(&self) -> bool {
+        self.dir.as_ref().is_some_and(|dir| {
+            std::fs::read_dir(dir).map_or(true, |mut files| files.next().is_none())
+        })
+    }
+
     /// Whether `pane` is one of the bars.
     pub fn is(&self, pane: &Pane) -> bool {
         pane.label.as_deref() == Some(LABEL)
@@ -138,8 +146,9 @@ mod tests {
             pane("w1:p2", LABEL),
             pane("w1:p3", "x"),
         );
+        assert!(bars.none());
         bars.add(&bar.pane_id);
-        assert!(bars.is(&bar));
+        assert!(bars.is(&bar) && !bars.none());
         // Renamed `Tools` by the user: not a bar.
         assert!(!bars.is(&renamed));
         assert!(!bars.is(&other));
@@ -148,9 +157,9 @@ mod tests {
         assert!(!bars.is(&bar));
         bars.add(&bar.pane_id);
         bars.forget(&bar.pane_id);
-        assert!(!bars.is(&bar));
+        assert!(!bars.is(&bar) && bars.none());
         let _ = std::fs::remove_dir_all(dir);
         // Without a state folder, the label tells.
-        assert!(Bars::by_label().is(&renamed));
+        assert!(Bars::by_label().is(&renamed) && !Bars::by_label().none());
     }
 }

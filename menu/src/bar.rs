@@ -160,19 +160,23 @@ pub fn on_pane_closed() -> Result<(), String> {
     else {
         return Ok(());
     };
-    let panes = herdr::workspace_panes(&workspace)?;
     let known = Bars::new();
-    for bar in panes.iter().filter(|p| known.is(p)) {
-        let tab: Vec<&Pane> = panes.iter().filter(|p| p.tab_id == bar.tab_id).collect();
-        if !has_its_place(&tab, &known) {
+    // No bar open: nothing to ask Herdr.
+    if known.none() {
+        return Ok(());
+    }
+    let all = herdr::all_panes()?;
+    for bar in all
+        .iter()
+        .filter(|p| p.workspace_id == workspace && known.is(p))
+    {
+        if !has_its_place(all.iter().filter(|p| p.tab_id == bar.tab_id), &known) {
             let _ = herdr::close(&bar.pane_id);
             known.forget(&bar.pane_id);
         }
     }
     // The closed pane may have been a bar.
-    if let Ok(all) = herdr::all_panes() {
-        known.keep_only(&all);
-    }
+    known.keep_only(&all);
     Ok(())
 }
 
@@ -263,14 +267,15 @@ fn is_terminal(pane: &Pane, known: &Bars) -> bool {
 }
 
 /// The bar stays while its tab has the explorer and a pane of its own.
-fn has_its_place(tab: &[&Pane], known: &Bars) -> bool {
-    tab.iter().any(|p| label_is(p, EXPLORER)) && tab.iter().any(|p| is_terminal(p, known))
+fn has_its_place<'a>(mut tab: impl Iterator<Item = &'a Pane> + Clone, known: &Bars) -> bool {
+    tab.clone().any(|p| label_is(p, EXPLORER)) && tab.any(|p| is_terminal(p, known))
 }
 
 /// The panes of the bar's tab; `None` when Herdr does not answer.
 fn my_tab(me: &str) -> Option<Vec<Pane>> {
-    let pane = herdr::pane(me).ok()?;
-    herdr::tab_panes(&pane.workspace_id, &pane.tab_id).ok()
+    let all = herdr::all_panes().ok()?;
+    let tab = all.iter().find(|p| p.pane_id == me)?.tab_id.clone();
+    Some(all.into_iter().filter(|p| p.tab_id == tab).collect())
 }
 
 /// Folders the entries start in, read from the tab: the explorer's, the
@@ -362,8 +367,8 @@ mod tests {
         assert!(!is_terminal(&pane(Some(LABEL)), &known));
         assert!(!is_terminal(&pane(Some("Preview")), &known));
         let (explorer, terminal) = (pane(Some(EXPLORER)), pane(None));
-        assert!(has_its_place(&[&explorer, &terminal], &known));
-        assert!(!has_its_place(&[&explorer], &known));
-        assert!(!has_its_place(&[&terminal], &known));
+        assert!(has_its_place([&explorer, &terminal].into_iter(), &known));
+        assert!(!has_its_place([&explorer].into_iter(), &known));
+        assert!(!has_its_place([&terminal].into_iter(), &known));
     }
 }
