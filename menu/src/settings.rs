@@ -59,8 +59,8 @@ enum Item {
 /// The name of a set of thresholds on the screen.
 fn levels_name(levels: Levels) -> &'static str {
     match levels {
-        Levels::Cpu => "Seuils CPU (Workspaces)",
-        Levels::Memory => "Seuils mémoire (Workspaces)",
+        Levels::Cpu => "Seuils CPU (Herdr)",
+        Levels::Memory => "Seuils mémoire (Herdr)",
         Levels::MachineCpu => "Seuils CPU (machine)",
         Levels::MachineMemory => "Seuils mémoire (machine)",
     }
