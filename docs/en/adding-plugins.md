@@ -43,7 +43,7 @@ Herdr's documentation is the authority on the manifest and the API: `herdr --hel
 
 ## Code
 
-- Quiet by default: a failure is written to stderr (Herdr keeps it in `herdr plugin log list`), never shown as a modal; a run never blocks Herdr or the agents, and background work stops with the command or pane that started it.
+- Quiet by default: a failure is written to stderr (Herdr keeps it in `herdr plugin log list`), never shown as a modal (only a tool the user has just opened, in its own popup, may show why it failed and wait for a key); a run never blocks Herdr or the agents, and background work stops with the command or pane that started it.
 - No path written down: the state and config folders come from Herdr (`herdr_api::state_dir()`, `herdr_api::env`).
 - What the plugin shows or writes is in French, except the names of the menu's built-in entries (Disk, Update, Settings), which their keys come from; identifiers and comments in English.
 

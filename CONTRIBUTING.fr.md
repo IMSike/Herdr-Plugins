@@ -21,7 +21,7 @@ Un plugin en développement est lié plutôt qu'installé : `herdr plugin link <
 
 ## Principes
 
-- **Discret par défaut** : un plugin ne bloque ni ne ralentit jamais Herdr ou les agents ; un échec est journalisé, jamais affiché en fenêtre modale.
+- **Discret par défaut** : un plugin ne bloque ni ne ralentit jamais Herdr ou les agents ; un échec est journalisé, jamais affiché en fenêtre modale (seul un outil que l'utilisateur vient d'ouvrir, dans son propre popup, peut afficher pourquoi il a échoué et attendre une touche).
 - **Herdr d'abord** : ce que la configuration, les raccourcis natifs ou les popups de Herdr savent faire n'est pas un plugin.
 - **Aucun secret, aucune donnée personnelle, aucun chemin propre à une machine** dans le dépôt.
 - **Documenté** : chaque fonctionnalité est expliquée (ce qu'elle affiche ou fait, implications, comment la désactiver), dans les deux langues.

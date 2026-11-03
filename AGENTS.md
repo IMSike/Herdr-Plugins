@@ -19,7 +19,7 @@ Read before changing anything:
 2. **Never install global tools** without asking.
 3. **No secrets, personal data or machine-specific paths** in the repository: it is public. A path is read at run time (`HERDR_PLUGIN_*` variables, environment), never written down.
 4. **Do not settle open design questions alone**: present the mechanism, the alternatives and a recommendation, then let the maintainer decide. Significant decisions go in an ADR (`docs/{en,fr}/adr/NNNN-title.md`: context, decision, consequences).
-5. **Quiet by default**: a plugin never blocks or slows Herdr or the agents; a failure is logged, never shown as a modal; background work stops when its parent command or pane exits.
+5. **Quiet by default**: a plugin never blocks or slows Herdr or the agents; a failure is logged, never shown as a modal (only a tool the user has just opened, in its own popup, may show why it failed and wait for a key); background work stops when its parent command or pane exits.
 6. Prefer what Herdr already offers (configuration, native keybindings, popups) to a plugin: a plugin exists only for what Herdr cannot do on its own.
 
 ## Documentation

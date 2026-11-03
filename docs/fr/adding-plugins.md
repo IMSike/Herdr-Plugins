@@ -43,7 +43,7 @@ La documentation de Herdr fait foi pour le manifeste et l'API : `herdr --help`, 
 
 ## Code
 
-- Discret par défaut : un échec est écrit sur stderr (Herdr le garde dans `herdr plugin log list`), jamais affiché en fenêtre modale ; un passage ne bloque jamais Herdr ni les agents, et le travail en arrière-plan s'arrête avec la commande ou le pane qui l'a lancé.
+- Discret par défaut : un échec est écrit sur stderr (Herdr le garde dans `herdr plugin log list`), jamais affiché en fenêtre modale (seul un outil que l'utilisateur vient d'ouvrir, dans son propre popup, peut afficher pourquoi il a échoué et attendre une touche) ; un passage ne bloque jamais Herdr ni les agents, et le travail en arrière-plan s'arrête avec la commande ou le pane qui l'a lancé.
 - Aucun chemin écrit en dur : les dossiers d'état et de configuration viennent de Herdr (`herdr_api::state_dir()`, `herdr_api::env`).
 - Ce que le plugin affiche ou écrit est en français, sauf les noms des entrées intégrées du menu (Disk, Update, Settings), d'où viennent leurs touches ; identifiants et commentaires en anglais.
 

@@ -21,7 +21,7 @@ A plugin under development is linked rather than installed: `herdr plugin link <
 
 ## Principles
 
-- **Quiet by default**: a plugin never blocks or slows Herdr or the agents; a failure is logged, never shown as a modal.
+- **Quiet by default**: a plugin never blocks or slows Herdr or the agents; a failure is logged, never shown as a modal (only a tool the user has just opened, in its own popup, may show why it failed and wait for a key).
 - **Herdr first**: what Herdr's configuration, native keybindings or popups can do is not a plugin.
 - **No secrets, no personal data, no machine-specific paths** in the repository.
 - **Documented**: each feature explained (what it shows or does, implications, how to turn it off), in both languages.
