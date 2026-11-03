@@ -192,6 +192,27 @@ impl Lock {
             Err(std::fs::TryLockError::Error(e)) => Err(e),
         }
     }
+
+    /// `take`, for a lock the caller can do without when there is none to
+    /// take (no state folder, one that cannot be written).
+    pub fn try_take(path: &Path) -> Taken {
+        match Self::take(path) {
+            Ok(Some(lock)) => Taken::Held(lock),
+            Ok(None) => Taken::Busy,
+            Err(_) => Taken::Unavailable,
+        }
+    }
+}
+
+/// What trying a lock gave.
+#[derive(Debug)]
+pub enum Taken {
+    /// Held until dropped.
+    Held(Lock),
+    /// Another process holds it.
+    Busy,
+    /// No lock to take: go on without.
+    Unavailable,
 }
 
 #[cfg(test)]

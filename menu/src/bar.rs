@@ -24,7 +24,8 @@ use crate::config::Menu;
 use crate::herdr::{self, Context, Pane};
 use crossterm::terminal;
 use geometry::{Layout, ratio_change};
-use registry::{Bars, TabLock, forget_tab_locks, lock_tab};
+use herdr_api::Taken;
+use registry::{Bars, forget_tab_locks, lock_tab};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -104,7 +105,7 @@ pub fn toggle(context: &Context) -> Result<bool, String> {
     };
     // Another run opens or closes the tab's bar: that is what was asked.
     let _lock = match lock_tab(tab) {
-        TabLock::Busy => return Ok(true),
+        Taken::Busy => return Ok(true),
         lock => lock,
     };
     let panes = herdr::tab_panes(workspace, tab)?;
@@ -135,7 +136,7 @@ pub fn on_pane_created() -> Result<(), String> {
     }
     // `prefix+space` opens or closes the tab's bar meanwhile: it decides.
     let _lock = match lock_tab(&explorer.tab_id) {
-        TabLock::Busy => return Ok(()),
+        Taken::Busy => return Ok(()),
         lock => lock,
     };
     let panes = herdr::tab_panes(&explorer.workspace_id, &explorer.tab_id)?;

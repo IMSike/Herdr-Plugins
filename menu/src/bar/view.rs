@@ -95,8 +95,8 @@ fn measure_in_background(me: String) -> Measurer {
             // through the file.
             let lock = file
                 .as_deref()
-                .map_or(stats::ReadingLock::Unavailable, stats::reading_lock);
-            if matches!(lock, stats::ReadingLock::Elsewhere) {
+                .map_or(herdr_api::Taken::Unavailable, stats::reading_lock);
+            if matches!(lock, herdr_api::Taken::Busy) {
                 match asked.recv_timeout(OTHER_READING_CHECK_EVERY) {
                     Ok(()) | Err(mpsc::RecvTimeoutError::Timeout) => {}
                     Err(mpsc::RecvTimeoutError::Disconnected) => return,
