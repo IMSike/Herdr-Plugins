@@ -155,7 +155,7 @@ pub fn run() -> Result<(), String> {
         Ok(message) => message.clone(),
         Err(e) => format!("Erreur : {e}"),
     };
-    crate::pause(&format!("\n{message}"));
+    crate::ui::pause(&format!("\n{message}"));
     result.map(|_| ())
 }
 
@@ -188,7 +188,7 @@ fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
          Tous les panes se ferment : {}.",
         stopping(panes.len(), agents.len(), working)
     );
-    if !crate::ask("Redémarrer maintenant ? [o/N] ", false) {
+    if !crate::ui::ask("Redémarrer maintenant ? [o/N] ", false) {
         return Ok(
             "Redémarrage annulé : la nouvelle version servira au prochain \
                    démarrage du serveur Herdr."
@@ -196,7 +196,7 @@ fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
         );
     }
     herdr_shown(&["server", "stop"])?;
-    if crate::ask(
+    if crate::ui::ask(
         "\nServeur arrêté. Relancer Herdr dans cette fenêtre ? [o/N] ",
         false,
     ) {

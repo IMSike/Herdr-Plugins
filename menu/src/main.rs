@@ -30,7 +30,7 @@ mod update;
 use config::{Action, Entry};
 use herdr::Context;
 use serde::{Deserialize, Serialize};
-use std::io::{self, Write};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
@@ -275,37 +275,9 @@ fn menu() -> Result<(), String> {
 fn run() -> Result<(), String> {
     let result = run_entry();
     if let Err(message) = &result {
-        pause(message);
+        ui::pause(message);
     }
     result
-}
-
-/// Asks a yes-or-no question; an empty answer is `default`, an unreadable
-/// one is no.
-pub(crate) fn ask(question: &str, default: bool) -> bool {
-    print!("{question}");
-    let _ = io::Write::flush(&mut io::stdout());
-    let mut answer = String::new();
-    if io::stdin().read_line(&mut answer).is_err() {
-        return false;
-    }
-    is_yes(&answer, default)
-}
-
-fn is_yes(answer: &str, default: bool) -> bool {
-    match answer.trim().to_lowercase().as_str() {
-        "" => default,
-        "o" | "oui" | "y" | "yes" => true,
-        _ => false,
-    }
-}
-
-/// Leaves `message` on screen until Enter, and says so: the popup or the
-/// window closes with this process.
-pub(crate) fn pause(message: &str) {
-    println!("{message}\n\nAppuyer sur Entrée pour fermer.");
-    let _ = io::stdout().flush();
-    let _ = io::stdin().read_line(&mut String::new());
 }
 
 /// Runs the entry the menu or the bar showed, not one read again from
@@ -334,13 +306,6 @@ fn run_entry() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn an_empty_answer_takes_the_default() {
-        assert!(is_yes("\n", true) && !is_yes("\n", false));
-        assert!(is_yes(" Oui\n", false) && is_yes("y", false));
-        assert!(!is_yes("non", true) && !is_yes("x", true));
-    }
 
     #[test]
     fn choice_round_trips() {

@@ -253,9 +253,9 @@ pub fn edit_in_tab() -> Result<(), String> {
     command
         .status()
         .map_err(|e| format!("impossible de lancer l'éditeur « {} » : {e}", editor[0]))?;
-    if crate::ask("Recharger la configuration de Herdr ? [O/n] ", true) {
+    if crate::ui::ask("Recharger la configuration de Herdr ? [O/n] ", true) {
         let message = reload().unwrap_or_else(|e| e);
-        crate::pause(&message);
+        crate::ui::pause(&message);
     }
     Ok(())
 }

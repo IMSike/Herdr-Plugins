@@ -1,7 +1,7 @@
 //! The screens drawn in a pane: the terminal taken over (`Screen`), a frame
 //! drawn in one write (`Frame`), text cut to the cells it takes (`fit`,
-//! `width`), and the popup menu: one row per entry, chosen by key, arrows or
-//! click.
+//! `width`), the popup menu (one row per entry, chosen by key, arrows or
+//! click), and the plain prompts of a terminal (`ask`, `pause`).
 
 use crate::config::Entry;
 use crossterm::cursor::{Hide, MoveTo, Show};
@@ -265,9 +265,44 @@ fn pad(text: &str, width: usize) -> String {
     format!("{text}{}", " ".repeat(width.saturating_sub(used)))
 }
 
+/// Asks a yes-or-no question; an empty answer is `default`, an unreadable
+/// one is no.
+pub fn ask(question: &str, default: bool) -> bool {
+    print!("{question}");
+    let _ = io::Write::flush(&mut io::stdout());
+    let mut answer = String::new();
+    if io::stdin().read_line(&mut answer).is_err() {
+        return false;
+    }
+    is_yes(&answer, default)
+}
+
+fn is_yes(answer: &str, default: bool) -> bool {
+    match answer.trim().to_lowercase().as_str() {
+        "" => default,
+        "o" | "oui" | "y" | "yes" => true,
+        _ => false,
+    }
+}
+
+/// Leaves `message` on screen until Enter, and says so: the popup or the
+/// window closes with this process.
+pub fn pause(message: &str) {
+    println!("{message}\n\nAppuyer sur Entrée pour fermer.");
+    let _ = io::stdout().flush();
+    let _ = io::stdin().read_line(&mut String::new());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_empty_answer_takes_the_default() {
+        assert!(is_yes("\n", true) && !is_yes("\n", false));
+        assert!(is_yes(" Oui\n", false) && is_yes("y", false));
+        assert!(!is_yes("non", true) && !is_yes("x", true));
+    }
 
     #[test]
     fn pad_and_fit_count_cells() {
