@@ -742,6 +742,33 @@ mod tests {
     }
 
     #[test]
+    fn every_setting_written_is_one_the_plugins_read() {
+        let dir = herdr_api::TempDir::new("menu-every-setting").unwrap();
+        let mut state = State {
+            files: Files {
+                menu: Some(dir.join(config::FILE_NAME)),
+                sidebar: Some(dir.join(sidebar::SETTINGS_FILE)),
+            },
+            menu: Menu::default(),
+            sidebar: Some(Settings::default()),
+            selected: 0,
+            status: None,
+            typing: None,
+        };
+        // A file holding a setting its plugin does not know is ignored:
+        // `written` says so.
+        for item in state.items() {
+            let said = match item {
+                Item::OpenFiles | Item::Reload => continue,
+                Item::Shells => state.save_shells("pwsh, bash"),
+                Item::Levels(which) => state.save_levels(which, "1 2 3"),
+                _ => state.step(item, true).unwrap(),
+            };
+            assert!(said.is_ok(), "{item:?}: {said:?}");
+        }
+    }
+
+    #[test]
     fn typed_thresholds_read_back_as_typed() {
         let file =
             std::env::temp_dir().join(format!("herdr-menu-levels-{}.toml", std::process::id()));
