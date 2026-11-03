@@ -159,6 +159,11 @@ impl State {
         rows
     }
 
+    /// The selected one of `items`, the screen's items.
+    fn selected_item(&self, items: &[Item]) -> Item {
+        items[self.selected.min(items.len() - 1)]
+    }
+
     fn items(&self) -> Vec<Item> {
         self.rows()
             .into_iter()
@@ -511,7 +516,7 @@ pub fn run() -> Result<(), String> {
 fn scroll(state: &State, height: u16) -> usize {
     let visible = usize::from(height.saturating_sub(TOP + BOTTOM)).max(1);
     let items = state.items();
-    let selected = items[state.selected.min(items.len() - 1)];
+    let selected = state.selected_item(&items);
     let rows = state.rows();
     let at = rows
         .iter()
@@ -529,7 +534,7 @@ fn show(state: &mut State) -> io::Result<()> {
     loop {
         draw(state)?.show_if_new(&mut shown)?;
         let items = state.items();
-        let item = items[state.selected.min(items.len() - 1)];
+        let item = state.selected_item(&items);
         let event = event::read()?;
         if let Some(text) = &mut state.typing {
             if let Event::Key(key) = event
@@ -621,7 +626,7 @@ fn draw(state: &State) -> io::Result<Frame> {
         SetAttribute(Attribute::Reset)
     )?;
     let items = state.items();
-    let selected = items[state.selected.min(items.len() - 1)];
+    let selected = state.selected_item(&items);
     let rows = state.rows();
     let first = scroll(state, height);
     let last = height.saturating_sub(BOTTOM);

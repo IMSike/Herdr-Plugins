@@ -294,8 +294,14 @@ fn diagnostic(value: &Value) -> String {
 /// Left by the settings screen for the `Tools` pane it was opened from: the
 /// files are open, the pane offers to reload.
 pub fn opened_flag(state_dir: &Path, bar: &str) -> PathBuf {
-    state_dir.join(format!("files-open-{}", bar.replace(':', "-")))
+    state_dir.join(format!(
+        "{OPENED_FLAG_PREFIX}{}",
+        herdr_api::id_file_name(bar)
+    ))
 }
+
+/// What starts the name of an `opened_flag`.
+pub const OPENED_FLAG_PREFIX: &str = "files-open-";
 
 #[cfg(test)]
 mod tests {

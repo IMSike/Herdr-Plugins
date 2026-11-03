@@ -119,7 +119,9 @@ fn open() -> Result<(), String> {
     let state = herdr_api::state_dir()?;
     // What an action, or a write of the figures, killed midway left behind.
     herdr_api::remove_stale(&state, STALE_AFTER, |name| {
-        name.starts_with("choice-") || name.starts_with("files-open-") || name.ends_with(".partial")
+        name.starts_with("choice-")
+            || name.starts_with(settings::files::OPENED_FLAG_PREFIX)
+            || name.ends_with(".partial")
     });
     let choice_file = state.join(format!("choice-{}", std::process::id()));
     let files = [

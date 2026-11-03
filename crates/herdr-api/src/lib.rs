@@ -78,6 +78,11 @@ pub fn state_dir() -> Result<PathBuf, String> {
         .ok_or_else(|| absent(env::STATE_DIR))
 }
 
+/// A Herdr id (`w1:p2`) as a file name: Windows refuses `:` in one.
+pub fn id_file_name(id: &str) -> String {
+    id.replace(':', "-")
+}
+
 /// The plugin's config folder.
 pub fn config_dir() -> Result<PathBuf, String> {
     std::env::var_os(env::CONFIG_DIR)

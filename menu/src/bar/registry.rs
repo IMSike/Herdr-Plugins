@@ -21,10 +21,7 @@ pub fn forget_tab_locks(live: &[Pane]) {
     let Ok(dir) = herdr_api::state_dir() else {
         return;
     };
-    let live: HashSet<String> = live
-        .iter()
-        .map(|p| format!("{TAB_LOCK_PREFIX}{}.lock", Bars::file_name(&p.tab_id)))
-        .collect();
+    let live: HashSet<String> = live.iter().map(|p| tab_lock_name(&p.tab_id)).collect();
     herdr_api::remove_stale(&dir, std::time::Duration::ZERO, |name| {
         name.starts_with(TAB_LOCK_PREFIX) && !live.contains(name)
     });
@@ -37,7 +34,12 @@ pub fn lock_tab(tab_id: &str) -> Taken {
     let Ok(dir) = herdr_api::state_dir() else {
         return Taken::Unavailable;
     };
-    Lock::try_take(&dir.join(format!("{TAB_LOCK_PREFIX}{}.lock", Bars::file_name(tab_id))))
+    Lock::try_take(&dir.join(tab_lock_name(tab_id)))
+}
+
+/// The name of a tab's lock, in the state folder.
+fn tab_lock_name(tab_id: &str) -> String {
+    format!("{TAB_LOCK_PREFIX}{}.lock", herdr_api::id_file_name(tab_id))
 }
 
 pub struct Bars {
@@ -58,14 +60,10 @@ impl Bars {
         Self { dir: None }
     }
 
-    fn file_name(pane_id: &str) -> String {
-        pane_id.replace(':', "-")
-    }
-
     fn file(&self, pane_id: &str) -> Option<PathBuf> {
         self.dir
             .as_ref()
-            .map(|dir| dir.join(Self::file_name(pane_id)))
+            .map(|dir| dir.join(herdr_api::id_file_name(pane_id)))
     }
 
     /// Records `pane_id` as a bar. A failure is logged: the bar then is not
@@ -110,7 +108,10 @@ impl Bars {
         let Ok(files) = std::fs::read_dir(dir) else {
             return;
         };
-        let live: HashSet<String> = live.iter().map(|p| Self::file_name(&p.pane_id)).collect();
+        let live: HashSet<String> = live
+            .iter()
+            .map(|p| herdr_api::id_file_name(&p.pane_id))
+            .collect();
         for file in files.flatten() {
             if !live.contains(file.file_name().to_string_lossy().as_ref()) {
                 let _ = std::fs::remove_file(file.path());
