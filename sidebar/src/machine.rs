@@ -12,9 +12,8 @@ pub struct CpuTimes {
     pub busy: u64,
     /// Busy and idle time, in the system's unit.
     pub total: u64,
-    /// Milliseconds of all cores together, busy or idle; 0 when unknown (a
-    /// sample written by an older version).
-    #[serde(default)]
+    /// Milliseconds of all cores together, busy or idle; 0 when unknown (no
+    /// `/proc/uptime`).
     pub all_cores_ms: u64,
 }
 
