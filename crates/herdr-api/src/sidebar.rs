@@ -7,7 +7,7 @@ mod settings;
 mod totals;
 
 pub use settings::{Levels, Settings, TEMPLATE};
-pub use totals::{Gauge, Level, Thresholds, Totals, TotalsThresholds, check_thresholds};
+pub use totals::{Gauge, Level, Part, Thresholds, Totals, TotalsThresholds, check_thresholds};
 
 use std::path::{Path, PathBuf};
 

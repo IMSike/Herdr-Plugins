@@ -87,6 +87,25 @@ pub struct Totals {
     pub thresholds: TotalsThresholds,
 }
 
+/// A piece of the totals' line.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Part {
+    /// A figure, with its level when the colors are on.
+    Figure { text: String, level: Option<Level> },
+    /// The machine's glyph.
+    Glyph(String),
+    /// What separates the figures.
+    Gap(String),
+}
+
+impl Part {
+    pub fn text(&self) -> &str {
+        match self {
+            Self::Figure { text, .. } | Self::Glyph(text) | Self::Gap(text) => text,
+        }
+    }
+}
+
 /// One of the four figures of the totals, as a gauge: its text, how full
 /// its bar is, and where its thresholds fall on the bar.
 #[derive(Debug, Clone, PartialEq)]
@@ -156,26 +175,25 @@ impl Totals {
 
     /// `6% 2,4G · 󰍹 35% 21,3G`; a CPU share without average is left out.
     pub fn line(&self, numbers: &NumberFormat) -> String {
-        self.parts(numbers)
-            .into_iter()
-            .map(|(text, _)| text)
-            .collect()
+        self.parts(numbers).iter().map(Part::text).collect()
     }
 
-    /// The line in pieces, each figure with its level (when the colors are
-    /// on), the separators with none. The glyph keeps the space after it:
-    /// a terminal may draw it over two cells.
-    pub fn parts(&self, numbers: &NumberFormat) -> Vec<(String, Option<Level>)> {
+    /// The line in pieces. The glyph keeps the space after it: a terminal
+    /// may draw it over two cells.
+    pub fn parts(&self, numbers: &NumberFormat) -> Vec<Part> {
         let mut parts = Vec::new();
         for gauge in self.gauges(numbers) {
             if gauge.machine && gauge.cpu {
-                parts.push((" · ".to_string(), None));
-                parts.push((format!("{MACHINE_GLYPH} "), None));
+                parts.push(Part::Gap(" · ".to_string()));
+                parts.push(Part::Glyph(format!("{MACHINE_GLYPH} ")));
             }
             if let Some(text) = &gauge.text {
-                parts.push((text.clone(), gauge.level(self.colors)));
+                parts.push(Part::Figure {
+                    text: text.clone(),
+                    level: gauge.level(self.colors),
+                });
                 if gauge.cpu {
-                    parts.push((" ".to_string(), None));
+                    parts.push(Part::Gap(" ".to_string()));
                 }
             }
         }
@@ -233,7 +251,10 @@ mod tests {
             totals
                 .parts(&numbers)
                 .into_iter()
-                .filter_map(|(_, level)| level)
+                .filter_map(|part| match part {
+                    Part::Figure { level, .. } => level,
+                    _ => None,
+                })
                 .collect()
         };
         assert!(levels(&totals()).is_empty());

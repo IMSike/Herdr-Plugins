@@ -15,7 +15,7 @@ use crossterm::queue;
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use crossterm::terminal;
 use herdr_api::NumberFormat;
-use herdr_api::sidebar::{Gauge, Level, MACHINE_GLYPH, Totals};
+use herdr_api::sidebar::{Gauge, Level, MACHINE_GLYPH, Part, Totals};
 use std::collections::HashSet;
 use std::io::{self, Write};
 use std::path::Path;
@@ -702,15 +702,19 @@ fn draw_line(
         return Ok(());
     }
     let parts = totals.parts(numbers);
-    let whole: String = parts.iter().map(|(text, _)| text.as_str()).collect();
+    let whole: String = parts.iter().map(Part::text).collect();
     if crate::ui::width(&whole) > usize::from(width) {
         let text = fit(&whole, usize::from(width));
         return queue!(out, MoveTo(centered(0, width, &text), row), Print(text));
     }
     queue!(out, MoveTo(centered(0, width, &whole), row))?;
-    for (text, level) in &parts {
-        let shown = text.chars().any(char::is_numeric) || text.contains(MACHINE_GLYPH);
-        draw_figure(out, text, *level, shown)?;
+    for part in &parts {
+        let (level, bold) = match part {
+            Part::Figure { level, .. } => (*level, true),
+            Part::Glyph(_) => (None, true),
+            Part::Gap(_) => (None, false),
+        };
+        draw_figure(out, part.text(), level, bold)?;
     }
     Ok(())
 }
@@ -804,14 +808,14 @@ fn draw_figure(
     out: &mut impl Write,
     text: &str,
     level: Option<Level>,
-    figure: bool,
+    bold: bool,
 ) -> io::Result<()> {
-    let color = match (figure, level) {
+    let color = match (bold, level) {
         (false, _) => Color::DarkGrey,
         (true, None) => Color::Reset,
         (true, Some(level)) => level_color(level),
     };
-    if figure {
+    if bold {
         queue!(out, SetAttribute(Attribute::Bold))?;
     }
     queue!(
