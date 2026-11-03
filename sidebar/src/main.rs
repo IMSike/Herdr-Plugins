@@ -274,7 +274,10 @@ fn tick(mode: Mode) -> Result<(), String> {
         send(&block.pane_id, tokens);
     }
 
-    let total = measures.total;
+    // Herdr's whole process tree; the panes' alone while no shell is known.
+    let total = table
+        .server(shells.values().map(|s| s.pid))
+        .map_or(measures.total, |server| table.tree(server));
     let total_cpu = cpu(&total);
     let machine_cpu = previous
         .as_ref()
@@ -309,7 +312,7 @@ fn tick(mode: Mode) -> Result<(), String> {
 }
 
 /// What a run measured: each pane's usage, each workspace's, and the total
-/// of all of them (Herdr's).
+/// of all of them, Herdr's while its server is not known.
 #[derive(Debug, Default)]
 struct Measures<'a> {
     panes: Vec<(&'a str, Usage)>,

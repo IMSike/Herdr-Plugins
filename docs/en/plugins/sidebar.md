@@ -2,7 +2,7 @@
 
 **English** · [Français](../../fr/plugins/sidebar.md)
 
-Turns Herdr's Agents panel into a tree: each workspace's agents listed under its name, with CPU and memory per workspace and per agent and the number of shells each agent is running. The total of all panes and the whole machine's show in the [menu](menu.md)'s `Tools` pane, or in the tab bar. The plugin only reports values; how they look is set by the sidebar rows of Herdr's `config.toml`.
+Turns Herdr's Agents panel into a tree: each workspace's agents listed under its name, with CPU and memory per workspace and per agent and the number of shells each agent is running. The total of Herdr's processes and the whole machine's show in the [menu](menu.md)'s `Tools` pane, or in the tab bar. The plugin only reports values; how they look is set by the sidebar rows of Herdr's `config.toml`.
 
 ```
  agents                 arbre
@@ -83,7 +83,7 @@ Agent tokens (Agents panel):
 
 State glyphs: `◐` working, `◆` blocked, `●` done (finished, not seen yet), `○` idle, `·` unknown. The color rules above match these glyphs.
 
-Totals: `<cpu> <memory> · 󰍹 <cpu> <memory>` (`6% 2,4G · 󰍹 35% 21,3G`): the total of every pane of every workspace (agents, terminals, the explorer's and the menu's panes), then the whole machine's (after the Nerd Font monitor icon), updated at each run. It does not follow the workspace shown: it is the same in every `Tools` pane and stays when you switch workspaces. It is therefore larger than the sum of the agents, and than a workspace's `$ws_stats`. Each run writes them in `totals.json`, in the state folder, which the menu's `Tools` pane shows under its icons. The tab bar shows them only with `tab_bar = true`; otherwise its entry stays empty and Herdr leaves it out, separator included. The time (`14:05`) is Herdr's own `datetime` entry: it stays when the plugin fails. The machine's figures count every process, those the plugin cannot read too (protected processes, virtual machines): its CPU share comes from the system's CPU times, its memory is the memory in use (what the Task Manager shows as "In use" on Windows).
+Totals: `<cpu> <memory> · 󰍹 <cpu> <memory>` (`6% 2,4G · 󰍹 35% 21,3G`): the total of Herdr's processes, then the whole machine's (after the Nerd Font monitor icon), updated at each run. Herdr's processes are its server and everything it runs: every pane of every workspace (agents, terminals, the explorer's and the menu's panes), their console hosts on Windows (`OpenConsole.exe`), the popups and the plugins' runs. The server is the process that started the panes' shells; while no shell is known, the total is that of the panes alone. It does not follow the workspace shown: it is the same in every `Tools` pane and stays when you switch workspaces. It is therefore larger than the sum of the agents, and than a workspace's `$ws_stats`, which counts its panes alone. Each run writes them in `totals.json`, in the state folder, which the menu's `Tools` pane shows under its icons. The tab bar shows them only with `tab_bar = true`; otherwise its entry stays empty and Herdr leaves it out, separator included. The time (`14:05`) is Herdr's own `datetime` entry: it stays when the plugin fails. The machine's figures count every process, those the plugin cannot read too (protected processes, virtual machines): its CPU share comes from the system's CPU times, its memory is the memory in use (what the Task Manager shows as "In use" on Windows).
 
 - **CPU**: used since the previous run, as a share of the whole machine, rounded to the percent (`0%`, `12%`: below 0.5% shows `0%`); missing on the first run, and when the previous run is less than a second or more than two minutes old.
 - **Memory**: working set on Windows, resident memory elsewhere (`850M`, `1,2G`).
@@ -124,7 +124,7 @@ The sidebar writes its totals, with their thresholds, in `totals.json`; the menu
 
 | Thresholds | Default | For |
 |---|---|---|
-| `cpu_levels` | `[10, 25, 50]` (% of the machine) | the CPU of all the workspaces (Herdr's processes) |
+| `cpu_levels` | `[10, 25, 50]` (% of the machine) | the CPU of Herdr's processes (its server and everything it runs) |
 | `memory_levels` | `[1, 2, 4]` (GiB) | their memory |
 | `machine_cpu_levels` | `[50, 70, 90]` (%) | the machine's CPU |
 | `machine_memory_levels` | `[60, 75, 90]` (% of its memory) | the machine's memory in use |

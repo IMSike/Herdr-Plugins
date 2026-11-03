@@ -126,6 +126,29 @@ impl<'a> Table<'a> {
         (now as i64 - then as i64 - self.shift).abs() <= 1
     }
 
+    /// The process that started most of `shells`: Herdr's server, whose
+    /// tree holds every pane, its console host on Windows, the popups and
+    /// the plugins' runs. `None` without a shell whose parent runs.
+    pub fn server(&self, shells: impl IntoIterator<Item = u32>) -> Option<u32> {
+        let mut counts: HashMap<u32, usize> = HashMap::new();
+        for shell in shells {
+            let Some(proc) = self.by_pid.get(&shell) else {
+                continue;
+            };
+            // A parent started after its child is a reused pid.
+            if let Some(parent) = proc.parent.and_then(|p| self.by_pid.get(&p))
+                && parent.pid != proc.pid
+                && parent.start_time <= proc.start_time
+            {
+                *counts.entry(parent.pid).or_default() += 1;
+            }
+        }
+        counts
+            .into_iter()
+            .max_by_key(|&(pid, n)| (n, std::cmp::Reverse(pid)))
+            .map(|(pid, _)| pid)
+    }
+
     /// Usage of `root` and all its descendants.
     pub fn tree(&self, root: u32) -> Usage {
         let mut usage = Usage::default();
@@ -257,6 +280,26 @@ mod tests {
                 shells: 2
             }
         );
+    }
+
+    #[test]
+    fn the_server_is_the_shells_parent() {
+        let procs = vec![
+            proc(1, None, 0, 0, "herdr.exe"),
+            proc(2, Some(1), 1, 0, "OpenConsole.exe"),
+            proc(3, Some(1), 2, 0, "pwsh.exe"),
+            proc(4, Some(1), 3, 0, "pwsh.exe"),
+            proc(5, Some(9), 4, 0, "bash.exe"),
+            // Its parent's pid was reused by a later process.
+            proc(6, Some(7), 5, 0, "bash.exe"),
+            proc(7, None, 9, 0, "other.exe"),
+        ];
+        let (shells, empty) = (shells(), Sample::default());
+        let table = Table::new(&procs, &empty, &shells);
+        assert_eq!(table.server([3, 4, 5, 6]), Some(1));
+        assert_eq!(table.server([6]), None);
+        assert_eq!(table.server([]), None);
+        assert_eq!(table.tree(1).memory, 400);
     }
 
     #[test]

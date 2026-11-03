@@ -75,7 +75,7 @@ impl Default for TotalsThresholds {
 pub struct Totals {
     /// When they were measured (Unix milliseconds).
     pub at_ms: u64,
-    /// CPU share of every pane, in percent; `None` on a run without average.
+    /// CPU share of Herdr's processes, in percent; `None` on a run without average.
     pub cpu: Option<f64>,
     pub memory: u64,
     pub machine_cpu: Option<f64>,

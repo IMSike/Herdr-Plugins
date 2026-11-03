@@ -2,7 +2,7 @@
 
 [English](../../en/plugins/sidebar.md) · **Français**
 
-Transforme le panneau Agents de Herdr en arbre : les agents de chaque workspace listés sous son nom, avec CPU et mémoire par workspace et par agent, et le nombre de shells lancés par chaque agent. Le total de tous les panes et celui de la machine entière s'affichent dans le pane `Tools` du [menu](menu.md), ou dans la barre d'onglets. Le plugin ne fait que fournir les valeurs ; leur affichage se règle dans les lignes de sidebar du `config.toml` de Herdr.
+Transforme le panneau Agents de Herdr en arbre : les agents de chaque workspace listés sous son nom, avec CPU et mémoire par workspace et par agent, et le nombre de shells lancés par chaque agent. Le total des processus de Herdr et celui de la machine entière s'affichent dans le pane `Tools` du [menu](menu.md), ou dans la barre d'onglets. Le plugin ne fait que fournir les valeurs ; leur affichage se règle dans les lignes de sidebar du `config.toml` de Herdr.
 
 ```
  agents                 arbre
@@ -83,7 +83,7 @@ Tokens des agents (panneau Agents) :
 
 Symboles d'état : `◐` au travail, `◆` bloqué, `●` terminé (pas encore vu), `○` inactif, `·` inconnu. Les règles de couleur ci-dessus se basent sur ces symboles.
 
-Totaux : `<cpu> <mémoire> · 󰍹 <cpu> <mémoire>` (`6% 2,4G · 󰍹 35% 21,3G`) : le total de tous les panes de tous les workspaces (agents, terminaux, panes de l'explorateur et du menu), puis celui de la machine entière (après l'icône écran Nerd Font), mis à jour à chaque passage. Il ne suit pas le workspace affiché : il est le même dans chaque pane `Tools` et ne change pas quand on change de workspace. Il dépasse donc la somme des agents, et le `$ws_stats` d'un workspace. Chaque passage les écrit dans `totals.json`, dans le dossier d'état, que le pane `Tools` du menu affiche sous ses icônes. La barre d'onglets ne les affiche qu'avec `tab_bar = true` ; sinon son entrée reste vide et Herdr l'omet, séparateur compris. L'heure (`14:05`) est l'entrée `datetime` propre à Herdr : elle reste affichée si le plugin échoue. Les chiffres de la machine comptent tous les processus, y compris ceux que le plugin ne peut pas lire (processus protégés, machines virtuelles) : sa part de CPU vient des temps CPU du système, sa mémoire est la mémoire utilisée (ce que le Gestionnaire des tâches affiche comme « En cours d'utilisation » sous Windows).
+Totaux : `<cpu> <mémoire> · 󰍹 <cpu> <mémoire>` (`6% 2,4G · 󰍹 35% 21,3G`) : le total des processus de Herdr, puis celui de la machine entière (après l'icône écran Nerd Font), mis à jour à chaque passage. Les processus de Herdr sont son serveur et tout ce qu'il lance : tous les panes de tous les workspaces (agents, terminaux, panes de l'explorateur et du menu), leurs hôtes de console sous Windows (`OpenConsole.exe`), les popups et les passages des plugins. Le serveur est le processus qui a lancé les shells des panes ; tant qu'aucun shell n'est connu, le total est celui des seuls panes. Il ne suit pas le workspace affiché : il est le même dans chaque pane `Tools` et ne change pas quand on change de workspace. Il dépasse donc la somme des agents, et le `$ws_stats` d'un workspace, qui ne compte que ses panes. Chaque passage les écrit dans `totals.json`, dans le dossier d'état, que le pane `Tools` du menu affiche sous ses icônes. La barre d'onglets ne les affiche qu'avec `tab_bar = true` ; sinon son entrée reste vide et Herdr l'omet, séparateur compris. L'heure (`14:05`) est l'entrée `datetime` propre à Herdr : elle reste affichée si le plugin échoue. Les chiffres de la machine comptent tous les processus, y compris ceux que le plugin ne peut pas lire (processus protégés, machines virtuelles) : sa part de CPU vient des temps CPU du système, sa mémoire est la mémoire utilisée (ce que le Gestionnaire des tâches affiche comme « En cours d'utilisation » sous Windows).
 
 - **CPU** : utilisé depuis le passage précédent, en part de la machine entière, arrondi au pourcent (`0%`, `12%` : moins de 0,5 % s'affiche `0%`) ; absent au premier passage, et quand le passage précédent date de moins d'une seconde ou de plus de deux minutes.
 - **Mémoire** : working set sous Windows, mémoire résidente ailleurs (`850M`, `1,2G`).
@@ -124,7 +124,7 @@ La sidebar écrit ses totaux, avec leurs seuils, dans `totals.json` ; le pane `T
 
 | Seuils | Par défaut | Pour |
 |---|---|---|
-| `cpu_levels` | `[10, 25, 50]` (% de la machine) | le CPU de tous les workspaces (les processus de Herdr) |
+| `cpu_levels` | `[10, 25, 50]` (% de la machine) | le CPU des processus de Herdr (son serveur et tout ce qu'il lance) |
 | `memory_levels` | `[1, 2, 4]` (Go) | leur mémoire |
 | `machine_cpu_levels` | `[50, 70, 90]` (%) | le CPU de la machine |
 | `machine_memory_levels` | `[60, 75, 90]` (% de sa mémoire) | la mémoire utilisée de la machine |

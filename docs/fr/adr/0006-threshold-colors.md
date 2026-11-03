@@ -24,7 +24,7 @@ Seuils : le CPU d'un agent est une part de toute la machine, et la mémoire util
 L'option a a d'abord été essayée, puis abandonnée pour les agents : dans le panneau Agents, les chiffres colorés ne rendaient pas aussi bien que prévu. Les couleurs restent dans le seul pane `Tools`, qui les dessine lui-même :
 
 - le réglage `colors` de la sidebar (désactivé par défaut) les active ; la sémantique de `gt` de Herdr est gardée (au-dessus d'un seuil, strictement, c'est le niveau suivant) ;
-- deux sortes de seuils, chacune un jeu de trois valeurs croissantes : le total de Herdr (tous les workspaces), `cpu_levels` en pourcentage de la machine et `memory_levels` en Go ; la machine, `machine_cpu_levels` et `machine_memory_levels` en pourcentage ;
+- deux sortes de seuils, chacune un jeu de trois valeurs croissantes : le total de Herdr (son serveur et tout ce qu'il lance), `cpu_levels` en pourcentage de la machine et `memory_levels` en Go ; la machine, `machine_cpu_levels` et `machine_memory_levels` en pourcentage ;
 - la sidebar écrit les totaux avec leurs seuils dans `totals.json` ; le pane `Tools` en déduit les niveaux. Ses barres (`totals = "bars"` dans `menu.toml`) passent du vert au rouge en dégradé par les mêmes seuils, que `colors` soit activé ou non.
 
 Les valeurs de la sidebar ne portent aucun marqueur : le panneau Agents garde les couleurs du `config.toml` de Herdr.

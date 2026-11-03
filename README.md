@@ -11,7 +11,7 @@
 | Plugin | Contents |
 |---|---|
 | [`menu`](docs/en/plugins/menu.md) | Starts a tool (lazygit, gh-dash, VS Code…) from a `Tools` pane of icons above the file explorer, or from a popup menu; figures on the workspace folder; updates Herdr, opens the settings |
-| [`sidebar`](docs/en/plugins/sidebar.md) | A workspace → agents tree in Herdr's Agents panel, with CPU, memory and shell counts; totals of all panes and of the whole machine for the menu's `Tools` pane or the tab bar |
+| [`sidebar`](docs/en/plugins/sidebar.md) | A workspace → agents tree in Herdr's Agents panel, with CPU, memory and shell counts; totals of Herdr's processes and of the whole machine for the menu's `Tools` pane or the tab bar |
 
 ## Installation
 

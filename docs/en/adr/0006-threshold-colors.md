@@ -24,7 +24,7 @@ Thresholds: an agent's CPU is a share of the whole machine, and the machine's me
 Option a was tried first, then dropped for the agents: in the Agents panel, the colored figures did not render as well as expected. The colors stay in the `Tools` pane only, which draws them itself:
 
 - the sidebar's `colors` setting (off by default) turns them on; Herdr's `gt` semantics are kept (above a threshold, strictly, is the next level);
-- two kinds of thresholds, each a set of three increasing values: Herdr's total (all the workspaces), `cpu_levels` in percent of the machine and `memory_levels` in GiB; the machine, `machine_cpu_levels` and `machine_memory_levels` in percent;
+- two kinds of thresholds, each a set of three increasing values: Herdr's total (its server and everything it runs), `cpu_levels` in percent of the machine and `memory_levels` in GiB; the machine, `machine_cpu_levels` and `machine_memory_levels` in percent;
 - the sidebar writes the totals with their thresholds in `totals.json`; the `Tools` pane works out the levels. Its bars (`totals = "bars"` in `menu.toml`) fade from green to red through the same thresholds, whether `colors` is on or not.
 
 The sidebar's values carry no marker: the Agents panel keeps the colors of Herdr's `config.toml`.
