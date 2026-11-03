@@ -183,7 +183,7 @@ The plugin only opens Herdr's `config.toml`: it never writes it ([ADR 0004](../a
 
 **The popup menu**
 
-- Herdr shows one popup at a time. The action therefore stays running while the menu is open: it waits for the menu to write the choice into a file of the plugin's state folder, then opens the tool's popup once the menu's is gone. While waiting it uses about 4 MB of memory, checks the file 20 times a second, and checks once a second that the menu still runs.
+- Herdr shows one popup at a time. The action therefore stays running while the menu is open: it waits for the menu to write the choice into a file of the plugin's state folder, then opens the tool's popup once the menu's is gone. While waiting it uses about 4 MB of memory, checks the file 20 times a second, and checks once a second that the menu still runs, through a lock the menu holds, which the system releases when the menu ends, killed included.
 - If the menu popup is closed by something else than the menu itself, the action sees within a second that the menu is gone, and stops.
 
 **Settings and update**

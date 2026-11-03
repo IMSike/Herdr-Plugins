@@ -49,8 +49,6 @@ const ALIVE_EVERY: Duration = Duration::from_secs(1);
 const STALE_AFTER: Duration = Duration::from_secs(24 * 3600);
 /// How often the action looks for the choice file.
 const CHOICE_CHECK_EVERY: Duration = Duration::from_millis(50);
-/// Checks in a row that cannot read the processes before the menu counts as gone.
-const UNREADABLE_CHECKS: u32 = 3;
 
 fn main() -> ExitCode {
     let result = match std::env::args().nth(1).as_deref() {
@@ -124,15 +122,22 @@ fn open() -> Result<(), String> {
         name.starts_with("choice-") || name.starts_with("files-open-") || name.ends_with(".partial")
     });
     let choice_file = state.join(format!("choice-{}", std::process::id()));
-    let pid_file = pid_file(&choice_file);
-    let _ = std::fs::remove_file(&choice_file);
-    let _ = std::fs::remove_file(&pid_file);
+    let files = [
+        choice_file.clone(),
+        beside(&choice_file, ".lock"),
+        beside(&choice_file, ".started"),
+    ];
+    let remove = || {
+        for file in &files {
+            let _ = std::fs::remove_file(file);
+        }
+    };
+    remove();
     let choice_path = choice_file.to_string_lossy().into_owned();
     herdr::open_pane("menu", &[(CHOICE_ENV, &choice_path)]).map_err(|e| e.to_string())?;
 
-    let text = wait_for_choice(&choice_file, &pid_file);
-    let _ = std::fs::remove_file(&choice_file);
-    let _ = std::fs::remove_file(&pid_file);
+    let text = wait_for_choice(&files[0], &files[1], &files[2]);
+    remove();
     let Some(choice) = text?.as_deref().and_then(Choice::decode) else {
         return Ok(());
     };
@@ -156,32 +161,27 @@ pub(crate) fn start(entry: &Entry, cwd: Option<&str>, bar: Option<&str>) -> Resu
 }
 
 /// The choice file's content once the menu wrote it; `None` when the menu
-/// went away without writing it (its popup closed by something else).
-fn wait_for_choice(choice_file: &Path, pid_file: &Path) -> Result<Option<String>, String> {
-    let started = Instant::now();
-    let mut next_check = started + ALIVE_EVERY;
-    let mut unreadable = 0;
+/// went away without writing it (its popup closed by something else). The
+/// menu runs while it holds `lock`: the system releases it when the menu
+/// ends, killed included.
+fn wait_for_choice(
+    choice_file: &Path,
+    lock: &Path,
+    started: &Path,
+) -> Result<Option<String>, String> {
+    let since = Instant::now();
+    let mut next_check = since + ALIVE_EVERY;
     loop {
         if let Ok(text) = std::fs::read_to_string(choice_file) {
             return Ok(Some(text));
         }
         if Instant::now() >= next_check {
             next_check += ALIVE_EVERY;
-            let menu = std::fs::read_to_string(pid_file)
-                .ok()
-                .and_then(|text| MenuProcess::decode(&text));
-            let gone = match menu {
-                Some(menu) => match menu.is_running() {
-                    Some(running) => {
-                        unreadable = 0;
-                        !running
-                    }
-                    None => {
-                        unreadable += 1;
-                        unreadable >= UNREADABLE_CHECKS
-                    }
-                },
-                None => started.elapsed() >= START_TIMEOUT,
+            let gone = if started.exists() {
+                // Held by the menu while it runs; taken here once it is gone.
+                !matches!(herdr_api::Lock::take(lock), Ok(None))
+            } else {
+                since.elapsed() >= START_TIMEOUT
             };
             if gone {
                 // It may have written its choice just before exiting.
@@ -192,73 +192,12 @@ fn wait_for_choice(choice_file: &Path, pid_file: &Path) -> Result<Option<String>
     }
 }
 
-fn pid_file(choice_file: &Path) -> PathBuf {
+/// A file beside the choice file: `.lock`, the lock the menu holds while it
+/// runs; `.started`, written once it holds it.
+fn beside(choice_file: &Path, extension: &str) -> PathBuf {
     let mut name = choice_file.as_os_str().to_os_string();
-    name.push(".pid");
+    name.push(extension);
     PathBuf::from(name)
-}
-
-/// The menu's process, as the menu writes it in the pid file: its pid, and
-/// when it started (when the system said), which tells it from a later
-/// process given the same pid.
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct MenuProcess {
-    pid: u32,
-    start_time: Option<u64>,
-}
-
-impl MenuProcess {
-    fn this() -> Self {
-        let pid = std::process::id();
-        let start_time = process(pid).flatten().map(|(_, start)| start);
-        Self { pid, start_time }
-    }
-
-    fn encode(&self) -> String {
-        match self.start_time {
-            Some(start) => format!("{} {start}", self.pid),
-            None => self.pid.to_string(),
-        }
-    }
-
-    fn decode(text: &str) -> Option<Self> {
-        let mut parts = text.split_whitespace();
-        let pid = parts.next()?.parse().ok()?;
-        let start_time = match parts.next() {
-            Some(start) => Some(start.parse().ok()?),
-            None => None,
-        };
-        Some(Self { pid, start_time })
-    }
-
-    /// Whether the menu still runs; `None` when the processes cannot be read.
-    fn is_running(&self) -> Option<bool> {
-        Some(process(self.pid)?.is_some_and(|(name, start_time)| {
-            // Linux derives start times from the boot time, which a clock
-            // adjustment moves by a second.
-            self.start_time
-                .is_none_or(|start| start.abs_diff(start_time) <= 1)
-                && is_this_program(&name)
-        }))
-    }
-}
-
-/// The name and start time of the process `pid`, if it runs; `None` when the
-/// processes cannot be read.
-fn process(pid: u32) -> Option<Option<(String, u64)>> {
-    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
-    let mut system = System::new().ok()?;
-    let pid = Pid::from_u32(pid);
-    system.refresh_processes_specifics(
-        ProcessesToUpdate::Some(&[pid]),
-        true,
-        ProcessRefreshKind::nothing(),
-    );
-    Some(
-        system
-            .process(pid)
-            .map(|p| (p.name().to_string_lossy().into_owned(), p.start_time())),
-    )
 }
 
 /// Whether a process name is this program's: the menu, the bar and the
@@ -296,9 +235,15 @@ fn write_choice(path: &Path, choice: Option<&Choice>) -> io::Result<()> {
 
 fn menu() -> Result<(), String> {
     let choice_file = PathBuf::from(herdr_api::var(CHOICE_ENV)?);
-    // Tells the waiting action that the menu runs, and which process to watch.
-    let me = MenuProcess::this().encode();
-    let _ = herdr_api::write_atomic(&pid_file(&choice_file), me.as_bytes());
+    // Tells the waiting action that the menu runs: it holds the lock until
+    // it ends. Without the lock, the action waits for the choice until its
+    // start timeout.
+    let running = herdr_api::Lock::take(&beside(&choice_file, ".lock"))
+        .ok()
+        .flatten();
+    if running.is_some() {
+        let _ = herdr_api::write_atomic(&beside(&choice_file, ".started"), b"");
+    }
     let (menu, error) = menu_config();
     // The disk figures belong to the bar: the explorer's folder.
     let entries: Vec<Entry> = menu
@@ -416,24 +361,7 @@ mod tests {
     }
 
     #[test]
-    fn this_process_runs() {
-        let me = MenuProcess::this();
-        assert!(me.start_time.is_some());
-        assert_eq!(MenuProcess::decode(&me.encode()), Some(me));
-        assert_eq!(me.is_running(), Some(true));
-        // A later process given the same pid is another one.
-        let other = MenuProcess {
-            start_time: me.start_time.map(|s| s + 10),
-            ..me
-        };
-        assert_eq!(other.is_running(), Some(false));
-        assert_eq!(
-            MenuProcess::decode("42"),
-            Some(MenuProcess {
-                pid: 42,
-                start_time: None
-            })
-        );
+    fn names_of_this_program() {
         assert!(same_program("herdr-menu.exe", "HERDR-MENU.EXE"));
         assert!(same_program(
             "herdr_menu-0123456789abcdef",
