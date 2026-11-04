@@ -27,19 +27,36 @@ command = ["target/release/herdr-sidebar", "event"]
 on = "pane.agent_status_changed"
 command = ["target/release/herdr-sidebar", "event"]
 
-# A new workspace gets its header without waiting for the next run.
+# A new, renamed or moved workspace gets its header and its place without
+# waiting for the next run (`reordered`: several moved at once).
 [[events]]
 on = "workspace.created"
 command = ["target/release/herdr-sidebar", "event"]
 
-# A tab renamed or moved, or a pane closed, changes the agents' places and
-# lines in the tree.
+[[events]]
+on = "workspace.renamed"
+command = ["target/release/herdr-sidebar", "event"]
+
+[[events]]
+on = "workspace.moved"
+command = ["target/release/herdr-sidebar", "event"]
+
+[[events]]
+on = "workspace.reordered"
+command = ["target/release/herdr-sidebar", "event"]
+
+# A tab renamed or moved, or a pane moved or closed, changes the agents'
+# places and lines in the tree.
 [[events]]
 on = "tab.renamed"
 command = ["target/release/herdr-sidebar", "event"]
 
 [[events]]
 on = "tab.moved"
+command = ["target/release/herdr-sidebar", "event"]
+
+[[events]]
+on = "pane.moved"
 command = ["target/release/herdr-sidebar", "event"]
 
 [[events]]
