@@ -21,7 +21,7 @@ Chaque plugin s'installe seul, depuis son dossier dans ce dépôt :
 herdr plugin install IMSike/Herdr-Plugins/<plugin>
 ```
 
-La compilation demande le toolchain Rust (`cargo`, Rust 1.89 ou plus récent) et, sous Windows, les Build Tools de Visual Studio avec la charge de travail C++ ([ADR 0001](docs/fr/adr/0001-rust-cargo-workspace.md)).
+La compilation demande le toolchain Rust (`cargo`, Rust 1.95 ou plus récent) et, sous Windows, les Build Tools de Visual Studio avec la charge de travail C++ ([ADR 0001](docs/fr/adr/0001-rust-cargo-workspace.md)).
 
 Les mises à jour ne sont jamais automatiques : `herdr plugin update` récupère le dernier commit de `main` (chaque push sur `main` est une version) pour tous les plugins installés depuis GitHub, ou `herdr plugin update <id-du-plugin>` celui d'un seul plugin ([ADR 0002](docs/fr/adr/0002-plugin-versions.md)).
 
