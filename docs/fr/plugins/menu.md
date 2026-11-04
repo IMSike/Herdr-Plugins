@@ -145,7 +145,7 @@ La fenêtre attend Entrée avant de se fermer, erreur comprise. Tant qu'elle est
 | Couleurs | `colors` : les [couleurs par seuil](sidebar.md#couleurs-par-seuil) | `sidebar.toml` |
 | Seuils CPU, Seuils mémoire (Workspaces ; machine) | les quatre jeux de seuils : Entrée pour taper trois valeurs croissantes séparées par des espaces (`10 25 50`), Entrée pour enregistrer, Échap pour annuler | `sidebar.toml` |
 | Ouvrir les fichiers de configuration… | ouvre les fichiers dans un éditeur, voir plus bas | |
-| Recharger la configuration de Herdr | recharge le `config.toml` de Herdr et dit si Herdr l'a accepté | |
+| Recharger la configuration de Herdr | recharge le `config.toml` de Herdr et dit si Herdr l'a appliqué, en partie (une section qu'il refuse ou qui demande un redémarrage garde ses réglages actuels : la première raison est affichée), ou refusé | |
 
 Les lignes Sidebar et Couleurs n'apparaissent que si le plugin [sidebar](sidebar.md) est installé. Quand la sidebar ignore son `sidebar.toml` (réglage inconnu, seuils pas en ordre…), l'écran dit pourquoi en rouge et affiche les valeurs par défaut, celles que la sidebar utilise. Un fichier est écrit en gardant ses commentaires et ses autres réglages : un réglage en commentaire y prend sa valeur à sa place. Le fichier d'un plugin qui n'existe pas encore est d'abord créé depuis son modèle, tous les réglages en commentaire à leur valeur par défaut.
 

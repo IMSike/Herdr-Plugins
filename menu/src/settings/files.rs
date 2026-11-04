@@ -261,7 +261,9 @@ pub fn edit_in_tab() -> Result<(), String> {
 }
 
 /// Reloads Herdr's configuration; says how it went. `Err` when Herdr
-/// refused it: the previous configuration stays.
+/// refused it all (`failed`): the previous configuration stays. Herdr
+/// applies a file in part (`partial`) when some sections are invalid or
+/// need a restart: those keep their current settings, the rest is applied.
 pub fn reload() -> Result<String, String> {
     let result =
         herdr_api::request("server.reload_config", json!({})).map_err(|e| e.to_string())?;
@@ -269,18 +271,21 @@ pub fn reload() -> Result<String, String> {
         .as_array()
         .map(|all| all.iter().map(diagnostic).collect())
         .unwrap_or_default();
-    if result["status"] != "applied" {
-        return Err(format!(
+    reload_message(result["status"].as_str(), diagnostics.first())
+}
+
+fn reload_message(status: Option<&str>, first: Option<&String>) -> Result<String, String> {
+    match (status, first) {
+        (Some("applied"), None) => Ok("configuration de Herdr rechargée".into()),
+        (Some("applied" | "partial"), Some(first)) => {
+            Ok(format!("configuration rechargée en partie : {first}"))
+        }
+        (Some("partial"), None) => Ok("configuration rechargée en partie".into()),
+        _ => Err(format!(
             "config.toml refusé : {}",
-            diagnostics
-                .first()
-                .map_or("raison inconnue", String::as_str)
-        ));
+            first.map_or("raison inconnue", String::as_str)
+        )),
     }
-    Ok(match diagnostics.first() {
-        Some(first) => format!("configuration rechargée, avec : {first}"),
-        None => "configuration de Herdr rechargée".into(),
-    })
 }
 
 fn diagnostic(value: &Value) -> String {
@@ -329,6 +334,18 @@ mod tests {
             Editor::WindowPerFile(argv("C:\\Tools\\Notepad.exe"))
         );
         assert_eq!(classify(argv("nvim")), Editor::Terminal(argv("nvim")));
+    }
+
+    #[test]
+    fn a_partial_reload_is_applied_but_said() {
+        let why = "terminal.kitty_graphics changes require restarting Herdr".to_string();
+        assert_eq!(
+            reload_message(Some("applied"), None),
+            Ok("configuration de Herdr rechargée".into())
+        );
+        assert!(reload_message(Some("partial"), Some(&why)).is_ok_and(|m| m.contains(&why)));
+        assert!(reload_message(Some("failed"), Some(&why)).is_err());
+        assert!(reload_message(None, None).is_err());
     }
 
     #[test]
