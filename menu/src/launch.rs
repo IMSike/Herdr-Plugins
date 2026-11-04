@@ -118,11 +118,11 @@ pub fn leave_the_pane(command: &mut Command) {
 }
 
 fn is_the_panes(name: &str) -> bool {
-    use herdr_api::env::{BIN_PATH, INSIDE, PANE_ID, STARTUP_CWD, TAB_ID, WORKSPACE_ID};
+    use herdr_api::env::{BIN_PATH, INSIDE, PANE_ID, TAB_ID, WORKSPACE_ID};
     let name = name.to_uppercase();
     name.starts_with("HERDR_PLUGIN_")
         || name.starts_with("HERDR_MENU_")
-        || [INSIDE, PANE_ID, WORKSPACE_ID, TAB_ID, STARTUP_CWD, BIN_PATH].contains(&name.as_str())
+        || [INSIDE, PANE_ID, WORKSPACE_ID, TAB_ID, BIN_PATH].contains(&name.as_str())
 }
 
 /// Starts `command` without waiting for it: its output goes nowhere, and it

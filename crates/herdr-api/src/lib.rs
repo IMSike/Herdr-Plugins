@@ -54,10 +54,9 @@ pub mod env {
     pub const EVENT_JSON: &str = "HERDR_PLUGIN_EVENT_JSON";
     /// The pane a plugin pane's program runs in.
     pub const PANE_ID: &str = "HERDR_PANE_ID";
-    /// The workspace and the tab of a pane, and the folder it started in.
+    /// The workspace and the tab of a pane.
     pub const WORKSPACE_ID: &str = "HERDR_WORKSPACE_ID";
     pub const TAB_ID: &str = "HERDR_TAB_ID";
-    pub const STARTUP_CWD: &str = "HERDR_STARTUP_CWD";
     /// The `herdr` binary that runs this session, in Herdr's panes.
     pub const BIN_PATH: &str = "HERDR_BIN_PATH";
     /// Herdr's `config.toml`, when set.
