@@ -59,9 +59,9 @@ Commit messages and pull request titles follow the [Angular convention](https://
 | `ci` | GitHub Actions workflows |
 | `revert` | Reverts a previous commit |
 
-Usual scopes: the plugin's name, `repo`. The subject is in the imperative, lowercase, without a final period. One commit = one coherent change, about one plugin.
+Scopes: the plugin's name (`menu`, `sidebar`), `herdr-api` for the shared crate alone, `repo` for the rest (documentation, workflows, a change of the shared crate with its users in the plugins). The subject is in the imperative, lowercase, without a final period. One commit = one coherent change, about one plugin.
 
-Messages are checked by the `.githooks/commit-msg` hook and by the [Commit messages](.github/workflows/commit-lint.yml) workflow.
+The `.githooks/commit-msg` hook and the [Commit messages](.github/workflows/commit-lint.yml) workflow check the type and the scope.
 
 ## Versions
 

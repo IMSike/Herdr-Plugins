@@ -63,3 +63,4 @@ La liaison ne lance aucune étape de build : recompilez après chaque modificati
 2. Écrivez `docs/en/plugins/<nom>.md` et `docs/fr/plugins/<nom>.md` : chaque fonctionnalité, ce qu'elle affiche ou fait, ses implications, comment la désactiver.
 3. Ajoutez le plugin aux tableaux de `README.md`, `README.fr.md` et `docs/{en,fr}/README.md`.
 4. Un choix important fait l'objet d'un ADR dans `docs/{en,fr}/adr/`.
+5. Ajoutez le nom du plugin aux portées de `.githooks/commit-msg` et de `.github/workflows/commit-lint.yml`, et à la liste de `CONTRIBUTING.md` et `CONTRIBUTING.fr.md`.

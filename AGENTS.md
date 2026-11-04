@@ -49,6 +49,6 @@ cargo test --locked
 
 ## Git
 
-- Maintainer's own work happens on the `dev` branch: never commit or push to `main` for them, they merge `dev` into `main`, which publishes a version. External contributions are pull requests to `main`. Commit messages and PR titles follow the **Angular convention** (`feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `revert`); there is no `chore`. The scope is the plugin's name (`feat(sidebar): ...`) or `repo`.
+- Maintainer's own work happens on the `dev` branch: never commit or push to `main` for them, they merge `dev` into `main`, which publishes a version. External contributions are pull requests to `main`. Commit messages and PR titles follow the **Angular convention** (`feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `revert`); there is no `chore`. The scope is the plugin's name (`feat(sidebar): ...`), `herdr-api` for the shared crate alone, or `repo`.
 - One commit = one coherent change; one plugin per commit.
 - Keep this file up to date when a convention changes.

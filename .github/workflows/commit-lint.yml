@@ -1,7 +1,8 @@
 name: Commit messages
 
 # Commit messages and pull request titles must follow the Angular convention:
-# <type>(<scope>)?: <subject>, type in build, ci, docs, feat, fix, perf, refactor, revert, test.
+# <type>(<scope>): <subject>, type in build, ci, docs, feat, fix, perf, refactor, revert, test,
+# scope in menu, sidebar, herdr-api, repo (as .githooks/commit-msg).
 # See CONTRIBUTING.md.
 
 on:
@@ -30,7 +31,7 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
           AFTER_SHA: ${{ github.event.after }}
         run: |
-          pattern='^(build|ci|docs|feat|fix|perf|refactor|revert|test)(\([a-z0-9._/-]+\))?!?: .+'
+          pattern='^(build|ci|docs|feat|fix|perf|refactor|revert|test)\((menu|sidebar|herdr-api|repo)\)!?: .+'
           failed=0
           check() {
             if printf '%s' "$1" | grep -Eq "$pattern"; then

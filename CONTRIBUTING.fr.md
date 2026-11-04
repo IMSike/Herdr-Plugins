@@ -59,9 +59,9 @@ Les messages de commit et les titres de pull request suivent la [convention Angu
 | `ci` | Workflows GitHub Actions |
 | `revert` | Annule un commit précédent |
 
-Portées habituelles : le nom du plugin, `repo`. Le sujet est à l'impératif, en minuscules, sans point final. Un commit = un changement cohérent, sur un seul plugin.
+Portées : le nom du plugin (`menu`, `sidebar`), `herdr-api` pour la seule crate partagée, `repo` pour le reste (documentation, workflows, un changement de la crate partagée avec ses utilisateurs dans les plugins). Le sujet est à l'impératif, en minuscules, sans point final. Un commit = un changement cohérent, sur un seul plugin.
 
-Les messages sont vérifiés par le hook `.githooks/commit-msg` et par le workflow [Commit messages](.github/workflows/commit-lint.yml).
+Le hook `.githooks/commit-msg` et le workflow [Commit messages](.github/workflows/commit-lint.yml) vérifient le type et la portée.
 
 ## Versions
 

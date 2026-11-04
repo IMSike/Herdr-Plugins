@@ -3,7 +3,8 @@
 # Enable once per clone: git config core.hooksPath .githooks
 
 subject=$(head -n 1 "$1")
-pattern='^(build|ci|docs|feat|fix|perf|refactor|revert|test)(\([a-z0-9._/-]+\))?!?: .+'
+# Scopes: a plugin, the shared crate or the whole repository (CONTRIBUTING.md).
+pattern='^(build|ci|docs|feat|fix|perf|refactor|revert|test)\((menu|sidebar|herdr-api|repo)\)!?: .+'
 
 case "$subject" in
     Merge\ *|fixup!\ *|squash!\ *|amend!\ *) exit 0 ;;
@@ -12,7 +13,8 @@ esac
 if ! printf '%s' "$subject" | grep -Eq "$pattern"; then
     echo "Commit message does not follow the Angular convention:" >&2
     echo "    $subject" >&2
-    echo "Expected: <type>(<scope>)?: <subject>" >&2
+    echo "Expected: <type>(<scope>): <subject>" >&2
     echo "Types: build, ci, docs, feat, fix, perf, refactor, revert, test" >&2
+    echo "Scopes: menu, sidebar, herdr-api, repo" >&2
     exit 1
 fi
