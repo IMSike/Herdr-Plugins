@@ -2,7 +2,8 @@ name: Plugins
 
 # Checks formatting, lints and runs the tests of every plugin of the Cargo
 # workspace, on Linux and Windows, and checks that it compiles with the
-# oldest Rust it declares. See CONTRIBUTING.md.
+# oldest Rust it declares; on dev, builds the release binaries. See
+# CONTRIBUTING.md.
 
 on:
   pull_request:
@@ -58,3 +59,10 @@ jobs:
 
       - name: Compile check
         run: cargo +1.95 check --locked --all-targets
+
+  # The release binaries of a commit of dev: merged into main as a
+  # fast-forward, the same commit is released with them, without building
+  # again (docs/en/adr/0008-prebuilt-binaries.md).
+  binaries:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    uses: ./.github/workflows/binaries.yml

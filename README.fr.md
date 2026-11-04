@@ -21,7 +21,7 @@ Chaque plugin s'installe seul, depuis son dossier dans ce dépôt :
 herdr plugin install IMSike/Herdr-Plugins/<plugin>
 ```
 
-La compilation demande le toolchain Rust (`cargo`, Rust 1.95 ou plus récent) et, sous Windows, les Build Tools de Visual Studio avec la charge de travail C++ ([ADR 0001](docs/fr/adr/0001-rust-cargo-workspace.md)).
+Rien à compiler : l'installation télécharge le binaire de la release du commit (Linux x86_64 et aarch64, Windows) et le vérifie avec les `SHA256SUMS` de la release. Elle demande Git, plus `curl` sous Linux. Seul un commit sans release (tout juste poussé sur `main` et encore en publication, ou installé avec `--ref`) est compilé, avec le toolchain Rust (`cargo`, Rust 1.95 ou plus récent) et, sous Windows, les Build Tools de Visual Studio avec la charge de travail C++ ([ADR 0008](docs/fr/adr/0008-prebuilt-binaries.md)).
 
 Les mises à jour ne sont jamais automatiques : `herdr plugin update` récupère le dernier commit de `main` (chaque push sur `main` est une version) pour tous les plugins installés depuis GitHub, ou `herdr plugin update <id-du-plugin>` celui d'un seul plugin ([ADR 0002](docs/fr/adr/0002-plugin-versions.md)).
 
@@ -31,7 +31,7 @@ Les mises à jour ne sont jamais automatiques : `herdr plugin update` récupère
 |---|---|
 | [Plugins](docs/fr/README.md) | Ce que chaque plugin affiche ou fait, implications, comment le désactiver |
 | [Ajouter un plugin](docs/fr/adding-plugins.md) | Organisation, crate, manifeste, essai, documentation |
-| [Décisions d'architecture](docs/fr/adr/) | Pourquoi Rust et un workspace Cargo, versions et mises à jour, le menu au-dessus de l'explorateur de fichiers, réglages des plugins, mise à jour de Herdr depuis le menu, couleurs par seuil |
+| [Décisions d'architecture](docs/fr/adr/) | Pourquoi Rust et un workspace Cargo, versions et mises à jour, le menu au-dessus de l'explorateur de fichiers, réglages des plugins, mise à jour de Herdr depuis le menu, couleurs par seuil, état par session, binaires précompilés |
 
 ## Contribuer
 

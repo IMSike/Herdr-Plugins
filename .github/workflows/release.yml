@@ -1,12 +1,14 @@
 name: Version
 
 # Tags each push to main with a semantic version and publishes a GitHub release
-# (no changelog). It commits nothing: plugin manifests keep version = "0.0.0".
+# (no changelog) with the plugins' binaries, which their [[build]] step
+# downloads. It commits nothing: plugin manifests keep version = "0.0.0".
 # - first run: v0.0.0
 # - a feat commit since the last tag: minor (0.X.0)
 # - any other commit: patch (0.0.X)
 # - major (X.0.0): only on demand, by running this workflow manually with "major".
-# See CONTRIBUTING.md and docs/en/adr/0002-plugin-versions.md.
+# See CONTRIBUTING.md, docs/en/adr/0002-plugin-versions.md and
+# docs/en/adr/0008-prebuilt-binaries.md.
 
 on:
   push:
@@ -20,7 +22,7 @@ on:
         default: auto
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: version
@@ -30,6 +32,8 @@ jobs:
   version:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    outputs:
+      next: ${{ steps.version.outputs.next }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -60,9 +64,87 @@ jobs:
           echo "Last: ${last:-none}, next: $next"
           echo "next=$next" >> "$GITHUB_OUTPUT"
 
-      - name: Tag and release
-        if: steps.version.outputs.next != ''
+  # The binaries the Plugins workflow built for this very commit on dev: a
+  # fast-forward merge brings the same commit to main. A merged pull request
+  # makes a new commit, which has none: they are built below.
+  artifacts:
+    needs: version
+    if: needs.version.outputs.next != ''
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      run: ${{ steps.find.outputs.run }}
+    steps:
+      - name: Find the run of dev
+        id: find
         env:
           GH_TOKEN: ${{ github.token }}
-          NEXT: ${{ steps.version.outputs.next }}
-        run: gh release create "$NEXT" --target "$GITHUB_SHA" --title "$NEXT" --notes "Version $NEXT."
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          run=$(gh run list --workflow validate.yml --commit "$GITHUB_SHA" --branch dev --event push \
+            --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -n "$run" ]; then
+            kept=$(gh api "repos/$GH_REPO/actions/runs/$run/artifacts" \
+              --jq '[.artifacts[] | select(.expired | not) | select(.name | startswith("binaries-"))] | length')
+            [ "$kept" -eq 3 ] || run=
+          fi
+          echo "Run of dev with the binaries: ${run:-none, built here}"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: [version, artifacts]
+    if: needs.version.outputs.next != '' && needs.artifacts.outputs.run == ''
+    uses: ./.github/workflows/binaries.yml
+
+  # The release published only with every binary and its SHA256SUMS: created as
+  # a draft, which makes no tag, then published, which tags the commit. The
+  # [[build]] step looks for that tag, so it never finds a release missing a
+  # binary.
+  publish:
+    needs: [version, artifacts, build]
+    if: >-
+      always() && needs.version.outputs.next != '' && needs.artifacts.result == 'success' &&
+      (needs.build.result == 'success' || (needs.build.result == 'skipped' && needs.artifacts.outputs.run != ''))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      NEXT: ${{ needs.version.outputs.next }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          run-id: ${{ needs.artifacts.outputs.run || github.run_id }}
+          github-token: ${{ github.token }}
+          pattern: binaries-*
+          merge-multiple: true
+          path: assets
+
+      - name: Check the binaries
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          want=0
+          for manifest in */herdr-plugin.toml; do
+            bin="herdr-${manifest%/herdr-plugin.toml}"
+            for asset in "$bin-x86_64-unknown-linux-musl" "$bin-aarch64-unknown-linux-musl" \
+              "$bin-x86_64-pc-windows-msvc.exe"; do
+              [ -s "assets/$asset" ] || fail "$asset is missing"
+              want=$((want + 1))
+            done
+          done
+          [ "$(ls assets | wc -l)" -eq "$want" ] || fail "assets other than the binaries: $(ls assets | tr '\n' ' ')"
+          (cd assets && sha256sum herdr-* > SHA256SUMS && cat SHA256SUMS)
+
+      - name: Tag and release
+        run: |
+          set -euo pipefail
+          gh release create "$NEXT" --draft --target "$GITHUB_SHA" --title "$NEXT" --notes "Version $NEXT." assets/*
+          gh release edit "$NEXT" --draft=false
+          echo "release $NEXT published"

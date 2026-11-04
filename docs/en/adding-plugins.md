@@ -30,12 +30,19 @@ Add the folder to `members` in the root `Cargo.toml`. Code that several plugins 
 `herdr-plugin.toml`:
 
 - `id = "imsike.<name>"`, a `name`, `version = "0.0.0"` never changed ([ADR 0002](adr/0002-plugin-versions.md)), `min_herdr_version`, a `description` and `platforms = ["linux", "windows"]`.
-- One build step, which writes the binary into the plugin's own folder:
+- Two build steps, one per system, which put the binary of the commit's release into the plugin's own folder, or build it with `cargo` without a release ([ADR 0008](adr/0008-prebuilt-binaries.md)):
 
   ```toml
   [[build]]
-  command = ["cargo", "build", "--release", "--locked", "--target-dir", "target"]
+  platforms = ["linux"]
+  command = ["sh", "../scripts/fetch-bin.sh", "herdr-<name>"]
+
+  [[build]]
+  platforms = ["windows"]
+  command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "../scripts/fetch-bin.ps1", "herdr-<name>"]
   ```
+
+  The workflows build and release the binary of every folder holding a `herdr-plugin.toml`: nothing to add there.
 
 - Commands (`[[actions]]`, `[[panes]]`, `[[events]]`, `[[startup]]`) run `target/release/herdr-<name>` with a subcommand. Titles are in English.
 

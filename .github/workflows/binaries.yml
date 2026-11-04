@@ -1,0 +1,59 @@
+name: Binaries
+
+# Builds the release binary of every plugin for each system the plugins'
+# [[build]] step downloads (scripts/fetch-bin.*), and keeps them as artifacts
+# named binaries-<target>: herdr-<plugin>-<target>[.exe]. Called by the Plugins
+# workflow on dev, and by the Version workflow when the commit has none.
+# See docs/en/adr/0008-prebuilt-binaries.md.
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  binary:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest, ext: .exe }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      TARGET: ${{ matrix.target }}
+      EXT: ${{ matrix.ext }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust target
+        run: rustup target add "$TARGET"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --locked --target "$TARGET"
+
+      # A plugin is a folder with a herdr-plugin.toml; its binary is herdr-<folder>.
+      - name: Name the binaries after their target
+        run: |
+          set -euo pipefail
+          mkdir dist
+          for manifest in */herdr-plugin.toml; do
+            bin="herdr-${manifest%/herdr-plugin.toml}"
+            cp "target/$TARGET/release/$bin$EXT" "dist/$bin-$TARGET$EXT"
+          done
+          ls -l dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: binaries-${{ matrix.target }}
+          path: dist/
+          if-no-files-found: error

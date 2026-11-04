@@ -27,6 +27,6 @@ Options studied for the layout: one repository per plugin, or one repository for
 
 ## Consequences
 
-- Building needs the Rust toolchain, and the MSVC Build Tools on Windows, on every machine that installs a plugin from GitHub. To be reassessed if plugins are used beyond the maintainer's machines: prebuilt binaries published by a release workflow and downloaded by the `[[build]]` step.
+- Building needs the Rust toolchain, and the MSVC Build Tools on Windows. A machine that installs a plugin from GitHub no longer builds it: the `[[build]]` step downloads the binary of the commit's release, and builds with `cargo` only without one ([ADR 0008](0008-prebuilt-binaries.md)).
 - A plugin's build writes its binary into its own folder (`cargo build --release --target-dir target`), so its manifest commands use a path relative to the plugin folder.
 - `herdr plugin update` compares the repository commit: a commit touching one plugin also rebuilds the others installed from this repository.

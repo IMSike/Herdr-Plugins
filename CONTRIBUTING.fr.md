@@ -75,6 +75,8 @@ Chaque push sur `main` (direct ou pull request fusionnée) reçoit un tag et une
 
 La première version est `v0.0.0`. Pas de changelog pour l'instant. Le workflow ne commite rien : chaque `herdr-plugin.toml` garde `version = "0.0.0"`, que Herdr exige mais n'utilise pas ([ADR 0002](docs/fr/adr/0002-plugin-versions.md)).
 
+Chaque release porte les binaires de tous les plugins et leurs `SHA256SUMS`, que l'étape de build des plugins télécharge : ceux que le workflow [Plugins](.github/workflows/validate.yml) a compilés sur `dev` pour le même commit, ou compilés par le workflow de release (une pull request fusionnée). La release n'est publiée, et son tag posé, qu'une fois tous les binaires joints ([ADR 0008](docs/fr/adr/0008-prebuilt-binaries.md)).
+
 ## Pull requests
 
 1. Partir de `main`.

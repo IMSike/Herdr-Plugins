@@ -27,6 +27,6 @@ Options étudiées pour l'organisation : un dépôt par plugin, ou un dépôt po
 
 ## Conséquences
 
-- Compiler demande le toolchain Rust, et les Build Tools MSVC sous Windows, sur chaque machine qui installe un plugin depuis GitHub. À réévaluer si les plugins servent au-delà des machines du mainteneur : des binaires précompilés publiés par un workflow de release et téléchargés par l'étape `[[build]]`.
+- Compiler demande le toolchain Rust, et les Build Tools MSVC sous Windows. Une machine qui installe un plugin depuis GitHub ne le compile plus : l'étape `[[build]]` télécharge le binaire de la release du commit, et ne compile avec `cargo` qu'à défaut ([ADR 0008](0008-prebuilt-binaries.md)).
 - Le build d'un plugin écrit son binaire dans son propre dossier (`cargo build --release --target-dir target`), donc les commandes de son manifeste utilisent un chemin relatif au dossier du plugin.
 - `herdr plugin update` compare le commit du dépôt : un commit qui touche un plugin recompile aussi les autres plugins installés depuis ce dépôt.

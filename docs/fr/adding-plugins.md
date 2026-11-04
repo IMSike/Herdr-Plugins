@@ -30,12 +30,19 @@ Ajoutez le dossier à `members` dans le `Cargo.toml` racine. Le code utile à pl
 `herdr-plugin.toml` :
 
 - `id = "imsike.<nom>"`, un `name`, `version = "0.0.0"` jamais modifié ([ADR 0002](adr/0002-plugin-versions.md)), `min_herdr_version`, une `description` et `platforms = ["linux", "windows"]`.
-- Une seule étape de build, qui écrit le binaire dans le dossier du plugin :
+- Deux étapes de build, une par système, qui placent le binaire de la release du commit dans le dossier du plugin, ou le compilent avec `cargo` à défaut de release ([ADR 0008](adr/0008-prebuilt-binaries.md)) :
 
   ```toml
   [[build]]
-  command = ["cargo", "build", "--release", "--locked", "--target-dir", "target"]
+  platforms = ["linux"]
+  command = ["sh", "../scripts/fetch-bin.sh", "herdr-<nom>"]
+
+  [[build]]
+  platforms = ["windows"]
+  command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "../scripts/fetch-bin.ps1", "herdr-<nom>"]
   ```
+
+  Les workflows compilent et publient le binaire de chaque dossier qui contient un `herdr-plugin.toml` : rien à y ajouter.
 
 - Les commandes (`[[actions]]`, `[[panes]]`, `[[events]]`, `[[startup]]`) lancent `target/release/herdr-<nom>` avec une sous-commande. Les titres sont en anglais.
 
