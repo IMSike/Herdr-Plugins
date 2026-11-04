@@ -146,8 +146,10 @@ pub fn save(file: &Path, measured: &Measured) -> Result<(), String> {
     herdr_api::write_json(file, measured).map_err(|e| e.to_string())
 }
 
-/// Walks the folder without following links; unreadable folders are skipped.
-/// Stops early, the figures incomplete, past the limit or once `stop` is set.
+/// Walks the folder without following links; unreadable folders inside it
+/// are skipped. Stops early, the figures incomplete, past the limit or once
+/// `stop` is set; incomplete with no entry when `root` itself cannot be
+/// read (gone, refused): figures of nothing.
 pub fn measure(root: &Path, limit: Limit, stop: &AtomicBool) -> Stats {
     let deadline = Instant::now() + limit.time;
     let mut stats = Stats {
@@ -163,6 +165,10 @@ pub fn measure(root: &Path, limit: Limit, stop: &AtomicBool) -> Stats {
             return stats;
         }
         let Ok(entries) = std::fs::read_dir(&dir) else {
+            if dir == root {
+                stats.complete = false;
+                return stats;
+            }
             continue;
         };
         for entry in entries.flatten() {
@@ -266,6 +272,14 @@ mod tests {
         );
         assert!(!cut.complete);
         assert!(!stopped.complete);
+    }
+
+    #[test]
+    fn a_folder_that_cannot_be_read_gives_no_figures() {
+        let root = herdr_api::TempDir::new("menu-stats-gone").unwrap();
+        let gone = root.join("gone");
+        let stats = measure(&gone, Limit::default(), &AtomicBool::new(false));
+        assert_eq!((stats.complete, stats.entries), (false, 0));
     }
 
     #[test]

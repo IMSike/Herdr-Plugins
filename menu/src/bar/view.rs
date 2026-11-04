@@ -67,7 +67,8 @@ enum Measure {
     NoFolder,
     Started,
     Done(Measured),
-    /// The reading ended before the folder's first entry: it did not answer.
+    /// The reading ended before the folder's first entry: it did not answer,
+    /// or could not be read.
     NoAnswer,
     /// The figures could not be kept in the state folder.
     Unsaved(String),
@@ -400,7 +401,7 @@ impl<'a> State<'a> {
                 }
                 Measure::NoAnswer => {
                     self.view.measuring = false;
-                    self.say("le dossier ne répond pas".into(), Color::Red);
+                    self.say("dossier illisible ou qui ne répond pas".into(), Color::Red);
                 }
                 Measure::Unsaved(error) => {
                     self.say(format!("chiffres non enregistrés : {error}"), Color::Red);
