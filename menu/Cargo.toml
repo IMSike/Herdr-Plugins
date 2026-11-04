@@ -17,3 +17,6 @@ toml.workspace = true
 toml_edit.workspace = true
 sysinfo = { workspace = true, features = ["disk"] }
 unicode-width = { version = "0.2.3", default-features = false }
+
+[dev-dependencies]
+herdr-api = { workspace = true, features = ["test-support"] }
