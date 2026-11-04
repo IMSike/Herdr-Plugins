@@ -24,7 +24,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Dependencies built by an earlier run, per system.
       - uses: Swatinem/rust-cache@v2
@@ -47,7 +47,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Rust 1.95
         run: rustup toolchain install 1.95 --profile minimal
