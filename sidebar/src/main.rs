@@ -170,7 +170,9 @@ fn tick(mode: Mode) -> Result<(), String> {
             .map(Path::to_path_buf)
             .ok_or("dossier du binaire inconnu")?,
     };
-    let sample_path = state_dir.join(SAMPLE_FILE);
+    // The sample and the totals describe one Herdr session.
+    let session_dir = herdr_api::session_in(&state_dir).map_err(|e| e.to_string())?;
+    let sample_path = session_dir.join(SAMPLE_FILE);
     let settings = Settings::load(config_dir(&state_dir).as_deref()).unwrap_or_else(|e| {
         eprintln!("herdr-sidebar : {e}");
         Settings::default()
@@ -301,7 +303,7 @@ fn tick(mode: Mode) -> Result<(), String> {
         if let Err(e) = herdr_api::write_json(&sample_path, &sample) {
             eprintln!("herdr-sidebar : échantillon non enregistré : {e}");
         }
-        if let Err(e) = totals.save(&state_dir) {
+        if let Err(e) = totals.save(&session_dir) {
             eprintln!("herdr-sidebar : totaux non enregistrés : {e}");
         }
     }
