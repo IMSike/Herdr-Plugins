@@ -329,10 +329,10 @@ mod tests {
             classify(argv("code --wait")),
             Editor::Window(argv("code --wait"))
         );
-        assert_eq!(
-            classify(argv("C:\\Tools\\Notepad.exe")),
-            Editor::WindowPerFile(argv("C:\\Tools\\Notepad.exe"))
-        );
+        // A path of this system's: Linux does not cut `C:\Tools\Notepad.exe`.
+        let notepad = Path::new("Tools").join("Notepad.exe");
+        let notepad = vec![notepad.to_string_lossy().into_owned()];
+        assert_eq!(classify(notepad.clone()), Editor::WindowPerFile(notepad));
         assert_eq!(classify(argv("nvim")), Editor::Terminal(argv("nvim")));
     }
 
