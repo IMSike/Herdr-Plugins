@@ -16,3 +16,6 @@ desktop.ini
 
 # Maintainer's notes (to-do, verification reports): kept out of the repository
 .maintainer/
+
+# Claude Code: the project's settings are shared, a contributor's own are not
+.claude/settings.local.json
