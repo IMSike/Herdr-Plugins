@@ -325,8 +325,8 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
 impl<'a> State<'a> {
     fn new(me: &'a str, menu: Menu, error: Option<String>) -> Self {
         let menu_file = crate::config_dir().map(|dir| dir.join(config::FILE_NAME));
-        let sidebar_state = herdr_api::sidebar::state_dir().ok();
-        let files_flag = herdr_api::state_dir()
+        let sidebar_state = herdr_api::sidebar::session_dir().ok();
+        let files_flag = herdr_api::session_dir()
             .ok()
             .map(|dir| files::opened_flag(&dir, me));
         // One left by a bar of the same pane id that closed before reading

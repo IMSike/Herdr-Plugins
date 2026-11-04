@@ -18,7 +18,7 @@ const TAB_LOCK_PREFIX: &str = "opening-";
 /// Removes the locks of the tabs that are no longer among `live`, every
 /// pane Herdr has.
 pub fn forget_tab_locks(live: &[Pane]) {
-    let Ok(dir) = herdr_api::state_dir() else {
+    let Ok(dir) = herdr_api::session_dir() else {
         return;
     };
     let live: HashSet<String> = live.iter().map(|p| tab_lock_name(&p.tab_id)).collect();
@@ -31,7 +31,7 @@ pub fn forget_tab_locks(live: &[Pane]) {
 /// one: `prefix+space` and the explorer's `pane.created` hook never both
 /// open one. `Busy` while another run lists or changes the tab's bars.
 pub fn lock_tab(tab_id: &str) -> Taken {
-    let Ok(dir) = herdr_api::state_dir() else {
+    let Ok(dir) = herdr_api::session_dir() else {
         return Taken::Unavailable;
     };
     Lock::try_take(&dir.join(tab_lock_name(tab_id)))
@@ -50,7 +50,7 @@ pub struct Bars {
 impl Bars {
     pub fn new() -> Self {
         Self {
-            dir: herdr_api::state_dir().ok().map(|dir| dir.join(DIR)),
+            dir: herdr_api::session_dir().ok().map(|dir| dir.join(DIR)),
         }
     }
 

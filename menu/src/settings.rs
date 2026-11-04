@@ -482,7 +482,7 @@ fn written(ignored: Option<String>, files: &[&str]) -> Result<String, String> {
 
 /// The `Tools` pane the screen was opened from switches to its reload view.
 fn tell_the_bar() {
-    if let (Ok(bar), Ok(state)) = (std::env::var(BAR_ENV), herdr_api::state_dir()) {
+    if let (Ok(bar), Ok(state)) = (std::env::var(BAR_ENV), herdr_api::session_dir()) {
         let _ = herdr_api::write_atomic(&files::opened_flag(&state, &bar), b"");
     }
 }
