@@ -1,6 +1,6 @@
 # Réglages de la barre latérale (imsike.sidebar). Une ligne commentée garde sa
 # valeur par défaut. Chaque passage du plugin relit ce fichier.
-# Couleurs et ordre des valeurs des agents : section [ui.sidebar] du config.toml
+# Couleurs et ordre des valeurs des agents : section [ui.sidebar.agents] du config.toml
 # de Herdr.
 
 # 2,4G plutôt que 2.4G.

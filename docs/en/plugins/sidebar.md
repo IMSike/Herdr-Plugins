@@ -114,7 +114,7 @@ percent_space = true
 shells = ["bash", "pwsh", "nu"]
 ```
 
-Each run reads the file: a change shows at the next run. A file that cannot be read or is invalid (unknown setting, `ttl_seconds = 0`, thresholds not in increasing order) is ignored: the runs use the defaults and say why in the plugin's log (`herdr plugin log list --plugin imsike.sidebar`). Colors, order and layout of the Agents panel stay in Herdr's `config.toml`.
+Each run reads the file: a change shows at the next run. A file that cannot be read or is invalid (unknown setting, `ttl_seconds = 0`, thresholds not in increasing order) is ignored: the runs use the defaults, and those started by an event say why in the plugin's log (`herdr plugin log list --plugin imsike.sidebar`; the tab bar runs are Herdr's own commands, which this log does not hold). Colors, order and layout of the Agents panel stay in Herdr's `config.toml`.
 
 Herdr runs the tab bar command without the plugin's environment, so without its config folder: `install` writes the folder's path in `config-dir`, in the state folder, where the tab bar runs read it. Until `install` has run once (at Herdr's start, or by hand), those runs use the defaults.
 
@@ -135,7 +135,7 @@ The Agents panel keeps the colors of Herdr's `config.toml`: coloring each agent'
 
 - Herdr has no long-running plugin process: the tab bar entry runs `herdr-sidebar tick` every 5 seconds, and Herdr never starts a run while the previous one is still going. Each run reads every process of the machine, then exits after a fraction of a second. It asks Herdr for a pane's shell process only the first time, or once the pane shows another terminal: later runs find it in `sample.json`.
 - When an agent appears or changes state, Herdr runs the plugin at once, and so do a new workspace, a renamed or moved tab and a closed pane (`pane.agent_detected`, `pane.agent_status_changed`, `workspace.created`, `tab.renamed`, `tab.moved`, `pane.closed` events; viewing a done agent turns it idle, which is a state change): the tree's states follow without waiting for the next run. These runs only place the agents in the tree, without reading the processes, and send only the agents whose place or line changed: the figures are those of the last run, and a new agent gets its own at the next one. A renamed workspace appears at the next run.
-- The Agents panel is sorted by `$order` through a Herdr agent view (labeled `arbre` in the panel header), which replaces the panel's own sort while the plugin is enabled. The tree follows the order of the workspaces in the sidebar and of the tabs in the tab bar: a moved tab takes its new place at the next run.
+- The Agents panel is sorted by `$order` through a Herdr agent view (labeled `arbre` in the panel header), which replaces the panel's own sort while the plugin is enabled. The tree follows the order of the workspaces in the sidebar and of the tabs in the tab bar: a moved tab takes its new place at once (see the events below).
 - The CPU share compares with the previous run, saved in `sample.json` in the folder of the session, as a share of all the machine's cores (a CPU quota given to Herdr does not change it). The time between the two runs comes from the system's CPU times (Windows) or its uptime (Linux), which a change of the clock does not move; a process is recognized by its start time, which follows such a change on Linux: the plugin allows for it.
 - Each report carries a sequence number, kept in `seq` in the state folder: when the clock is set back, the reports go on in order instead of being ignored by Herdr, and two runs started at the same moment do not share one. It is taken once the session is read: of two runs at once, the one that read it last wins.
 - A run still waiting for Herdr after 4 seconds stops asking it, and fails (the tab bar entry is empty until the next run): a slow Herdr is not sent more requests.
@@ -143,7 +143,7 @@ The Agents panel keeps the colors of Herdr's `config.toml`: coloring each agent'
 - Values expire after 20 seconds (`ttl_seconds`). If the runs stop, the tree lines disappear instead of going stale, and agents are listed without lines.
 - Herdr indents a block's second row by two cells, so the first agent of a workspace (under its header) would sit further right than the others. The plugin pads the others' lines with two blank braille characters (U+2800), since Herdr strips ordinary spaces at the start of a value. A line longer than the sidebar is cut.
 - The `◐` glyph replaces Herdr's state icon.
-- The name shown is the agent's tab name: a tab never renamed shows its number, and two agents in one tab share a name. A renamed tab appears at the next run.
+- The name shown is the agent's tab name: a tab never renamed shows its number, and two agents in one tab share a name. A renamed tab appears at once.
 - Herdr itself puts ` · ` between two tokens of a row (`Général · 4% 853M ·  1`); it cannot be changed. `$stats` keeps the figures in one token, without it.
 - The values carry their unit, so numeric color rules (`gt`, `lt`) do not apply to them.
 
