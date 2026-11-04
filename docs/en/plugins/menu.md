@@ -129,7 +129,7 @@ The folder is only measured while this page is shown: going back stops the measu
 1. `herdr update` installs the latest Herdr (with `--handoff` where the server can hand its sessions over to the new version, which it cannot on Windows).
 2. `herdr status --json` tells whether the running server is still the old version. If not, the window says Herdr is up to date: the client already open keeps its old version until you detach (`prefix+q`) and start `herdr` again.
 3. If so, it says how many panes close and how many agents stop (`5 panes, dont 2 agents (1 au travail)`) and asks `Redémarrer maintenant ? [o/N]`. Anything but `o`, `oui`, `y` or `yes` cancels: the new version runs at the server's next start.
-4. Once confirmed, it stops the server (`herdr server stop`): **every pane closes and every agent stops**, as when Herdr is quit. Then it offers to start Herdr again in that window (`[o/N]`); otherwise it puts `herdr` in the clipboard (with `clip`, `pbcopy`, `wl-copy`, `xclip` or `xsel`, whichever works), to paste in a terminal.
+4. Once confirmed, it stops the server (`herdr server stop`): **every pane closes and every agent stops**, as when Herdr is quit. Then it offers to start Herdr again in that window (`[o/N]`); otherwise it puts `herdr` in the clipboard (with `clip`, `wl-copy`, `xclip` or `xsel`, whichever works), to paste in a terminal.
 
 The window waits for Enter before closing, an error included. While it is open, another click on Update says that an update is under way instead of opening a second one. Without a graphical display (over SSH), or when the terminal closes at once, the `Tools` pane says so in red: run `herdr update` outside Herdr.
 
@@ -143,7 +143,7 @@ The window waits for Enter before closing, an error included. While it is open, 
 | Shells | `shells`: Enter to type them, separated by commas, Enter to save, Escape to cancel | `sidebar.toml` |
 | Totaux dans la barre d'onglets | `tab_bar` | `sidebar.toml` |
 | Couleurs | `colors`: the [threshold colors](sidebar.md#threshold-colors) | `sidebar.toml` |
-| Seuils CPU, Seuils mémoire (Workspaces; machine) | the four sets of thresholds: Enter to type three increasing values separated by spaces (`10 25 50`), Enter to save, Escape to cancel | `sidebar.toml` |
+| Seuils CPU, Seuils mémoire (Herdr; machine) | the four sets of thresholds: Enter to type three increasing values separated by spaces (`10 25 50`), Enter to save, Escape to cancel | `sidebar.toml` |
 | Ouvrir les fichiers de configuration… | opens the files in an editor, see below | |
 | Recharger la configuration de Herdr | reloads Herdr's `config.toml` and says whether Herdr applied it, in part (a section it refuses or that needs a restart keeps its current settings: the first reason is shown), or refused it | |
 
@@ -197,4 +197,4 @@ Commands run as your user, with your environment, like any program you would sta
 
 ## Turn it off
 
-To drop a built-in entry, list in `menu.toml` the entries to keep. To turn the whole menu off, remove the key from `config.toml`, then `herdr plugin disable imsike.menu` (or `herdr plugin uninstall imsike.menu`): the `Tools` panes close with their explorer or at the next restart. `menu.toml` stays in the config folder, and the figures' files (`stats-<hash>.json`, with their lock `stats-<hash>.lock`), the update's lock (`update.lock`), and the sessions' folders (`sessions`: the tabs' locks and the `bars` folder of each session) in the state folder, until you delete them.
+To drop a built-in entry, list in `menu.toml` the entries to keep. To turn the whole menu off, remove the key from `config.toml`, then `herdr plugin disable imsike.menu` (or `herdr plugin uninstall imsike.menu`): the `Tools` panes close with their explorer; those Herdr restores at its next start, plain shells by then, are closed by hand. `menu.toml` stays in the config folder, and the figures' files (`stats-<hash>.json`, with their lock `stats-<hash>.lock`), the update's lock (`update.lock`), and the sessions' folders (`sessions`: the tabs' locks and the `bars` folder of each session) in the state folder, until you delete them.

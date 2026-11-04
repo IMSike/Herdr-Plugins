@@ -129,7 +129,7 @@ Le dossier n'est mesuré que pendant que cette page est affichée : revenir arr�
 1. `herdr update` installe la dernière version de Herdr (avec `--handoff` quand le serveur sait passer ses sessions à la nouvelle version, ce qu'il ne sait pas faire sous Windows).
 2. `herdr status --json` indique si le serveur en cours est encore l'ancienne version. Sinon, la fenêtre dit que Herdr est à jour : le client déjà ouvert garde son ancienne version jusqu'à ce que vous vous détachiez (`prefix+q`) et relanciez `herdr`.
 3. Si oui, elle dit combien de panes se ferment et combien d'agents s'arrêtent (`5 panes, dont 2 agents (1 au travail)`) et demande `Redémarrer maintenant ? [o/N]`. Toute autre réponse que `o`, `oui`, `y` ou `yes` annule : la nouvelle version tournera au prochain démarrage du serveur.
-4. Une fois confirmé, elle arrête le serveur (`herdr server stop`) : **tous les panes se ferment et tous les agents s'arrêtent**, comme quand on quitte Herdr. Puis elle propose de relancer Herdr dans cette fenêtre (`[o/N]`) ; sinon elle met `herdr` dans le presse-papiers (avec `clip`, `pbcopy`, `wl-copy`, `xclip` ou `xsel`, le premier qui fonctionne), à coller dans un terminal.
+4. Une fois confirmé, elle arrête le serveur (`herdr server stop`) : **tous les panes se ferment et tous les agents s'arrêtent**, comme quand on quitte Herdr. Puis elle propose de relancer Herdr dans cette fenêtre (`[o/N]`) ; sinon elle met `herdr` dans le presse-papiers (avec `clip`, `wl-copy`, `xclip` ou `xsel`, le premier qui fonctionne), à coller dans un terminal.
 
 La fenêtre attend Entrée avant de se fermer, erreur comprise. Tant qu'elle est ouverte, un nouveau clic sur Update dit qu'une mise à jour est en cours au lieu d'en ouvrir une deuxième. Sans affichage graphique (en SSH), ou quand le terminal se ferme aussitôt, le pane `Tools` le dit en rouge : lancez `herdr update` hors de Herdr.
 
@@ -143,7 +143,7 @@ La fenêtre attend Entrée avant de se fermer, erreur comprise. Tant qu'elle est
 | Shells | `shells` : Entrée pour les taper, séparés par des virgules, Entrée pour enregistrer, Échap pour annuler | `sidebar.toml` |
 | Totaux dans la barre d'onglets | `tab_bar` | `sidebar.toml` |
 | Couleurs | `colors` : les [couleurs par seuil](sidebar.md#couleurs-par-seuil) | `sidebar.toml` |
-| Seuils CPU, Seuils mémoire (Workspaces ; machine) | les quatre jeux de seuils : Entrée pour taper trois valeurs croissantes séparées par des espaces (`10 25 50`), Entrée pour enregistrer, Échap pour annuler | `sidebar.toml` |
+| Seuils CPU, Seuils mémoire (Herdr ; machine) | les quatre jeux de seuils : Entrée pour taper trois valeurs croissantes séparées par des espaces (`10 25 50`), Entrée pour enregistrer, Échap pour annuler | `sidebar.toml` |
 | Ouvrir les fichiers de configuration… | ouvre les fichiers dans un éditeur, voir plus bas | |
 | Recharger la configuration de Herdr | recharge le `config.toml` de Herdr et dit si Herdr l'a appliqué, en partie (une section qu'il refuse ou qui demande un redémarrage garde ses réglages actuels : la première raison est affichée), ou refusé | |
 
@@ -197,4 +197,4 @@ Les commandes tournent sous votre compte, avec votre environnement, comme tout p
 
 ## Désactiver
 
-Pour retirer une entrée intégrée, listez dans `menu.toml` les entrées à garder. Pour désactiver tout le menu, retirez la touche de `config.toml`, puis `herdr plugin disable imsike.menu` (ou `herdr plugin uninstall imsike.menu`) : les panes `Tools` se ferment avec leur explorateur ou au redémarrage suivant. `menu.toml` reste dans le dossier de configuration, et les fichiers des chiffres (`stats-<hash>.json`, avec leur verrou `stats-<hash>.lock`), le verrou de la mise à jour (`update.lock`), et les dossiers des sessions (`sessions` : les verrous des onglets et le dossier `bars` de chaque session) dans le dossier d'état, jusqu'à ce que vous les supprimiez.
+Pour retirer une entrée intégrée, listez dans `menu.toml` les entrées à garder. Pour désactiver tout le menu, retirez la touche de `config.toml`, puis `herdr plugin disable imsike.menu` (ou `herdr plugin uninstall imsike.menu`) : les panes `Tools` se ferment avec leur explorateur ; ceux que Herdr restaure à son démarrage suivant, devenus de simples shells, se ferment à la main. `menu.toml` reste dans le dossier de configuration, et les fichiers des chiffres (`stats-<hash>.json`, avec leur verrou `stats-<hash>.lock`), le verrou de la mise à jour (`update.lock`), et les dossiers des sessions (`sessions` : les verrous des onglets et le dossier `bars` de chaque session) dans le dossier d'état, jusqu'à ce que vous les supprimiez.
