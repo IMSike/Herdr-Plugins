@@ -78,6 +78,46 @@ pub fn state_dir() -> Result<PathBuf, String> {
         .ok_or_else(|| absent(env::STATE_DIR))
 }
 
+/// The folder of the running Herdr session in this plugin's state folder,
+/// created when missing (see `session_in`).
+pub fn session_dir() -> Result<PathBuf, String> {
+    session_in(&state_dir()?).map_err(|e| e.to_string())
+}
+
+/// The folder of the running Herdr session in `state_dir`, created when
+/// missing. Herdr gives a plugin one state folder for all its sessions,
+/// whose pane and tab ids start over at `w1`: what names a pane or a tab,
+/// or describes the session, goes here.
+pub fn session_in(state_dir: &Path) -> io::Result<PathBuf> {
+    let socket = std::env::var_os(env::SOCKET_PATH);
+    let dir = state_dir
+        .join(SESSIONS_DIR)
+        .join(session_name(socket.as_deref().map(Path::new)));
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+/// Where the sessions' folders are, in a state folder.
+const SESSIONS_DIR: &str = "sessions";
+/// The session `herdr` runs without `--session`.
+const DEFAULT_SESSION: &str = "default";
+
+/// A named session's socket is `…/sessions/<name>/herdr.sock`, the
+/// default session's sits elsewhere.
+fn session_name(socket: Option<&Path>) -> String {
+    socket
+        .and_then(Path::parent)
+        .filter(|dir| {
+            dir.parent()
+                .and_then(Path::file_name)
+                .is_some_and(|parent| parent == SESSIONS_DIR)
+        })
+        .and_then(Path::file_name)
+        .map(|name| name.to_string_lossy().into_owned())
+        .filter(|name| name != DEFAULT_SESSION)
+        .unwrap_or_else(|| DEFAULT_SESSION.to_string())
+}
+
 /// A Herdr id (`w1:p2`) as a file name: Windows refuses `:` in one.
 pub fn id_file_name(id: &str) -> String {
     id.replace(':', "-")
@@ -274,6 +314,21 @@ pub enum Taken {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_session_is_named_after_its_socket_folder() {
+        let name = |path: &str| session_name(Some(Path::new(path)));
+        assert_eq!(name("/home/u/.config/herdr/herdr.sock"), "default");
+        assert_eq!(
+            name("/home/u/.config/herdr/sessions/work/herdr.sock"),
+            "work"
+        );
+        assert_eq!(
+            name(r"C:\Users\u\AppData\Roaming\herdr\herdr.sock"),
+            "default"
+        );
+        assert_eq!(session_name(None), "default");
+    }
 
     #[test]
     fn writes_over_the_old_content() {

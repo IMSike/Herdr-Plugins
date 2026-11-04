@@ -200,7 +200,8 @@ impl Totals {
         parts
     }
 
-    /// The file of the totals, in the sidebar's state folder.
+    /// The file of the totals, in the sidebar's folder of the session (see
+    /// `session_dir`).
     pub fn file(state_dir: &Path) -> PathBuf {
         state_dir.join(TOTALS_FILE)
     }

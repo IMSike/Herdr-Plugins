@@ -47,6 +47,12 @@ pub fn state_dir() -> Result<PathBuf, String> {
     beside(&crate::state_dir()?)
 }
 
+/// The folder of the running Herdr session in the sidebar's state folder,
+/// where its totals are.
+pub fn session_dir() -> Result<PathBuf, String> {
+    crate::session_in(&state_dir()?).map_err(|e| e.to_string())
+}
+
 /// The sidebar's config folder, beside this plugin's, as its state folder.
 pub fn config_dir() -> Result<PathBuf, String> {
     beside(&crate::config_dir()?)
