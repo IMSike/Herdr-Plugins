@@ -5,8 +5,15 @@ min_herdr_version = "0.9.5"
 description = "A menu that opens a tool (lazygit, gh-dash…) in a large popup, updates Herdr and sets the plugins: a Tools pane of icons above the file explorer, or a popup"
 platforms = ["linux", "windows"]
 
+# The release binary of the commit installed, into target/release/; built
+# with cargo when that commit has no release (docs/en/adr/0008-prebuilt-binaries.md).
 [[build]]
-command = ["cargo", "build", "--release", "--locked", "--target-dir", "target"]
+platforms = ["linux"]
+command = ["sh", "../scripts/fetch-bin.sh", "herdr-menu"]
+
+[[build]]
+platforms = ["windows"]
+command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "../scripts/fetch-bin.ps1", "herdr-menu"]
 
 # Closes the Tools panes restored as plain shells after a restart.
 [[startup]]
