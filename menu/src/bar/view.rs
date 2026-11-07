@@ -317,9 +317,7 @@ pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()
             continue;
         }
         let event = event::read()?;
-        if state.on_event(event, size.0).is_break() {
-            return Ok(());
-        }
+        state.on_event(event, size.0);
     }
 }
 
@@ -499,30 +497,24 @@ impl<'a> State<'a> {
         });
     }
 
-    /// Answers a key, a click, the pointer or a resize; `Break` when the
-    /// bar closes.
-    fn on_event(&mut self, event: Event, width: u16) -> ControlFlow<()> {
+    /// Answers a key, a click, the pointer or a resize. No key closes the
+    /// bar: `prefix+space` and the closing of the explorer do, so that a
+    /// stray Escape never takes it away.
+    fn on_event(&mut self, event: Event, width: u16) {
         let view = &mut self.view;
         let mut asked = Asked::default();
         match event {
             Event::Resize(..) => self.check_at = Some(Instant::now() + SETTLE),
-            Event::Key(key) if key.kind == KeyEventKind::Press => {
-                if crate::ui::is_control(key.modifiers) {
-                    if key.code == KeyCode::Char('c') {
-                        return ControlFlow::Break(());
-                    }
-                    return ControlFlow::Continue(());
-                }
+            Event::Key(key)
+                if key.kind == KeyEventKind::Press && !crate::ui::is_control(key.modifiers) =>
+            {
                 match (view.page, key.code) {
-                    // An entry's own key wins over `q`.
                     (Page::Tools, KeyCode::Char(c))
                         if view.menu.entries.iter().any(|e| e.key == c) =>
                     {
                         asked.entry = view.menu.entries.iter().position(|e| e.key == c);
                     }
-                    (Page::Tools, KeyCode::Esc | KeyCode::Char('q')) => {
-                        return ControlFlow::Break(());
-                    }
+                    (Page::Tools, _) => {}
                     (_, KeyCode::Esc | KeyCode::Char('q') | KeyCode::Backspace) => {
                         asked.button = Some(Button::Back);
                     }
@@ -564,7 +556,6 @@ impl<'a> State<'a> {
             _ => {}
         }
         self.answer(asked);
-        ControlFlow::Continue(())
     }
 
     fn answer(&mut self, asked: Asked) {

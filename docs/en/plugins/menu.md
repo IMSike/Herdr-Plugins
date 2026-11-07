@@ -32,7 +32,7 @@ The icons are [Nerd Font](https://www.nerdfonts.com) glyphs: without a Nerd Font
 
 ## Use
 
-**With the explorer.** The `Tools` pane opens with the explorer, however it is opened (`prefix+f`, opening on its own in a new tab), and closes with it. Click an icon or its name, or type the entry's key while the pane has the focus; hovering shows the entry in yellow. A tool that cannot start shows why in red, under the icons, for 5 seconds. A double click, or a key held down, starts the entry once. `prefix+space` closes the pane and opens it again; Escape, `q` or Ctrl+C in the pane closes it. An entry's own key wins over `q`.
+**With the explorer.** The `Tools` pane opens with the explorer, however it is opened (`prefix+f`, opening on its own in a new tab), and closes with it. Click an icon or its name, or type the entry's key while the pane has the focus; hovering shows the entry in yellow. A tool that cannot start shows why in red, under the icons, for 5 seconds. A double click, or a key held down, starts the entry once. Only `prefix+space`, which closes the pane and opens it again, and the closing of the explorer close the pane: no key typed in the pane (Escape, `q`, Ctrl+C) closes it, so that one Escape too many does not take it away. For the explorer, too, to close with `prefix+f` alone, take the keys away from its `close` action in its `keys.json` (`{ "explorer": { "close": [] } }`, see [its documentation](https://github.com/gcaudan/herdr-explorer/blob/main/docs/configuration.md)); Escape still closes the preview.
 
 The icons are laid out one of two ways, set by `layout` (see [Settings](#settings)):
 
