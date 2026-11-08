@@ -2,40 +2,99 @@
 //! sidebar, each written to its file as soon as it changes; the
 //! configuration files opened in an editor; Herdr's configuration reloaded.
 
+mod canvas;
 pub mod files;
 mod store;
+mod view;
 
 use crate::config::{self, Menu, TotalsStyle};
-use crate::ui::{Frame, Screen, fit, is_control};
-use crossterm::cursor::MoveTo;
+use crate::ui::{Frame, Screen, is_control};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind};
-use crossterm::queue;
-use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use crossterm::terminal;
 use files::Files;
 use herdr_api::NumberFormat;
 use herdr_api::sidebar::{self, Levels, Settings, Thresholds, check_thresholds};
 use std::io;
 use toml_edit::Value;
+use view::Target;
 
 /// The `Tools` pane the screen was opened from, if any.
 pub const BAR_ENV: &str = "HERDR_MENU_BAR";
-/// First row of the list.
-const TOP: u16 = 2;
-/// Rows under the list: the status and the help.
-const BOTTOM: u16 = 2;
-/// Width of a setting's name, before its value.
-const NAME_WIDTH: usize = 34;
 /// A step of `ttl_seconds`, and its bounds.
 const TTL_STEP: u64 = 5;
 const TTL_MAX: u64 = 600;
+/// The size the number formats are shown with: 2.4 GiB, and 853 MiB.
+const SAMPLE_SIZE: u64 = 2_576_980_378;
+const SAMPLE_SMALL_SIZE: u64 = 853 * 1024 * 1024;
+/// The CPU share they are shown with.
+const SAMPLE_CPU: f64 = 4.2;
+/// The units of a size, in the order `MemoryUnit::next` goes through them.
+const MEMORY_UNITS: [herdr_api::MemoryUnit; 3] = [
+    herdr_api::MemoryUnit::M,
+    herdr_api::MemoryUnit::Mo,
+    herdr_api::MemoryUnit::MB,
+];
 
 /// What a row of the screen holds.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Row {
-    Header(&'static str),
+    Header(Section),
     Blank,
     Item(Item),
+}
+
+/// The sections of the screen.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Section {
+    Numbers,
+    Tools,
+    Sidebar,
+    Colors,
+    Files,
+}
+
+impl Section {
+    fn title(self) -> &'static str {
+        match self {
+            Self::Numbers => "Format des nombres",
+            Self::Tools => "Pane Tools",
+            Self::Sidebar => "Sidebar",
+            Self::Colors => "Couleurs par seuil",
+            Self::Files => "Configuration",
+        }
+    }
+}
+
+/// How an item's value is shown.
+#[derive(Debug, Clone, PartialEq)]
+enum Shown {
+    /// One of a few values, all shown, the `current` one highlighted.
+    Choice {
+        options: Vec<String>,
+        current: usize,
+    },
+    /// A number changed by steps.
+    Number(String),
+    /// Text typed after Enter.
+    Text(String),
+    /// Three thresholds, typed after Enter, and their unit.
+    Levels(Vec<String>, &'static str),
+    /// Something done on Enter.
+    Action,
+}
+
+/// A yes-or-no setting, shown as two choices.
+fn yes_no(value: bool) -> Shown {
+    Shown::Choice {
+        options: vec!["non".into(), "oui".into()],
+        current: usize::from(value),
+    }
+}
+
+/// A size or a share as the screen shows it: the narrow no-break space of
+/// the plugins as a plain one, which every terminal draws one cell wide.
+fn plain(text: String) -> String {
+    text.replace('\u{202F}', " ")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -120,6 +179,8 @@ struct State {
     /// `None` when the sidebar is not installed.
     sidebar: Option<Settings>,
     selected: usize,
+    /// The first row of the list on screen.
+    top: usize,
     /// The last thing done, or why it failed (in red).
     status: Option<(String, bool)>,
     /// The text being typed for the selected item (shells, thresholds).
@@ -127,34 +188,95 @@ struct State {
 }
 
 impl State {
+    fn new(files: Files, menu: Menu, sidebar: Option<Settings>) -> Self {
+        Self {
+            files,
+            menu,
+            sidebar,
+            selected: 0,
+            top: 0,
+            status: None,
+            typing: None,
+        }
+    }
+
     fn rows(&self) -> Vec<Row> {
         let mut rows = vec![
-            Row::Header("Format des nombres"),
+            Row::Header(Section::Numbers),
             Row::Item(Item::DecimalComma),
             Row::Item(Item::PercentSpace),
             Row::Item(Item::CpuDecimal),
             Row::Item(Item::MemoryUnit),
             Row::Item(Item::MemorySpace),
-            Row::Header("Pane Tools"),
+            Row::Blank,
+            Row::Header(Section::Tools),
             Row::Item(Item::Totals),
         ];
         if self.sidebar.is_some() {
             rows.extend([
-                Row::Header("Sidebar"),
+                Row::Blank,
+                Row::Header(Section::Sidebar),
                 Row::Item(Item::Ttl),
                 Row::Item(Item::Shells),
                 Row::Item(Item::TabBar),
-                Row::Header("Couleurs par seuil (vert, jaune, orange, rouge)"),
+                Row::Blank,
+                Row::Header(Section::Colors),
                 Row::Item(Item::Colors),
             ]);
             rows.extend(Levels::ALL.map(|l| Row::Item(Item::Levels(l))));
         }
         rows.extend([
             Row::Blank,
+            Row::Header(Section::Files),
             Row::Item(Item::OpenFiles),
             Row::Item(Item::Reload),
         ]);
         rows
+    }
+
+    /// The index, among the items, of the first item of each section.
+    fn section_starts(&self) -> Vec<usize> {
+        let mut starts = Vec::new();
+        let mut items = 0;
+        let mut after_header = false;
+        for row in self.rows() {
+            match row {
+                Row::Header(_) => after_header = true,
+                Row::Item(_) => {
+                    if after_header {
+                        starts.push(items);
+                    }
+                    after_header = false;
+                    items += 1;
+                }
+                Row::Blank => {}
+            }
+        }
+        starts
+    }
+
+    /// The first item of the next section (`forward`), or the first item of
+    /// a section above the selected item: its own section's when it is not
+    /// that one; round the list.
+    fn next_section(&self, forward: bool) -> usize {
+        let starts = self.section_starts();
+        let found = if forward {
+            starts.iter().find(|&&s| s > self.selected)
+        } else {
+            starts.iter().rev().find(|&&s| s < self.selected)
+        };
+        let round = if forward {
+            starts.first()
+        } else {
+            starts.last()
+        };
+        found.or(round).copied().unwrap_or(0)
+    }
+
+    /// Selects the item `index`; the screen stays open.
+    fn select(&mut self, index: usize) -> bool {
+        self.selected = index;
+        false
     }
 
     /// The selected one of `items`, the screen's items.
@@ -172,68 +294,187 @@ impl State {
             .collect()
     }
 
-    fn name_and_value(&self, item: Item, selected: bool) -> (&'static str, String) {
-        let yes_no = |b: bool| if b { "oui" } else { "non" }.to_string();
-        let sidebar = self.sidebar.as_ref();
-        let typed = self.typing.as_ref().filter(|_| selected);
-        let numbers = &self.menu.numbers;
+    /// An item's name on the screen.
+    fn label(&self, item: Item) -> String {
         match item {
-            Item::DecimalComma => ("Virgule décimale (2,4G)", yes_no(numbers.decimal_comma)),
-            Item::PercentSpace => ("Espace avant % (4 %)", yes_no(numbers.percent_space)),
+            Item::DecimalComma => "Virgule décimale",
+            Item::PercentSpace => "Espace avant %",
+            Item::CpuDecimal => "CPU avec une décimale",
+            Item::MemoryUnit => "Unités de la mémoire",
+            Item::MemorySpace => "Espace avant l'unité",
+            Item::Totals => "Totaux CPU / mémoire",
+            Item::Ttl => "Durée de vie des valeurs",
+            Item::Shells => "Shells",
+            Item::TabBar => "Totaux dans la barre d'onglets",
+            Item::Colors => "Couleurs",
+            Item::Levels(which) => levels_name(which),
+            // nf-md-pencil
+            Item::OpenFiles => "\u{F03EB} Ouvrir les fichiers de configuration…",
+            // nf-md-reload, as the `Tools` pane's button
+            Item::Reload => "\u{F0453} Recharger la configuration de Herdr",
+        }
+        .into()
+    }
+
+    /// An item's value: a choice shows each value as the current number
+    /// format writes it, so that it shows what changes.
+    fn shown(&self, item: Item) -> Shown {
+        let sidebar = self.sidebar.as_ref();
+        let numbers = self.menu.numbers;
+        let sizes = |format: fn(&mut NumberFormat, usize), count: usize, current: usize| {
+            let options = (0..count)
+                .map(|i| {
+                    let mut n = numbers;
+                    format(&mut n, i);
+                    plain(n.size(SAMPLE_SIZE))
+                })
+                .collect();
+            Shown::Choice { options, current }
+        };
+        let shares = |format: fn(&mut NumberFormat, bool), current: bool| {
+            let options = [false, true]
+                .into_iter()
+                .map(|b| {
+                    let mut n = numbers;
+                    format(&mut n, b);
+                    plain(n.cpu(SAMPLE_CPU))
+                })
+                .collect();
+            Shown::Choice {
+                options,
+                current: usize::from(current),
+            }
+        };
+        match item {
+            Item::DecimalComma => sizes(
+                |n, i| n.decimal_comma = i == 1,
+                2,
+                usize::from(numbers.decimal_comma),
+            ),
+            Item::PercentSpace => shares(|n, b| n.percent_space = b, numbers.percent_space),
+            Item::CpuDecimal => shares(|n, b| n.cpu_decimal = b, numbers.cpu_decimal),
+            Item::MemoryUnit => sizes(
+                |n, i| n.memory_unit = MEMORY_UNITS[i],
+                MEMORY_UNITS.len(),
+                MEMORY_UNITS
+                    .iter()
+                    .position(|&u| u == numbers.memory_unit)
+                    .unwrap_or(0),
+            ),
+            Item::MemorySpace => sizes(
+                |n, i| n.memory_space = i == 1,
+                2,
+                usize::from(numbers.memory_space),
+            ),
+            Item::Totals => Shown::Choice {
+                options: vec!["une ligne".into(), "barres".into()],
+                current: usize::from(self.menu.totals == TotalsStyle::Bars),
+            },
+            Item::Ttl => Shown::Number(format!("{} s", sidebar.map_or(0, |s| s.ttl_seconds))),
+            Item::Shells => Shown::Text(sidebar.map_or_else(String::new, |s| s.shells.join(", "))),
+            Item::TabBar => yes_no(sidebar.is_some_and(|s| s.tab_bar)),
+            Item::Colors => yes_no(sidebar.is_some_and(|s| s.colors)),
+            Item::Levels(which) => Shown::Levels(
+                sidebar.map_or_else(Vec::new, |s| {
+                    which.of(s).iter().map(|v| number(*v)).collect()
+                }),
+                levels_unit(which),
+            ),
+            Item::OpenFiles | Item::Reload => Shown::Action,
+        }
+    }
+
+    /// What an item does, and the setting and files it writes.
+    fn about(&self, item: Item) -> (&'static str, String) {
+        let menu = config::FILE_NAME;
+        let side = sidebar::SETTINGS_FILE;
+        let both = match self.sidebar {
+            Some(_) => format!("{menu}, {side}"),
+            None => menu.to_string(),
+        };
+        let (what, key, file) = match item {
+            Item::DecimalComma => (
+                "Une virgule ou un point avant les décimales.",
+                "decimal_comma",
+                both,
+            ),
+            Item::PercentSpace => ("Une espace fine avant le signe %.", "percent_space", both),
             Item::CpuDecimal => (
-                "CPU avec une décimale",
-                if numbers.cpu_decimal { "4,2%" } else { "4%" }.into(),
+                "Les parts de CPU des totaux, avec une décimale ou sans.",
+                "cpu_decimal",
+                both,
             ),
             Item::MemoryUnit => (
-                "Unités de la mémoire",
-                match numbers.memory_unit {
-                    herdr_api::MemoryUnit::M => "M, G",
-                    herdr_api::MemoryUnit::Mo => "Mo, Go",
-                    herdr_api::MemoryUnit::MB => "MB, GB",
-                }
-                .into(),
+                "L'unité des tailles : K, M, G ; Ko, Mo, Go ; ou KB, MB, GB.",
+                "memory_unit",
+                both,
             ),
             Item::MemorySpace => (
-                "Espace avant l'unité",
-                numbers.size(2_576_980_378).replace('\u{202F}', " "),
+                "Une espace fine entre une taille et son unité.",
+                "memory_space",
+                both,
             ),
             Item::Totals => (
-                "Totaux CPU / mémoire",
-                match self.menu.totals {
-                    TotalsStyle::Line => "une ligne",
-                    TotalsStyle::Bars => "barres",
-                }
-                .into(),
+                "Les totaux sous les icônes : une ligne, ou quatre barres.",
+                "totals",
+                menu.into(),
             ),
             Item::Ttl => (
-                "Durée de vie des valeurs",
-                format!("{} s", sidebar.map_or(0, |s| s.ttl_seconds)),
+                "Combien de temps une valeur dure sans mesure nouvelle (5 à 600 s).",
+                "ttl_seconds",
+                side.into(),
             ),
             Item::Shells => (
-                "Shells",
-                match typed {
-                    Some(text) => format!("{text}▏"),
-                    None => sidebar.map_or_else(String::new, |s| s.shells.join(", ")),
-                },
+                "Les programmes comptés comme shells, séparés par des virgules.",
+                "shells",
+                side.into(),
             ),
             Item::TabBar => (
-                "Totaux dans la barre d'onglets",
-                yes_no(sidebar.is_some_and(|s| s.tab_bar)),
+                "Les totaux CPU et mémoire à droite de la barre d'onglets.",
+                "tab_bar",
+                side.into(),
             ),
-            Item::Colors => ("Couleurs", yes_no(sidebar.is_some_and(|s| s.colors))),
+            Item::Colors => (
+                "Les chiffres en vert, jaune, orange ou rouge selon leurs seuils.",
+                "colors",
+                side.into(),
+            ),
             Item::Levels(which) => (
-                levels_name(which),
-                match typed {
-                    Some(text) => format!("{text}▏"),
-                    None => sidebar.map_or_else(String::new, |s| {
-                        let values: Vec<String> = which.of(s).iter().map(|v| number(*v)).collect();
-                        format!("{} {}", values.join(" · "), levels_unit(which))
-                    }),
-                },
+                "Trois seuils croissants, entre vert, jaune, orange et rouge.",
+                which.key(),
+                side.into(),
             ),
-            Item::OpenFiles => ("Ouvrir les fichiers de configuration…", String::new()),
-            Item::Reload => ("Recharger la configuration de Herdr", String::new()),
-        }
+            Item::OpenFiles => (
+                "Ouvre les fichiers dans un éditeur, et ferme cet écran.",
+                "",
+                String::new(),
+            ),
+            Item::Reload => (
+                "Recharge le config.toml de Herdr et dit s'il l'a appliqué.",
+                "",
+                String::new(),
+            ),
+        };
+        let place = if key.is_empty() {
+            String::new()
+        } else {
+            format!("{key} · {file}")
+        };
+        (what, place)
+    }
+
+    /// What a section's header shows after its title: the numbers as their
+    /// format writes them.
+    fn note(&self, section: Section) -> Option<String> {
+        let n = self.menu.numbers;
+        (section == Section::Numbers).then(|| {
+            plain(format!(
+                "{} · {} · {}",
+                n.cpu(SAMPLE_CPU),
+                n.size(SAMPLE_SMALL_SIZE),
+                n.size(SAMPLE_SIZE)
+            ))
+        })
     }
 
     /// Writes `key` to `menu.toml`; why the menu still ignores the file,
@@ -334,8 +575,19 @@ impl State {
     }
 
     /// Changes `item` by one step (`forward` or back); whether the screen
-    /// should close.
-    fn change(&mut self, item: Item, forward: bool) -> bool {
+    /// should close. A choice goes round its values when `round`, and
+    /// stops at its first or last one otherwise, as its row shows them.
+    fn change(&mut self, item: Item, forward: bool, round: bool) -> bool {
+        if !round && let Shown::Choice { options, current } = self.shown(item) {
+            let at_end = if forward {
+                current + 1 >= options.len()
+            } else {
+                current == 0
+            };
+            if at_end {
+                return false;
+            }
+        }
         if item == Item::OpenFiles {
             match files::open(&self.files) {
                 Ok(_) => {
@@ -348,6 +600,24 @@ impl State {
             self.show(result);
         }
         false
+    }
+
+    /// Sets the choice `item` to its value `option`, step by step, as long
+    /// as each step changes it.
+    fn choose(&mut self, item: Item, option: usize) {
+        let current = |state: &Self| match state.shown(item) {
+            Shown::Choice { current, .. } => Some(current),
+            _ => None,
+        };
+        while let Some(before) = current(self).filter(|&c| c != option) {
+            match self.step(item, true) {
+                Some(result) => self.show(result),
+                None => return,
+            }
+            if current(self) == Some(before) {
+                return;
+            }
+        }
     }
 
     /// What changing `item` by one step did, to show; `None` when there is
@@ -483,41 +753,30 @@ pub fn run() -> Result<(), String> {
         },
         None => (None, None),
     };
-    let mut state = State {
-        files,
-        menu,
-        sidebar,
-        selected: 0,
-        status: menu_error.or(sidebar_error).map(|e| (e, true)),
-        typing: None,
-    };
+    let mut state = State::new(files, menu, sidebar);
+    state.status = menu_error.or(sidebar_error).map(|e| (e, true));
     show(&mut state).map_err(|e| e.to_string())
 }
 
-/// The first row of the list on screen: the selected item stays visible
-/// when the list is taller than the screen.
-fn scroll(state: &State, height: u16) -> usize {
-    let visible = usize::from(height.saturating_sub(TOP + BOTTOM)).max(1);
-    let items = state.items();
-    let selected = state.selected_item(&items);
-    let rows = state.rows();
-    let at = rows
-        .iter()
-        .position(|row| *row == Row::Item(selected))
-        .unwrap_or(0);
-    // Show the header above the first item, the end of the list at the end.
-    (at + 1)
-        .saturating_sub(visible)
-        .min(rows.len().saturating_sub(visible))
+/// Draws the screen; what its parts answer to a click.
+fn draw(state: &mut State, shown: &mut Vec<u8>) -> io::Result<view::Drawn> {
+    let (width, height) = terminal::size()?;
+    let drawn = view::render(state, width, height);
+    state.top = drawn.top;
+    let mut frame = Frame::new()?;
+    drawn.canvas.write_to(&mut frame)?;
+    frame.show_if_new(shown)?;
+    Ok(drawn)
 }
 
 fn show(state: &mut State) -> io::Result<()> {
     let _screen = Screen::enter()?;
     let mut shown = Vec::new();
     loop {
-        draw(state)?.show_if_new(&mut shown)?;
+        let drawn = draw(state, &mut shown)?;
         let items = state.items();
         let item = state.selected_item(&items);
+        let last = items.len() - 1;
         let event = event::read()?;
         if let Some(text) = &mut state.typing {
             if let Event::Key(key) = event
@@ -547,48 +806,38 @@ fn show(state: &mut State) -> io::Result<()> {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Esc | KeyCode::Char('q') => true,
                 KeyCode::Up | KeyCode::Char('k') => {
-                    state.selected = (state.selected + items.len() - 1) % items.len();
-                    false
+                    state.select((state.selected + last) % items.len())
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
-                    state.selected = (state.selected + 1) % items.len();
-                    false
+                    state.select((state.selected + 1) % items.len())
                 }
-                KeyCode::Left | KeyCode::Char('h') => state.change(item, false),
-                KeyCode::Right | KeyCode::Char('l') | KeyCode::Enter | KeyCode::Char(' ') => {
-                    state.change(item, true)
-                }
+                KeyCode::Home | KeyCode::Char('g') => state.select(0),
+                KeyCode::End | KeyCode::Char('G') => state.select(last),
+                KeyCode::Tab => state.select(state.next_section(true)),
+                KeyCode::BackTab => state.select(state.next_section(false)),
+                KeyCode::Left | KeyCode::Char('h') => state.change(item, false, false),
+                KeyCode::Right | KeyCode::Char('l') => state.change(item, true, false),
+                KeyCode::Enter | KeyCode::Char(' ') => state.change(item, true, true),
                 _ => false,
             },
-            Event::Mouse(mouse) => {
-                let (_, height) = terminal::size()?;
-                let rows = state.rows();
-                let in_list = mouse.row >= TOP && mouse.row < height.saturating_sub(BOTTOM);
-                let hit = usize::from(mouse.row.wrapping_sub(TOP)) + scroll(state, height);
-                let item_at = rows.get(hit).filter(|_| in_list).and_then(|row| match row {
-                    Row::Item(item) => items.iter().position(|i| i == item),
-                    _ => None,
-                });
-                match (mouse.kind, item_at) {
-                    (MouseEventKind::Moved, Some(i)) => {
-                        state.selected = i;
-                        false
+            Event::Mouse(mouse) => match (mouse.kind, drawn.at(mouse.column, mouse.row)) {
+                (MouseEventKind::Moved, Some(target)) => state.select(target.item()),
+                (MouseEventKind::Down(MouseButton::Left), Some(target)) => {
+                    state.selected = target.item();
+                    let item = items[target.item()];
+                    match target {
+                        Target::Item(_) => state.change(item, true, true),
+                        Target::Choose(_, option) => {
+                            state.choose(item, option);
+                            false
+                        }
+                        Target::Step(_, forward) => state.change(item, forward, false),
                     }
-                    (MouseEventKind::Down(MouseButton::Left), Some(i)) => {
-                        state.selected = i;
-                        state.change(items[i], true)
-                    }
-                    (MouseEventKind::ScrollDown, _) => {
-                        state.selected = (state.selected + 1).min(items.len() - 1);
-                        false
-                    }
-                    (MouseEventKind::ScrollUp, _) => {
-                        state.selected = state.selected.saturating_sub(1);
-                        false
-                    }
-                    _ => false,
                 }
-            }
+                (MouseEventKind::ScrollDown, _) => state.select((state.selected + 1).min(last)),
+                (MouseEventKind::ScrollUp, _) => state.select(state.selected.saturating_sub(1)),
+                _ => false,
+            },
             _ => false,
         };
         if close {
@@ -597,95 +846,180 @@ fn show(state: &mut State) -> io::Result<()> {
     }
 }
 
-fn draw(state: &State) -> io::Result<Frame> {
-    let (width, height) = terminal::size()?;
-    let width = usize::from(width);
-    let mut out = Frame::new()?;
-    queue!(
-        out,
-        MoveTo(1, 0),
-        SetAttribute(Attribute::Bold),
-        Print("Réglages"),
-        SetAttribute(Attribute::Reset)
-    )?;
-    let items = state.items();
-    let selected = state.selected_item(&items);
-    let rows = state.rows();
-    let first = scroll(state, height);
-    let last = height.saturating_sub(BOTTOM);
-    for (y, row) in (TOP..last).zip(rows.iter().skip(first)) {
-        match *row {
-            Row::Blank => {}
-            Row::Header(title) => {
-                queue!(
-                    out,
-                    MoveTo(1, y),
-                    SetForegroundColor(Color::DarkGrey),
-                    Print(fit(title, width.saturating_sub(1))),
-                    ResetColor
-                )?;
-            }
-            Row::Item(item) => {
-                let (name, value) = state.name_and_value(item, item == selected);
-                let marker = if item == selected { "›" } else { " " };
-                let line = format!(" {marker} {name:<NAME_WIDTH$}{value}");
-                if item == selected {
-                    queue!(out, SetForegroundColor(Color::Yellow))?;
-                }
-                queue!(out, MoveTo(0, y), Print(fit(&line, width)), ResetColor)?;
-            }
-        }
-    }
-    // Rows above or below the screen: a hint in the corner.
-    let more = (
-        first > 0,
-        first + usize::from(last.saturating_sub(TOP)) < rows.len(),
-    );
-    let arrows = match more {
-        (true, true) => "↑↓",
-        (true, false) => "↑",
-        (false, true) => "↓",
-        (false, false) => "",
-    };
-    if !arrows.is_empty() {
-        queue!(
-            out,
-            MoveTo(width.saturating_sub(3) as u16, 0),
-            SetForegroundColor(Color::DarkGrey),
-            Print(arrows),
-            ResetColor
-        )?;
-    }
-    if let Some((status, error)) = &state.status {
-        let color = if *error { Color::Red } else { Color::Green };
-        queue!(
-            out,
-            MoveTo(1, height.saturating_sub(2)),
-            SetForegroundColor(color),
-            Print(fit(status, width.saturating_sub(1))),
-            ResetColor
-        )?;
-    }
-    let help = match (state.typing.is_some(), selected) {
-        (true, Item::Shells) => " noms séparés par des virgules · Entrée valider · Échap annuler",
-        (true, _) => {
-            " trois valeurs croissantes, séparées par des espaces · Entrée valider · Échap annuler"
-        }
-        (false, _) => " ↑↓ choisir · ←→ Entrée changer · Échap fermer",
-    };
-    queue!(
-        out,
-        MoveTo(0, height.saturating_sub(1)),
-        SetAttribute(Attribute::Dim),
-        Print(fit(help, width)),
-        SetAttribute(Attribute::Reset)
-    )?;
-    Ok(out)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The screen on the files of `dir`, the sidebar installed.
+    fn state_in(dir: &std::path::Path) -> State {
+        let files = Files {
+            menu: Some(dir.join(config::FILE_NAME)),
+            sidebar: Some(dir.join(sidebar::SETTINGS_FILE)),
+        };
+        State::new(files, Menu::default(), Some(Settings::default()))
+    }
+
+    /// The screen without files, as `width` × `height` cells of text.
+    fn rendered(state: &State, width: u16, height: u16) -> String {
+        view::render(state, width, height).canvas.to_text()
+    }
+
+    #[test]
+    fn the_screen_shows_every_setting_in_its_section() {
+        let mut state = State::new(
+            Files {
+                menu: None,
+                sidebar: None,
+            },
+            Menu::default(),
+            Some(Settings::default()),
+        );
+        state.status = Some(("enregistré dans menu.toml".into(), false));
+        let text = rendered(&state, 92, 40);
+        println!("{text}");
+        for expected in [
+            "Réglages",
+            "Format des nombres",
+            "Virgule décimale",
+            " 2.4G   2,4G",
+            " 2,4G   2,4Go   2,4GB",
+            "━━ 10 ━━ 25 ━━ 50 ━━ %",
+            "‹ 20 s ›",
+            "Couleurs par seuil",
+            "Seuils mémoire (Herdr)",
+            "✓ enregistré dans menu.toml",
+            "decimal_comma · menu.toml, sidebar.toml",
+            "↑↓ naviguer",
+        ] {
+            assert!(text.contains(expected), "{expected:?} missing:\n{text}");
+        }
+        // Without the sidebar, its sections are gone.
+        state.sidebar = None;
+        let text = rendered(&state, 92, 40);
+        assert!(!text.contains("Sidebar") && !text.contains("Seuils"));
+    }
+
+    #[test]
+    fn any_size_draws_without_panic() {
+        let mut state = State::new(
+            Files {
+                menu: None,
+                sidebar: None,
+            },
+            Menu::default(),
+            Some(Settings::default()),
+        );
+        state.status = Some((
+            "une erreur longue, très longue, bien trop longue".into(),
+            true,
+        ));
+        for (w, h) in [
+            (0, 0),
+            (1, 1),
+            (3, 2),
+            (10, 5),
+            (20, 8),
+            (30, 12),
+            (200, 60),
+        ] {
+            for selected in 0..state.items().len() {
+                state.selected = selected;
+                state.typing = (selected % 2 == 0).then(|| "pwsh, bash, zsh, fish".into());
+                let drawn = view::render(&state, w, h);
+                state.top = drawn.top;
+            }
+        }
+    }
+
+    #[test]
+    fn a_short_screen_scrolls_to_the_selection() {
+        let mut state = State::new(
+            Files {
+                menu: None,
+                sidebar: None,
+            },
+            Menu::default(),
+            Some(Settings::default()),
+        );
+        state.selected = state.items().len() - 1;
+        let text = rendered(&state, 70, 14);
+        println!("{text}");
+        assert!(text.contains("Recharger la configuration de Herdr"));
+        assert!(!text.contains("Virgule décimale"));
+        // The scrollbar's thumb, at the bottom.
+        assert!(text.contains('┃'));
+    }
+
+    #[test]
+    fn typed_text_shows_its_end_and_the_keys_to_save_it() {
+        let mut state = State::new(
+            Files {
+                menu: None,
+                sidebar: None,
+            },
+            Menu::default(),
+            Some(Settings::default()),
+        );
+        state.selected = state
+            .items()
+            .iter()
+            .position(|&i| i == Item::Shells)
+            .unwrap();
+        state.typing = Some("pwsh, bash, zsh, fish, nu, elvish, xonsh, tcsh".into());
+        let text = rendered(&state, 56, 11);
+        println!("{text}");
+        assert!(text.contains("tcsh▏"));
+        assert!(text.contains("Entrée valider"));
+    }
+
+    #[test]
+    fn tab_goes_from_section_to_section() {
+        let state = State::new(
+            Files {
+                menu: None,
+                sidebar: None,
+            },
+            Menu::default(),
+            Some(Settings::default()),
+        );
+        let starts = state.section_starts();
+        assert_eq!(starts.len(), 5);
+        let items = state.items();
+        assert_eq!(items[starts[1]], Item::Totals);
+        assert_eq!(items[starts[4]], Item::OpenFiles);
+        assert_eq!(state.next_section(true), starts[1]);
+        // Back from the first section: round to the last.
+        assert_eq!(state.next_section(false), starts[4]);
+        let within = State {
+            selected: starts[2] + 1,
+            ..state
+        };
+        assert_eq!(within.next_section(false), starts[2]);
+    }
+
+    #[test]
+    fn arrows_stop_at_a_choice_s_ends_and_a_click_picks_one() {
+        let dir = herdr_api::TempDir::new("menu-choices").unwrap();
+        let mut state = state_in(&dir);
+        let comma = |s: &State| s.menu.numbers.decimal_comma;
+        // `decimal_comma` is on: its last value, right does nothing.
+        assert!(comma(&state));
+        state.change(Item::DecimalComma, true, false);
+        assert!(comma(&state));
+        state.change(Item::DecimalComma, false, false);
+        assert!(!comma(&state));
+        // Enter goes round.
+        state.change(Item::DecimalComma, true, true);
+        assert!(comma(&state));
+        state.choose(Item::MemoryUnit, 2);
+        assert_eq!(state.menu.numbers.memory_unit, herdr_api::MemoryUnit::MB);
+        state.choose(Item::MemoryUnit, 0);
+        assert_eq!(state.menu.numbers.memory_unit, herdr_api::MemoryUnit::M);
+        assert!(matches!(
+            state.shown(Item::MemoryUnit),
+            Shown::Choice { current: 0, .. }
+        ));
+    }
 
     #[test]
     fn thresholds_are_typed_with_spaces() {
@@ -704,17 +1038,7 @@ mod tests {
         // Ignored for another reason: an unknown setting.
         std::fs::write(dir.join(config::FILE_NAME), "unknown = 1\n").unwrap();
         std::fs::write(dir.join(sidebar::SETTINGS_FILE), "").unwrap();
-        let mut state = State {
-            files: Files {
-                menu: Some(dir.join(config::FILE_NAME)),
-                sidebar: Some(dir.join(sidebar::SETTINGS_FILE)),
-            },
-            menu: Menu::default(),
-            sidebar: Some(Settings::default()),
-            selected: 0,
-            status: None,
-            typing: None,
-        };
+        let mut state = state_in(&dir);
         let before = state.menu.numbers.decimal_comma;
         let said = state.step(Item::DecimalComma, true).unwrap();
         let sidebar = Settings::read(&dir.join(sidebar::SETTINGS_FILE));
@@ -727,17 +1051,7 @@ mod tests {
     #[test]
     fn every_setting_written_is_one_the_plugins_read() {
         let dir = herdr_api::TempDir::new("menu-every-setting").unwrap();
-        let mut state = State {
-            files: Files {
-                menu: Some(dir.join(config::FILE_NAME)),
-                sidebar: Some(dir.join(sidebar::SETTINGS_FILE)),
-            },
-            menu: Menu::default(),
-            sidebar: Some(Settings::default()),
-            selected: 0,
-            status: None,
-            typing: None,
-        };
+        let mut state = state_in(&dir);
         // A file holding a setting its plugin does not know is ignored:
         // `written` says so.
         for item in state.items() {

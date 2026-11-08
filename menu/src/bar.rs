@@ -15,7 +15,7 @@
 //! explorer, then swaps places with it. Herdr gives a side of a split a tenth
 //! of it at least, so the bar is never shorter than a tenth of the column.
 
-mod colors;
+pub(crate) mod colors;
 mod geometry;
 mod registry;
 mod view;

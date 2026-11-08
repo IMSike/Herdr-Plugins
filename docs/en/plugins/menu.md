@@ -134,7 +134,33 @@ The folder is only measured while this page is shown: going back stops the measu
 
 The window waits for Enter before closing, an error included. While it is open, another click on Update says that an update is under way instead of opening a second one. Without a graphical display (over SSH), or when the terminal closes at once, the `Tools` pane says so in red: run `herdr update` outside Herdr.
 
-**Settings** (`s`) opens a settings screen in a popup of 70% of the terminal's width and 80% of its height; the list scrolls when it does not fit (an arrow in the top right corner says so). Up and down (or `j`/`k`) choose a line; left and right (or `h`/`l`), Enter or Space change it, and each change is saved at once; with the mouse, hovering a line chooses it, a click changes it and the wheel moves the choice; Escape, `q` or Ctrl+C closes the screen. A file that is a link (deployed by stow or chezmoi, say) stays a link: the file it points to is written. When the file stays ignored after a change (another of its settings is invalid), the screen says so in red, with the reason, and shows the new value, which the file holds: the next change turns it back.
+**Settings** (`s`) opens a settings screen in a popup of 70% of the terminal's width and 80% of its height:
+
+```
+ 󰒓 Réglages                                                               1/17
+
+  Format des nombres ────────────────────────────────────── 4% · 853M · 2,4G
+  ▌ Virgule décimale                 2.4G   2,4G
+    Espace avant %                   4%   4 %
+    Unités de la mémoire             2,4G   2,4Go   2,4GB
+  …
+  Sidebar ───────────────────────────────────────────────────────────────────
+    Durée de vie des valeurs        ‹ 20 s ›
+    Shells                           bash, sh, zsh, fish, dash, nu, pwsh
+  …
+  ───────────────────────────────────────────────────────────────────────────
+    Une virgule ou un point avant les décimales.  decimal_comma · menu.toml, sidebar.toml
+    ✓ enregistré dans menu.toml
+ ↑↓ naviguer   ←→ choisir   Espace suivant   Tab section   Échap fermer
+```
+
+- The settings are grouped in sections, each value in a column of its own, centered in a wide popup. A setting with a few values shows them all, the current one highlighted (in yellow on the selected line); the number formats are shown as they would write a figure, with the current format, and the header of their section shows a CPU share and two sizes in that format. A number (`‹ 20 s ›`) shows the arrows that change it; a set of thresholds shows the four colors around its values.
+- Under the list: what the selected line does, with the setting and the files it writes; the last thing done (`✓` in green, or `✗` in red with the reason); and the keys of the selected line.
+- Keys: up and down (or `j`/`k`) choose a line, Home/End (or `g`/`G`) the first or last, Tab the first line of the next section, Shift+Tab the first line of its section, or of the one above. Left and right (or `h`/`l`) move a choice towards its first or last value (stopping there) or a number by a step; Enter or Space go to the next value, round the list, or start typing; each change is saved at once. Escape, `q` or Ctrl+C closes the screen.
+- Mouse: hovering a line chooses it, a click on one of its values chooses that value, a click on `‹` or `›` steps a number, a click elsewhere on the line acts as Enter, and the wheel moves the choice.
+- On a small popup, the list scrolls (a scrollbar on its right says where it is), and the description, then the status line, give way to it; a name or value too long is cut with `…`, and typed text shows its end.
+
+A file that is a link (deployed by stow or chezmoi, say) stays a link: the file it points to is written. When the file stays ignored after a change (another of its settings is invalid), the screen says so in red, with the reason, and shows the new value, which the file holds: the next change turns it back.
 
 | Line | Effect | File |
 |---|---|---|

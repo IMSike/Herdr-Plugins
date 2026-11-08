@@ -134,7 +134,33 @@ Le dossier n'est mesuré que pendant que cette page est affichée : revenir arr�
 
 La fenêtre attend Entrée avant de se fermer, erreur comprise. Tant qu'elle est ouverte, un nouveau clic sur Update dit qu'une mise à jour est en cours au lieu d'en ouvrir une deuxième. Sans affichage graphique (en SSH), ou quand le terminal se ferme aussitôt, le pane `Tools` le dit en rouge : lancez `herdr update` hors de Herdr.
 
-**Settings** (`s`) ouvre un écran de réglages dans un popup de 70 % de la largeur du terminal et 80 % de sa hauteur ; la liste défile quand elle ne tient pas (une flèche en haut à droite le signale). Haut et bas (ou `j`/`k`) choisissent une ligne ; gauche et droite (ou `h`/`l`), Entrée ou Espace la changent, et chaque changement est enregistré aussitôt ; à la souris, survoler une ligne la choisit, un clic la change et la molette déplace le choix ; Échap, `q` ou Ctrl+C ferme l'écran. Un fichier qui est un lien (déployé par stow ou chezmoi, par exemple) reste un lien : c'est le fichier vers lequel il pointe qui est écrit. Quand le fichier reste ignoré après un changement (un autre de ses réglages est invalide), l'écran le dit en rouge, avec la raison, et affiche la nouvelle valeur, que le fichier contient : le changement suivant la remet.
+**Settings** (`s`) ouvre un écran de réglages dans un popup de 70 % de la largeur du terminal et 80 % de sa hauteur :
+
+```
+ 󰒓 Réglages                                                               1/17
+
+  Format des nombres ────────────────────────────────────── 4% · 853M · 2,4G
+  ▌ Virgule décimale                 2.4G   2,4G
+    Espace avant %                   4%   4 %
+    Unités de la mémoire             2,4G   2,4Go   2,4GB
+  …
+  Sidebar ───────────────────────────────────────────────────────────────────
+    Durée de vie des valeurs        ‹ 20 s ›
+    Shells                           bash, sh, zsh, fish, dash, nu, pwsh
+  …
+  ───────────────────────────────────────────────────────────────────────────
+    Une virgule ou un point avant les décimales.  decimal_comma · menu.toml, sidebar.toml
+    ✓ enregistré dans menu.toml
+ ↑↓ naviguer   ←→ choisir   Espace suivant   Tab section   Échap fermer
+```
+
+- Les réglages sont groupés en sections, chaque valeur dans une colonne à elle, au centre d'un popup large. Un réglage à quelques valeurs les montre toutes, l'actuelle en évidence (en jaune sur la ligne choisie) ; les formats des nombres sont montrés comme ils écriraient un chiffre, avec le format actuel, et l'en-tête de leur section montre une part de CPU et deux tailles dans ce format. Un nombre (`‹ 20 s ›`) montre les flèches qui le changent ; un jeu de seuils montre les quatre couleurs autour de ses valeurs.
+- Sous la liste : ce que fait la ligne choisie, avec le réglage et les fichiers qu'elle écrit ; la dernière chose faite (`✓` en vert, ou `✗` en rouge avec la raison) ; et les touches de la ligne choisie.
+- Touches : haut et bas (ou `j`/`k`) choisissent une ligne, Début/Fin (ou `g`/`G`) la première ou la dernière, Tab la première ligne de la section suivante, Maj+Tab la première ligne de sa section, ou de celle au-dessus. Gauche et droite (ou `h`/`l`) déplacent un choix vers sa première ou sa dernière valeur (en s'y arrêtant) ou un nombre d'un pas ; Entrée ou Espace passent à la valeur suivante, en faisant le tour, ou commencent la saisie ; chaque changement est enregistré aussitôt. Échap, `q` ou Ctrl+C ferme l'écran.
+- Souris : survoler une ligne la choisit, un clic sur l'une de ses valeurs choisit cette valeur, un clic sur `‹` ou `›` change un nombre d'un pas, un clic ailleurs sur la ligne fait comme Entrée, et la molette déplace le choix.
+- Dans un petit popup, la liste défile (une barre de défilement à sa droite dit où elle en est), et la description, puis la ligne d'état, lui laissent la place ; un nom ou une valeur trop longs sont coupés avec `…`, et un texte saisi montre sa fin.
+
+Un fichier qui est un lien (déployé par stow ou chezmoi, par exemple) reste un lien : c'est le fichier vers lequel il pointe qui est écrit. Quand le fichier reste ignoré après un changement (un autre de ses réglages est invalide), l'écran le dit en rouge, avec la raison, et affiche la nouvelle valeur, que le fichier contient : le changement suivant la remet.
 
 | Ligne | Effet | Fichier |
 |---|---|---|
