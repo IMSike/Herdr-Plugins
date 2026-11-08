@@ -200,7 +200,7 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 }
 
 /// The name a settings file gives `value`, a choice among names (`"M"`,
-/// `"double"`): the one serde writes, so that the two never differ.
+/// `"bars"`): the one serde writes, so that the two never differ.
 pub fn name_of<T: Serialize>(value: &T) -> String {
     match serde_json::to_value(value) {
         Ok(serde_json::Value::String(name)) => name,
