@@ -5,11 +5,11 @@
 Starts a tool (lazygit, gh-dash, VS Code…) from one click or one key, updates Herdr, and sets the plugins. In a tab that shows the file explorer of [herdr-explorer](https://github.com/gcaudan/herdr-explorer), the menu is a short `Tools` pane above it, in its column: icons and their names, and the CPU and memory of Herdr and of the machine. Elsewhere it is a small popup. Tools that run in the terminal open in a large popup over the current workspace; tabs and panes stay as they are behind it, and quitting the tool closes the popup.
 
 ```
-      󰊢         󰊤         󰨞
-   lazygit   gh-dash   VS Code
-      󰋊         󰚰         󰒓
-     Disk     Update   Settings
-       2% 3,1G · 󰍹 10% 22,4G
+      󰊢         󰊤         󰄪         󰨞
+   lazygit   gh-dash     btop    VS Code
+           󰋊         󰚰         󰒓
+          Disk     Update   Settings
+            2% 3,1G · 󰍹 10% 22,4G
 ```
 
 ## Installation
@@ -58,10 +58,13 @@ Without configuration the menu offers:
 |---|---|---|
 | `l` | lazygit | `lazygit` |
 | `g` | gh-dash | `gh dash` (the [gh-dash](https://github.com/dlvhdr/gh-dash) extension of the GitHub CLI) |
+| `b` | btop | `btop`: the [btop](https://github.com/aristocratos/btop) system monitor (CPU, memory, disks, network, processes) |
 | `c` | VS Code | `code .`: the workspace's folder in VS Code |
 | `d` | Disk | built-in action `disk`: the figures on the workspace folder, see [below](#built-in-entries) |
 | `u` | Update | built-in action `update`: updates Herdr, see [below](#built-in-entries) |
 | `s` | Settings | built-in action `settings`: the settings screen, see [below](#built-in-entries) |
+
+The plugin installs none of these tools. One that is missing opens its popup anyway, which says `« btop » introuvable dans le PATH : installez-le, ou changez sa commande dans menu.toml` and waits for Enter. btop is installed by the system's package manager (`apt install btop`, `brew install btop`…); on Windows it is [btop4win](https://github.com/aristocratos/btop4win) (`winget install aristocratos.btop4win`, or `scoop install btop`), whose program is `btop4win.exe`: when the package does not also put a `btop` on `PATH`, give the entry `command = ["btop4win"]` in `menu.toml`. The entry keeps `btop`, the name of the program everywhere else.
 
 To choose your own, write `menu.toml` in the plugin's config folder (`herdr plugin config-dir imsike.menu` prints it; the settings screen creates it, with every setting commented out, when it first saves one or opens the files). Its entries replace the built-in ones, all of them; a file without entries keeps them:
 

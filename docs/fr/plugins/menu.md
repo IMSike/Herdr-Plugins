@@ -5,11 +5,11 @@
 Lance un outil (lazygit, gh-dash, VS Code…) d'un clic ou d'une touche, met à jour Herdr et règle les plugins. Dans un onglet qui affiche l'explorateur de fichiers de [herdr-explorer](https://github.com/gcaudan/herdr-explorer), le menu est un petit pane `Tools` au-dessus de lui, dans sa colonne : icônes et leurs noms, et le CPU et la mémoire de Herdr et de la machine. Ailleurs, c'est un petit popup. Les outils en terminal s'ouvrent dans un grand popup au-dessus du workspace courant ; les onglets et les panes restent tels quels derrière, et quitter l'outil ferme le popup.
 
 ```
-      󰊢         󰊤         󰨞
-   lazygit   gh-dash   VS Code
-      󰋊         󰚰         󰒓
-     Disk     Update   Settings
-       2% 3,1G · 󰍹 10% 22,4G
+      󰊢         󰊤         󰄪         󰨞
+   lazygit   gh-dash     btop    VS Code
+           󰋊         󰚰         󰒓
+          Disk     Update   Settings
+            2% 3,1G · 󰍹 10% 22,4G
 ```
 
 ## Installation
@@ -58,10 +58,13 @@ Sans configuration, le menu propose :
 |---|---|---|
 | `l` | lazygit | `lazygit` |
 | `g` | gh-dash | `gh dash` (l'extension [gh-dash](https://github.com/dlvhdr/gh-dash) de la CLI GitHub) |
+| `b` | btop | `btop` : le moniteur système [btop](https://github.com/aristocratos/btop) (CPU, mémoire, disques, réseau, processus) |
 | `c` | VS Code | `code .` : le dossier du workspace dans VS Code |
 | `d` | Disk | action intégrée `disk` : les chiffres du dossier du workspace, voir [plus bas](#entrées-intégrées) |
 | `u` | Update | action intégrée `update` : met à jour Herdr, voir [plus bas](#entrées-intégrées) |
 | `s` | Settings | action intégrée `settings` : l'écran des réglages, voir [plus bas](#entrées-intégrées) |
+
+Le plugin n'installe aucun de ces outils. Un outil absent ouvre tout de même son popup, qui affiche `« btop » introuvable dans le PATH : installez-le, ou changez sa commande dans menu.toml` et attend Entrée. btop s'installe avec le gestionnaire de paquets du système (`apt install btop`, `brew install btop`…) ; sous Windows, c'est [btop4win](https://github.com/aristocratos/btop4win) (`winget install aristocratos.btop4win`, ou `scoop install btop`), dont le programme est `btop4win.exe` : quand le paquet ne met pas aussi un `btop` dans le `PATH`, donnez à l'entrée `command = ["btop4win"]` dans `menu.toml`. L'entrée garde `btop`, le nom du programme partout ailleurs.
 
 Pour choisir les vôtres, écrivez `menu.toml` dans le dossier de configuration du plugin (`herdr plugin config-dir imsike.menu` l'affiche ; l'écran des réglages le crée, avec tous les réglages en commentaire, la première fois qu'il en enregistre un ou qu'il ouvre les fichiers). Ses entrées remplacent toutes les entrées intégrées ; un fichier sans entrée les garde :
 

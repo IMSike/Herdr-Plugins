@@ -38,7 +38,12 @@ fn program(name: &str) -> Result<std::ffi::OsString, String> {
     }
     find_on_path(name)
         .map(PathBuf::into_os_string)
-        .ok_or_else(|| format!("« {name} » introuvable dans le PATH"))
+        .ok_or_else(|| not_found(name))
+}
+
+/// The error of a program `name` that is not on `PATH`.
+pub fn not_found(name: &str) -> String {
+    format!("« {name} » introuvable dans le PATH")
 }
 
 /// The extensions of the programs Windows runs, in the order it tries them.
