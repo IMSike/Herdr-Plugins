@@ -148,12 +148,12 @@ pub fn defaults() -> Vec<Entry> {
         entry('l', "lazygit", &["lazygit"], "\u{F02A2}", true),
         // nf-md-github
         entry('g', "gh-dash", &["gh", "dash"], "\u{F02A4}", true),
-        // nf-md-chart_line
-        entry('b', "btop", &["btop"], "\u{F012A}", true),
         // nf-md-microsoft_visual_studio_code
         entry('c', "VS Code", &["code", "."], "\u{F0A1E}", false),
         // nf-md-harddisk
         action('d', "Disk", Action::Disk, "\u{F02CA}"),
+        // nf-md-chart_line
+        entry('b', "btop", &["btop"], "\u{F012A}", true),
         // nf-md-update
         action('u', "Update", Action::Update, "\u{F06B0}"),
         // nf-md-cog

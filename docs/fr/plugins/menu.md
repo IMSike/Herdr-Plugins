@@ -2,14 +2,12 @@
 
 [English](../../en/plugins/menu.md) · **Français**
 
-Lance un outil (lazygit, gh-dash, VS Code…) d'un clic ou d'une touche, met à jour Herdr et règle les plugins. Dans un onglet qui affiche l'explorateur de fichiers de [herdr-explorer](https://github.com/gcaudan/herdr-explorer), le menu est un petit pane `Tools` au-dessus de lui, dans sa colonne : icônes et leurs noms, et le CPU et la mémoire de Herdr et de la machine. Ailleurs, c'est un petit popup. Les outils en terminal s'ouvrent dans un grand popup au-dessus du workspace courant ; les onglets et les panes restent tels quels derrière, et quitter l'outil ferme le popup.
+Lance un outil (lazygit, gh-dash, VS Code…) d'un clic ou d'une touche, met à jour Herdr et règle les plugins. Dans un onglet qui affiche l'explorateur de fichiers de [herdr-explorer](https://github.com/gcaudan/herdr-explorer), le menu est un petit pane `Tools` au-dessus de lui, dans sa colonne : une ligne d'icônes, le nom de celle sous la souris, et le CPU et la mémoire de Herdr et de la machine. Ailleurs, c'est un petit popup. Les outils en terminal s'ouvrent dans un grand popup au-dessus du workspace courant ; les onglets et les panes restent tels quels derrière, et quitter l'outil ferme le popup.
 
 ```
-      󰊢         󰊤         󰄪         󰨞
-   lazygit   gh-dash     btop    VS Code
-           󰋊         󰚰         󰒓
-          Disk     Update   Settings
-            2% 3,1G · 󰍹 10% 22,4G
+   󰊢    󰊤    󰨞    󰋊    󰄪    󰚰    󰒓
+                     btop
+       2% 3,1G · 󰍹 10% 22,4G
 ```
 
 ## Installation
@@ -55,9 +53,9 @@ Sans configuration, le menu propose :
 |---|---|---|
 | `l` | lazygit | `lazygit` |
 | `g` | gh-dash | `gh dash` (l'extension [gh-dash](https://github.com/dlvhdr/gh-dash) de la CLI GitHub) |
-| `b` | btop | `btop` : le moniteur système [btop](https://github.com/aristocratos/btop) (CPU, mémoire, disques, réseau, processus) |
 | `c` | VS Code | `code .` : le dossier du workspace dans VS Code |
 | `d` | Disk | action intégrée `disk` : les chiffres du dossier du workspace, voir [plus bas](#entrées-intégrées) |
+| `b` | btop | `btop` : le moniteur système [btop](https://github.com/aristocratos/btop) (CPU, mémoire, disques, réseau, processus) |
 | `u` | Update | action intégrée `update` : met à jour Herdr, voir [plus bas](#entrées-intégrées) |
 | `s` | Settings | action intégrée `settings` : l'écran des réglages, voir [plus bas](#entrées-intégrées) |
 

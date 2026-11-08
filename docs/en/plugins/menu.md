@@ -2,14 +2,12 @@
 
 **English** · [Français](../../fr/plugins/menu.md)
 
-Starts a tool (lazygit, gh-dash, VS Code…) from one click or one key, updates Herdr, and sets the plugins. In a tab that shows the file explorer of [herdr-explorer](https://github.com/gcaudan/herdr-explorer), the menu is a short `Tools` pane above it, in its column: icons and their names, and the CPU and memory of Herdr and of the machine. Elsewhere it is a small popup. Tools that run in the terminal open in a large popup over the current workspace; tabs and panes stay as they are behind it, and quitting the tool closes the popup.
+Starts a tool (lazygit, gh-dash, VS Code…) from one click or one key, updates Herdr, and sets the plugins. In a tab that shows the file explorer of [herdr-explorer](https://github.com/gcaudan/herdr-explorer), the menu is a short `Tools` pane above it, in its column: a row of icons, the name of the one under the mouse, and the CPU and memory of Herdr and of the machine. Elsewhere it is a small popup. Tools that run in the terminal open in a large popup over the current workspace; tabs and panes stay as they are behind it, and quitting the tool closes the popup.
 
 ```
-      󰊢         󰊤         󰄪         󰨞
-   lazygit   gh-dash     btop    VS Code
-           󰋊         󰚰         󰒓
-          Disk     Update   Settings
-            2% 3,1G · 󰍹 10% 22,4G
+   󰊢    󰊤    󰨞    󰋊    󰄪    󰚰    󰒓
+                     btop
+       2% 3,1G · 󰍹 10% 22,4G
 ```
 
 ## Installation
@@ -55,9 +53,9 @@ Without configuration the menu offers:
 |---|---|---|
 | `l` | lazygit | `lazygit` |
 | `g` | gh-dash | `gh dash` (the [gh-dash](https://github.com/dlvhdr/gh-dash) extension of the GitHub CLI) |
-| `b` | btop | `btop`: the [btop](https://github.com/aristocratos/btop) system monitor (CPU, memory, disks, network, processes) |
 | `c` | VS Code | `code .`: the workspace's folder in VS Code |
 | `d` | Disk | built-in action `disk`: the figures on the workspace folder, see [below](#built-in-entries) |
+| `b` | btop | `btop`: the [btop](https://github.com/aristocratos/btop) system monitor (CPU, memory, disks, network, processes) |
 | `u` | Update | built-in action `update`: updates Herdr, see [below](#built-in-entries) |
 | `s` | Settings | built-in action `settings`: the settings screen, see [below](#built-in-entries) |
 

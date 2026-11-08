@@ -23,7 +23,7 @@
 # totals = "line"
 
 # Entrées du menu. Sans aucune entrée, le menu garde les siennes : lazygit (l),
-# gh-dash (g), btop (b), VS Code (c), Disk (d), Update (u) et Settings (s).
+# gh-dash (g), VS Code (c), Disk (d), btop (b), Update (u) et Settings (s).
 # Dès qu'une entrée est écrite ici, elle remplace toute la liste.
 #
 # [[entries]]
