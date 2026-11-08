@@ -55,11 +55,11 @@ Sans configuration, le menu propose :
 | `g` | gh-dash | `gh dash` (l'extension [gh-dash](https://github.com/dlvhdr/gh-dash) de la CLI GitHub) |
 | `c` | VS Code | `code .` : le dossier du workspace dans VS Code |
 | `d` | Disk | action intégrée `disk` : les chiffres du dossier du workspace, voir [plus bas](#entrées-intégrées) |
-| `b` | btop | `btop` : le moniteur système [btop](https://github.com/aristocratos/btop) (CPU, mémoire, disques, réseau, processus) |
+| `b` | btop | `btop` (sous Windows, `btop4win` quand seul lui est dans le `PATH`) : le moniteur système [btop](https://github.com/aristocratos/btop) (CPU, mémoire, disques, réseau, processus) |
 | `u` | Update | action intégrée `update` : met à jour Herdr, voir [plus bas](#entrées-intégrées) |
 | `s` | Settings | action intégrée `settings` : l'écran des réglages, voir [plus bas](#entrées-intégrées) |
 
-Le plugin n'installe aucun de ces outils. Un outil absent ouvre tout de même son popup, qui affiche `« btop » introuvable dans le PATH : installez-le, ou changez sa commande dans menu.toml` et attend Entrée. btop s'installe avec le gestionnaire de paquets du système (`apt install btop`, `brew install btop`…) ; sous Windows, c'est [btop4win](https://github.com/aristocratos/btop4win) : `winget install aristocratos.btop4win` et `scoop install btop` le rendent tous deux disponible sous le nom `btop`. Une copie téléchargée à la main s'appelle `btop4win.exe` : listez alors les entrées dans `menu.toml` (elles remplacent toutes les entrées intégrées), celle de btop avec `command = ["btop4win"]`.
+Le plugin n'installe aucun de ces outils. Un outil absent ouvre tout de même son popup, qui affiche `« btop » introuvable dans le PATH : installez-le, ou changez sa commande dans menu.toml` et attend Entrée. btop s'installe avec le gestionnaire de paquets du système (`apt install btop`, `brew install btop`…) ; sous Windows, c'est [btop4win](https://github.com/aristocratos/btop4win) (`winget install aristocratos.btop4win`, ou `scoop install btop`). Scoop l'installe sous le nom `btop` ; winget aussi quand il peut créer ce lien (mode développeur ou administrateur), et sinon met son dossier dans le `PATH`, où il s'appelle `btop4win`. L'entrée lance `btop`, ou `btop4win` quand seul lui est dans le `PATH` ; Herdr voit un `PATH` modifié par une installation une fois redémarré.
 
 Pour choisir les vôtres, écrivez `menu.toml` dans le dossier de configuration du plugin (`herdr plugin config-dir imsike.menu` l'affiche ; l'écran des réglages le crée, avec tous les réglages en commentaire, la première fois qu'il en enregistre un ou qu'il ouvre les fichiers). Ses entrées remplacent toutes les entrées intégrées ; un fichier sans entrée les garde :
 

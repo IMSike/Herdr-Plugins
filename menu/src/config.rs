@@ -153,12 +153,31 @@ pub fn defaults() -> Vec<Entry> {
         // nf-md-harddisk
         action('d', "Disk", Action::Disk, "\u{F02CA}"),
         // nf-md-chart_line
-        entry('b', "btop", &["btop"], "\u{F012A}", true),
+        entry('b', "btop", &[btop()], "\u{F012A}", true),
         // nf-md-update
         action('u', "Update", Action::Update, "\u{F06B0}"),
         // nf-md-cog
         action('s', "Settings", Action::Settings, "\u{F0493}"),
     ]
+}
+
+/// btop's program on this system (see `btop_among`).
+fn btop() -> &'static str {
+    btop_among(cfg!(windows), |name| {
+        crate::launch::find_on_path(name).is_some()
+    })
+}
+
+/// On Windows btop is btop4win: scoop installs it as `btop`, winget as
+/// `btop` when it can make that link (Developer Mode or administrator),
+/// and otherwise puts its folder on `PATH`, where it is `btop4win`.
+/// `btop` when neither is `found`, for the message to name it.
+fn btop_among(windows: bool, found: impl Fn(&str) -> bool) -> &'static str {
+    if windows && !found("btop") && found("btop4win") {
+        "btop4win"
+    } else {
+        "btop"
+    }
 }
 
 /// Parses a `menu.toml` and checks its entries. A file without entries
@@ -327,6 +346,16 @@ mod tests {
             .collect();
         keys.sort_unstable();
         assert_eq!(in_template, keys);
+    }
+
+    #[test]
+    fn btop_is_btop4win_on_windows_only_when_only_it_is_found() {
+        let only = |name: &'static str| move |n: &str| n == name;
+        assert_eq!(btop_among(true, only("btop4win")), "btop4win");
+        assert_eq!(btop_among(true, |_| true), "btop");
+        assert_eq!(btop_among(true, only("btop")), "btop");
+        assert_eq!(btop_among(true, |_| false), "btop");
+        assert_eq!(btop_among(false, only("btop4win")), "btop");
     }
 
     #[test]

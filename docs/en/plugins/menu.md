@@ -55,11 +55,11 @@ Without configuration the menu offers:
 | `g` | gh-dash | `gh dash` (the [gh-dash](https://github.com/dlvhdr/gh-dash) extension of the GitHub CLI) |
 | `c` | VS Code | `code .`: the workspace's folder in VS Code |
 | `d` | Disk | built-in action `disk`: the figures on the workspace folder, see [below](#built-in-entries) |
-| `b` | btop | `btop`: the [btop](https://github.com/aristocratos/btop) system monitor (CPU, memory, disks, network, processes) |
+| `b` | btop | `btop` (on Windows, `btop4win` when only it is on `PATH`): the [btop](https://github.com/aristocratos/btop) system monitor (CPU, memory, disks, network, processes) |
 | `u` | Update | built-in action `update`: updates Herdr, see [below](#built-in-entries) |
 | `s` | Settings | built-in action `settings`: the settings screen, see [below](#built-in-entries) |
 
-The plugin installs none of these tools. One that is missing opens its popup anyway, which says `« btop » introuvable dans le PATH : installez-le, ou changez sa commande dans menu.toml` and waits for Enter. btop is installed by the system's package manager (`apt install btop`, `brew install btop`…); on Windows it is [btop4win](https://github.com/aristocratos/btop4win): `winget install aristocratos.btop4win` and `scoop install btop` both make it available as `btop`. A copy downloaded by hand is `btop4win.exe`: then list the entries in `menu.toml` (they replace all the built-in ones), btop's with `command = ["btop4win"]`.
+The plugin installs none of these tools. One that is missing opens its popup anyway, which says `« btop » introuvable dans le PATH : installez-le, ou changez sa commande dans menu.toml` and waits for Enter. btop is installed by the system's package manager (`apt install btop`, `brew install btop`…); on Windows it is [btop4win](https://github.com/aristocratos/btop4win) (`winget install aristocratos.btop4win`, or `scoop install btop`). Scoop installs it as `btop`; winget as `btop` when it can make that link (Developer Mode or administrator), and otherwise puts its folder on `PATH`, where it is `btop4win`. The entry runs `btop`, or `btop4win` when only it is on `PATH`; Herdr sees a `PATH` changed by an installation once restarted.
 
 To choose your own, write `menu.toml` in the plugin's config folder (`herdr plugin config-dir imsike.menu` prints it; the settings screen creates it, with every setting commented out, when it first saves one or opens the files). Its entries replace the built-in ones, all of them; a file without entries keeps them:
 
