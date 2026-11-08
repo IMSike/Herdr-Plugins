@@ -108,7 +108,7 @@ struct File {
     /// The icons' layout of earlier versions, which had two: still read so
     /// that a file that sets it stays valid, and ignored.
     #[serde(rename = "layout", skip_serializing)]
-    _layout: Option<toml::Value>,
+    _layout: Option<serde::de::IgnoredAny>,
 }
 
 impl Default for File {

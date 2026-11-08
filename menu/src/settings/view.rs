@@ -8,7 +8,7 @@
 
 use super::canvas::{Canvas, Style};
 use super::{Item, Row, Section, Shown, State};
-use crate::bar::colors::level_color;
+use crate::colors::{TRACK_COLOR, level_color};
 use crate::ui::{fit, width};
 use crossterm::style::Color;
 use herdr_api::sidebar::Level;
@@ -17,19 +17,19 @@ const fn rgb(r: u8, g: u8, b: u8) -> Color {
     Color::Rgb { r, g, b }
 }
 
-// Gruvbox (dark), as the `Tools` pane.
+// Gruvbox (dark), as the bars of the `Tools` pane.
 const DARK: Color = rgb(0x1d, 0x20, 0x21);
 const ON_ACCENT: Color = rgb(0x28, 0x28, 0x28);
-const BG1: Color = rgb(0x3c, 0x38, 0x36);
+const BG1: Color = TRACK_COLOR;
 const BG2: Color = rgb(0x50, 0x49, 0x45);
 const BG3: Color = rgb(0x66, 0x5c, 0x54);
 const FG: Color = rgb(0xeb, 0xdb, 0xb2);
 const FG4: Color = rgb(0xa8, 0x99, 0x84);
 const GREY: Color = rgb(0x92, 0x83, 0x74);
-const YELLOW: Color = rgb(0xfa, 0xbd, 0x2f);
+const YELLOW: Color = level_color(Level::Yellow);
 const AQUA: Color = rgb(0x8e, 0xc0, 0x7c);
-const GREEN: Color = rgb(0xb8, 0xbb, 0x26);
-const RED: Color = rgb(0xfb, 0x49, 0x34);
+const GREEN: Color = level_color(Level::Green);
+const RED: Color = level_color(Level::Red);
 
 /// The levels between thresholds, in order.
 const LEVELS: [Level; 4] = [Level::Green, Level::Yellow, Level::Orange, Level::Red];
@@ -88,7 +88,6 @@ impl Drawn {
 
 /// The rows of the screen, from its height: the smaller it is, the fewer
 /// rows around the list.
-#[derive(Debug, PartialEq)]
 struct Areas {
     title: Option<u16>,
     /// First row of the list, and how many rows it has.
@@ -149,7 +148,6 @@ fn areas(height: u16) -> Areas {
 
 /// The columns of the list: from `left` to `right` (excluded), the values
 /// from `value`, the scrollbar at `bar`.
-#[derive(Debug, PartialEq)]
 struct Columns {
     left: u16,
     right: u16,
@@ -279,8 +277,8 @@ pub fn render(state: &State, width: u16, height: u16) -> Drawn {
     // The actions, without a value, take the whole row.
     let label_width = items
         .iter()
-        .filter(|&&item| state.shown(item) != Shown::Action)
-        .map(|&item| self::width(&state.label(item)))
+        .filter(|item| !item.is_action())
+        .map(|item| self::width(item.label()))
         .max()
         .unwrap_or(0);
     let cols = columns(width, label_width, rows.len() > visible);
@@ -308,7 +306,7 @@ pub fn render(state: &State, width: u16, height: u16) -> Drawn {
                 hits.push(Hit {
                     y,
                     x: cols.left,
-                    end: cols.bar.map_or(cols.right, |b| b + 1),
+                    end: cols.right,
                     target: Target::Item(i),
                 });
                 let typing = state.typing.as_deref().filter(|_| item == selected);
@@ -434,14 +432,14 @@ impl RowDraw<'_> {
             bg: base.bg,
             ..Style::fg(GREY)
         };
-        if state.shown(item) == Shown::Action {
+        if item.is_action() {
             // No value: the name takes the row, its key at the end.
             const KEY: &str = "Entrée ↵";
             let room = usize::from(limit.saturating_sub(cols.left + 2));
             let key_room = room.saturating_sub(width(KEY) + 2);
             let shows_key = self.selected && key_room >= 12;
             let label_room = if shows_key { key_room } else { room };
-            let label = ellipsize(&state.label(item), label_room);
+            let label = ellipsize(item.label(), label_room);
             canvas.text_to(cols.left + 2, y, &label, label_style, cols.right);
             if shows_key {
                 let x = limit - width(KEY) as u16;
@@ -449,7 +447,7 @@ impl RowDraw<'_> {
             }
             return;
         }
-        let label = ellipsize(&state.label(item), usize::from(cols.label));
+        let label = ellipsize(item.label(), usize::from(cols.label));
         canvas.text_to(cols.left + 2, y, &label, label_style, cols.right);
         if cols.value >= limit {
             return;

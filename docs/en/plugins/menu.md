@@ -6,7 +6,7 @@ Starts a tool (lazygit, gh-dash, VS Code…) from one click or one key, updates 
 
 ```
    󰊢    󰊤    󰨞    󰋊    󰄪    󰚰    󰒓
-                     btop
+                btop
        2% 3,1G · 󰍹 10% 22,4G
 ```
 
@@ -39,7 +39,7 @@ Under the icons, the CPU and memory of Herdr's processes (its server and everyth
 - `line` (default): one row, `2% 3,1G · 󰍹 10% 22,4G`.
 - `bars`: four rows, `CPU :`, `RAM :`, `CPU 󰍹 :`, `RAM 󰍹 :`, each with a bar as wide as the pane allows, then its value. A thin bar (`━━━━╸────`) fills by half cells with the share of the machine (Herdr's memory: of the machine's memory), each cell in the color its place takes in a gradient from green to red through the [thresholds](sidebar.md#threshold-colors) of its figure; its empty part is tinted, dimmed, with the color of each threshold's zone, so the bar shows how far the next threshold is. Herdr's CPU share is missing on the sidebar's first run: its bar stays empty, with `–`.
 
-With the sidebar's threshold colors on (`colors = true` in `sidebar.toml`), each figure is green, yellow, orange or red as its thresholds set. Without the sidebar, or when its figures are more than 30 seconds old, the rows stay empty. The pane asks for its icons' 2 rows plus its totals' (1 or 4).
+With the sidebar's threshold colors on (`colors = true` in `sidebar.toml`), each figure is green, yellow, orange or red as its thresholds set. Without the sidebar, or when its figures are more than 30 seconds old, the rows stay empty. The pane asks for 2 rows, for its icons and the name under them, plus its totals' (1 or 4).
 
 **Without the explorer.** `prefix+space` opens the popup menu, titled with the workspace's folder name. Choose an entry with its key, with the arrows (or `j`/`k`) and Enter, or with a click. Escape, `q` or Ctrl+C closes the menu. An entry's own key wins over `j`, `k` and `q`. The **Disk** entry belongs to the `Tools` pane only: the popup menu leaves it out.
 
@@ -59,7 +59,7 @@ Without configuration the menu offers:
 | `u` | Update | built-in action `update`: updates Herdr, see [below](#built-in-entries) |
 | `s` | Settings | built-in action `settings`: the settings screen, see [below](#built-in-entries) |
 
-The plugin installs none of these tools. One that is missing opens its popup anyway, which says `« btop » introuvable dans le PATH : installez-le, ou changez sa commande dans menu.toml` and waits for Enter. btop is installed by the system's package manager (`apt install btop`, `brew install btop`…); on Windows it is [btop4win](https://github.com/aristocratos/btop4win) (`winget install aristocratos.btop4win`, or `scoop install btop`), whose program is `btop4win.exe`: when the package does not also put a `btop` on `PATH`, give the entry `command = ["btop4win"]` in `menu.toml`. The entry keeps `btop`, the name of the program everywhere else.
+The plugin installs none of these tools. One that is missing opens its popup anyway, which says `« btop » introuvable dans le PATH : installez-le, ou changez sa commande dans menu.toml` and waits for Enter. btop is installed by the system's package manager (`apt install btop`, `brew install btop`…); on Windows it is [btop4win](https://github.com/aristocratos/btop4win): `winget install aristocratos.btop4win` and `scoop install btop` both make it available as `btop`. A copy downloaded by hand is `btop4win.exe`: then list the entries in `menu.toml` (they replace all the built-in ones), btop's with `command = ["btop4win"]`.
 
 To choose your own, write `menu.toml` in the plugin's config folder (`herdr plugin config-dir imsike.menu` prints it; the settings screen creates it, with every setting commented out, when it first saves one or opens the files). Its entries replace the built-in ones, all of them; a file without entries keeps them:
 
@@ -71,7 +71,7 @@ command = ["lazygit"]     # program and arguments, run without a shell
 icon = "󰊢"                # optional: a Nerd Font glyph; the key without it
 
 [[entries]]
-key = "t"
+key = "b"
 label = "btop"
 command = ["btop"]
 cwd = "pane"              # "workspace" (default) or "pane", see below
@@ -135,27 +135,36 @@ The window waits for Enter before closing, an error included. While it is open, 
 **Settings** (`s`) opens a settings screen in a popup of 70% of the terminal's width and 80% of its height:
 
 ```
- 󰒓 Réglages                                                               1/17
+ 󰒓 Réglages                                                              1/16
 
-  Format des nombres ────────────────────────────────────── 4% · 853M · 2,4G
-  ▌ Virgule décimale                 2.4G   2,4G
-    Espace avant %                   4%   4 %
-    Unités de la mémoire             2,4G   2,4Go   2,4GB
-  …
-  Sidebar ───────────────────────────────────────────────────────────────────
-    Durée de vie des valeurs        ‹ 20 s ›
-    Shells                           bash, sh, zsh, fish, dash, nu, pwsh
-  …
-  ───────────────────────────────────────────────────────────────────────────
-    Une virgule ou un point avant les décimales.  decimal_comma · menu.toml, sidebar.toml
-    ✓ enregistré dans menu.toml
+ Format des nombres ────────────────────────────────────── 4% · 853M · 2,4G ┃
+ ▌ Virgule décimale                 2.4G   2,4G                             ┃
+   Espace avant %                   4%   4 %                                ┃
+   CPU avec une décimale            4%   4,2%                               ┃
+   Unités de la mémoire             2,4G   2,4Go   2,4GB                    ┃
+   Espace avant l'unité             2,4G   2,4 G                            ┃
+                                                                            ┃
+ Pane Tools ─────────────────────────────────────────────────────────────── ┃
+   Totaux CPU / mémoire             une ligne   barres                      ┃
+                                                                            ┃
+ Sidebar ────────────────────────────────────────────────────────────────── ┃
+   Durée de vie des valeurs        ‹ 20 s ›                                 ┃
+   Shells                           bash, sh, zsh, fish, dash, nu, pwsh, …  │
+   Totaux dans la barre d'onglets   non   oui                               │
+                                                                            │
+ Couleurs par seuil ─────────────────────────────────────────────────────── │
+   Couleurs                         non   oui                               │
+   Seuils CPU (Herdr)               ━━ 10 ━━ 25 ━━ 50 ━━ %                  │
+ ──────────────────────────────────────────────────────────────────────────
+   Une virgule ou un point avant les décimales.
+   ✓ enregistré dans menu.toml
  ↑↓ naviguer   ←→ choisir   Espace suivant   Tab section   Échap fermer
 ```
 
 - The settings are grouped in sections, each value in a column of its own, centered in a wide popup. A setting with a few values shows them all, the current one highlighted (in yellow on the selected line); the number formats are shown as they would write a figure, with the current format, and the header of their section shows a CPU share and two sizes in that format. A number (`‹ 20 s ›`) shows the arrows that change it; a set of thresholds shows the four colors around its values.
-- Under the list: what the selected line does, with the setting and the files it writes; the last thing done (`✓` in green, or `✗` in red with the reason); and the keys of the selected line.
-- Keys: up and down (or `j`/`k`) choose a line, Home/End (or `g`/`G`) the first or last, Tab the first line of the next section, Shift+Tab the first line of its section, or of the one above. Left and right (or `h`/`l`) move a choice towards its first or last value (stopping there) or a number by a step; Enter or Space go to the next value, round the list, or start typing; each change is saved at once. Escape, `q` or Ctrl+C closes the screen.
-- Mouse: hovering a line chooses it, a click on one of its values chooses that value, a click on `‹` or `›` steps a number, a click elsewhere on the line acts as Enter, and the wheel moves the choice.
+- Under the list: what the selected line does, with the setting and the files it writes when the popup is wide enough; the last thing done (`✓` in green, or `✗` in red with the reason); and the keys of the selected line.
+- Keys: up and down (or `j`/`k`) choose a line, Home/End (or `g`/`G`) the first or last, Tab the first line of the next section, Shift+Tab the first line of its section, or of the one above. Left and right (or `h`/`l`) move a choice towards its first or last value (stopping there) or a number by a step, and do nothing on the other lines; Enter or Space take a choice to its next value, round the list, add a step to a number, start typing, or run the line's action; each change is saved at once. Escape, `q` or Ctrl+C closes the screen.
+- Mouse: hovering a line selects it, a click on one of its values chooses that value, a click on `‹` or `›` steps a number, a click elsewhere on the line acts as Enter, and the wheel moves the selection; the scrollbar only shows where the list is.
 - On a small popup, the list scrolls (a scrollbar on its right says where it is), and the description, then the status line, give way to it; a name or value too long is cut with `…`, and typed text shows its end.
 
 A file that is a link (deployed by stow or chezmoi, say) stays a link: the file it points to is written. When the file stays ignored after a change (another of its settings is invalid), the screen says so in red, with the reason, and shows the new value, which the file holds: the next change turns it back.

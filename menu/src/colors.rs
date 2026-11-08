@@ -1,11 +1,14 @@
-//! The colors of the threshold levels, the gradient of the bars through
-//! them, and the zones of the levels on the empty part of a bar.
+//! The colors of the threshold levels (gruvbox), the gradient of the bars
+//! through them, and the zones of the levels on the empty part of a bar;
+//! the settings screen draws with them too.
 
 use crossterm::style::Color;
 use herdr_api::sidebar::{Level, Thresholds};
 
 /// The empty part of a bar (gruvbox's dark grey).
 const TRACK: (u8, u8, u8) = (0x3c, 0x38, 0x36);
+/// The same, as a color.
+pub const TRACK_COLOR: Color = rgb(TRACK);
 /// How much of its level's color the empty part of a bar takes.
 const ZONE_TINT: f64 = 0.45;
 
@@ -48,8 +51,8 @@ fn mix(a: (u8, u8, u8), b: (u8, u8, u8), t: f64) -> Color {
     }
 }
 
-/// The colors of the levels (gruvbox).
-fn level_rgb(level: Level) -> (u8, u8, u8) {
+/// The colors of the levels.
+const fn level_rgb(level: Level) -> (u8, u8, u8) {
     match level {
         Level::Green => (0xb8, 0xbb, 0x26),
         Level::Yellow => (0xfa, 0xbd, 0x2f),
@@ -58,8 +61,11 @@ fn level_rgb(level: Level) -> (u8, u8, u8) {
     }
 }
 
-pub fn level_color(level: Level) -> Color {
-    let (r, g, b) = level_rgb(level);
+pub const fn level_color(level: Level) -> Color {
+    rgb(level_rgb(level))
+}
+
+const fn rgb((r, g, b): (u8, u8, u8)) -> Color {
     Color::Rgb { r, g, b }
 }
 

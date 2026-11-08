@@ -114,13 +114,34 @@ enum Item {
     Reload,
 }
 
-/// The name of a set of thresholds on the screen.
-fn levels_name(levels: Levels) -> &'static str {
-    match levels {
-        Levels::Cpu => "Seuils CPU (Herdr)",
-        Levels::Memory => "Seuils mémoire (Herdr)",
-        Levels::MachineCpu => "Seuils CPU (machine)",
-        Levels::MachineMemory => "Seuils mémoire (machine)",
+impl Item {
+    /// Its name on the screen.
+    fn label(self) -> &'static str {
+        match self {
+            Self::DecimalComma => "Virgule décimale",
+            Self::PercentSpace => "Espace avant %",
+            Self::CpuDecimal => "CPU avec une décimale",
+            Self::MemoryUnit => "Unités de la mémoire",
+            Self::MemorySpace => "Espace avant l'unité",
+            Self::Totals => "Totaux CPU / mémoire",
+            Self::Ttl => "Durée de vie des valeurs",
+            Self::Shells => "Shells",
+            Self::TabBar => "Totaux dans la barre d'onglets",
+            Self::Colors => "Couleurs",
+            Self::Levels(Levels::Cpu) => "Seuils CPU (Herdr)",
+            Self::Levels(Levels::Memory) => "Seuils mémoire (Herdr)",
+            Self::Levels(Levels::MachineCpu) => "Seuils CPU (machine)",
+            Self::Levels(Levels::MachineMemory) => "Seuils mémoire (machine)",
+            // nf-md-pencil
+            Self::OpenFiles => "\u{F03EB} Ouvrir les fichiers de configuration…",
+            // nf-md-reload, as the `Tools` pane's button
+            Self::Reload => "\u{F0453} Recharger la configuration de Herdr",
+        }
+    }
+
+    /// Something done on Enter, without a value to show.
+    fn is_action(self) -> bool {
+        matches!(self, Self::OpenFiles | Self::Reload)
     }
 }
 
@@ -292,28 +313,6 @@ impl State {
                 _ => None,
             })
             .collect()
-    }
-
-    /// An item's name on the screen.
-    fn label(&self, item: Item) -> String {
-        match item {
-            Item::DecimalComma => "Virgule décimale",
-            Item::PercentSpace => "Espace avant %",
-            Item::CpuDecimal => "CPU avec une décimale",
-            Item::MemoryUnit => "Unités de la mémoire",
-            Item::MemorySpace => "Espace avant l'unité",
-            Item::Totals => "Totaux CPU / mémoire",
-            Item::Ttl => "Durée de vie des valeurs",
-            Item::Shells => "Shells",
-            Item::TabBar => "Totaux dans la barre d'onglets",
-            Item::Colors => "Couleurs",
-            Item::Levels(which) => levels_name(which),
-            // nf-md-pencil
-            Item::OpenFiles => "\u{F03EB} Ouvrir les fichiers de configuration…",
-            // nf-md-reload, as the `Tools` pane's button
-            Item::Reload => "\u{F0453} Recharger la configuration de Herdr",
-        }
-        .into()
     }
 
     /// An item's value: a choice shows each value as the current number
@@ -576,16 +575,23 @@ impl State {
 
     /// Changes `item` by one step (`forward` or back); whether the screen
     /// should close. A choice goes round its values when `round`, and
-    /// stops at its first or last one otherwise, as its row shows them.
+    /// stops at its first or last one otherwise, as its row shows them;
+    /// only `round` (Enter, a click) types a value or runs an action.
     fn change(&mut self, item: Item, forward: bool, round: bool) -> bool {
-        if !round && let Shown::Choice { options, current } = self.shown(item) {
-            let at_end = if forward {
-                current + 1 >= options.len()
-            } else {
-                current == 0
-            };
-            if at_end {
-                return false;
+        if !round {
+            match self.shown(item) {
+                Shown::Choice { options, current } => {
+                    let at_end = if forward {
+                        current + 1 >= options.len()
+                    } else {
+                        current == 0
+                    };
+                    if at_end {
+                        return false;
+                    }
+                }
+                Shown::Number(_) => {}
+                Shown::Text(_) | Shown::Levels(..) | Shown::Action => return false,
             }
         }
         if item == Item::OpenFiles {
@@ -594,10 +600,10 @@ impl State {
                     tell_the_bar();
                     return true;
                 }
-                Err(e) => self.show(Err(e)),
+                Err(e) => self.report(Err(e)),
             }
         } else if let Some(result) = self.step(item, forward) {
-            self.show(result);
+            self.report(result);
         }
         false
     }
@@ -611,7 +617,7 @@ impl State {
         };
         while let Some(before) = current(self).filter(|&c| c != option) {
             match self.step(item, true) {
-                Some(result) => self.show(result),
+                Some(result) => self.report(result),
                 None => return,
             }
             if current(self) == Some(before) {
@@ -687,7 +693,7 @@ impl State {
             Item::Levels(which) => self.save_levels(which, text),
             _ => return,
         };
-        self.show(result);
+        self.report(result);
     }
 
     fn save_shells(&mut self, text: &str) -> Result<String, String> {
@@ -710,7 +716,8 @@ impl State {
         .unwrap_or_else(|| Ok(String::new()))
     }
 
-    fn show(&mut self, result: Result<String, String>) {
+    /// Shows `result` on the status line.
+    fn report(&mut self, result: Result<String, String>) {
         self.status = Some(match result {
             Ok(message) => (message, false),
             Err(e) => (e, true),
@@ -859,6 +866,15 @@ mod tests {
         State::new(files, Menu::default(), Some(Settings::default()))
     }
 
+    /// The screen without files, the sidebar installed.
+    fn state() -> State {
+        let files = Files {
+            menu: None,
+            sidebar: None,
+        };
+        State::new(files, Menu::default(), Some(Settings::default()))
+    }
+
     /// The screen without files, as `width` × `height` cells of text.
     fn rendered(state: &State, width: u16, height: u16) -> String {
         view::render(state, width, height).canvas.to_text()
@@ -866,17 +882,9 @@ mod tests {
 
     #[test]
     fn the_screen_shows_every_setting_in_its_section() {
-        let mut state = State::new(
-            Files {
-                menu: None,
-                sidebar: None,
-            },
-            Menu::default(),
-            Some(Settings::default()),
-        );
+        let mut state = state();
         state.status = Some(("enregistré dans menu.toml".into(), false));
         let text = rendered(&state, 92, 40);
-        println!("{text}");
         for expected in [
             "Réglages",
             "Format des nombres",
@@ -901,14 +909,7 @@ mod tests {
 
     #[test]
     fn any_size_draws_without_panic() {
-        let mut state = State::new(
-            Files {
-                menu: None,
-                sidebar: None,
-            },
-            Menu::default(),
-            Some(Settings::default()),
-        );
+        let mut state = state();
         state.status = Some((
             "une erreur longue, très longue, bien trop longue".into(),
             true,
@@ -933,33 +934,21 @@ mod tests {
 
     #[test]
     fn a_short_screen_scrolls_to_the_selection() {
-        let mut state = State::new(
-            Files {
-                menu: None,
-                sidebar: None,
-            },
-            Menu::default(),
-            Some(Settings::default()),
-        );
+        let mut state = state();
         state.selected = state.items().len() - 1;
         let text = rendered(&state, 70, 14);
-        println!("{text}");
-        assert!(text.contains("Recharger la configuration de Herdr"));
-        assert!(!text.contains("Virgule décimale"));
+        assert!(
+            text.contains("Recharger la configuration de Herdr"),
+            "{text}"
+        );
+        assert!(!text.contains("Virgule décimale"), "{text}");
         // The scrollbar's thumb, at the bottom.
-        assert!(text.contains('┃'));
+        assert!(text.contains('┃'), "{text}");
     }
 
     #[test]
     fn typed_text_shows_its_end_and_the_keys_to_save_it() {
-        let mut state = State::new(
-            Files {
-                menu: None,
-                sidebar: None,
-            },
-            Menu::default(),
-            Some(Settings::default()),
-        );
+        let mut state = state();
         state.selected = state
             .items()
             .iter()
@@ -967,21 +956,13 @@ mod tests {
             .unwrap();
         state.typing = Some("pwsh, bash, zsh, fish, nu, elvish, xonsh, tcsh".into());
         let text = rendered(&state, 56, 11);
-        println!("{text}");
-        assert!(text.contains("tcsh▏"));
-        assert!(text.contains("Entrée valider"));
+        assert!(text.contains("tcsh▏"), "{text}");
+        assert!(text.contains("Entrée valider"), "{text}");
     }
 
     #[test]
     fn tab_goes_from_section_to_section() {
-        let state = State::new(
-            Files {
-                menu: None,
-                sidebar: None,
-            },
-            Menu::default(),
-            Some(Settings::default()),
-        );
+        let state = state();
         let starts = state.section_starts();
         assert_eq!(starts.len(), 5);
         let items = state.items();
@@ -995,6 +976,38 @@ mod tests {
             ..state
         };
         assert_eq!(within.next_section(false), starts[2]);
+    }
+
+    #[test]
+    fn the_scrollbar_is_not_a_row_to_click() {
+        let mut state = state();
+        state.selected = state.items().len() - 1;
+        let drawn = view::render(&state, 70, 14);
+        let text = drawn.canvas.to_text();
+        let bar = text
+            .lines()
+            .find_map(|line| line.chars().position(|c| c == '┃'))
+            .expect("a scrollbar");
+        for y in 0..14 {
+            assert_eq!(drawn.at(u16::try_from(bar).unwrap(), y), None, "{text}");
+        }
+    }
+
+    #[test]
+    fn arrows_neither_type_nor_run_an_action() {
+        let dir = herdr_api::TempDir::new("menu-arrows").unwrap();
+        let mut state = state_in(&dir);
+        for item in [
+            Item::OpenFiles,
+            Item::Reload,
+            Item::Shells,
+            Item::Levels(Levels::Cpu),
+        ] {
+            for forward in [true, false] {
+                assert!(!state.change(item, forward, false), "{item:?}");
+                assert!(state.typing.is_none() && state.status.is_none(), "{item:?}");
+            }
+        }
     }
 
     #[test]

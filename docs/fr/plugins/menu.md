@@ -6,7 +6,7 @@ Lance un outil (lazygit, gh-dash, VS Code…) d'un clic ou d'une touche, met à 
 
 ```
    󰊢    󰊤    󰨞    󰋊    󰄪    󰚰    󰒓
-                     btop
+                btop
        2% 3,1G · 󰍹 10% 22,4G
 ```
 
@@ -39,7 +39,7 @@ Sous les icônes, le CPU et la mémoire des processus de Herdr (son serveur et t
 - `line` (par défaut) : une ligne, `2% 3,1G · 󰍹 10% 22,4G`.
 - `bars` : quatre lignes, `CPU :`, `RAM :`, `CPU 󰍹 :`, `RAM 󰍹 :`, chacune avec une barre aussi large que le pane le permet, puis sa valeur. Une barre fine (`━━━━╸────`) se remplit, par demi-case, de la part de la machine (mémoire de Herdr : de la mémoire de la machine), chaque case dans la couleur que prend sa place dans un dégradé du vert au rouge passant par les [seuils](sidebar.md#couleurs-par-seuil) de son chiffre ; sa partie vide est teintée, en atténué, de la couleur de la zone de chaque seuil, si bien que la barre montre à quelle distance est le seuil suivant. La part de CPU de Herdr manque au premier passage de la sidebar : sa barre reste vide, avec `–`.
 
-Avec les couleurs par seuil de la sidebar (`colors = true` dans `sidebar.toml`), chaque chiffre est vert, jaune, orange ou rouge selon ses seuils. Sans la sidebar, ou quand ses chiffres ont plus de 30 secondes, les lignes restent vides. Le pane demande les 2 lignes de ses icônes plus celles de ses totaux (1 ou 4).
+Avec les couleurs par seuil de la sidebar (`colors = true` dans `sidebar.toml`), chaque chiffre est vert, jaune, orange ou rouge selon ses seuils. Sans la sidebar, ou quand ses chiffres ont plus de 30 secondes, les lignes restent vides. Le pane demande 2 lignes, pour ses icônes et le nom en dessous, plus celles de ses totaux (1 ou 4).
 
 **Sans l'explorateur.** `prefix+space` ouvre le menu en popup, titré du nom du dossier du workspace. Choisissez une entrée par sa touche, par les flèches (ou `j`/`k`) et Entrée, ou d'un clic. Échap, `q` ou Ctrl+C ferme le menu. La touche propre à une entrée l'emporte sur `j`, `k` et `q`. L'entrée **Disk** n'appartient qu'au pane `Tools` : le menu en popup l'omet.
 
@@ -59,7 +59,7 @@ Sans configuration, le menu propose :
 | `u` | Update | action intégrée `update` : met à jour Herdr, voir [plus bas](#entrées-intégrées) |
 | `s` | Settings | action intégrée `settings` : l'écran des réglages, voir [plus bas](#entrées-intégrées) |
 
-Le plugin n'installe aucun de ces outils. Un outil absent ouvre tout de même son popup, qui affiche `« btop » introuvable dans le PATH : installez-le, ou changez sa commande dans menu.toml` et attend Entrée. btop s'installe avec le gestionnaire de paquets du système (`apt install btop`, `brew install btop`…) ; sous Windows, c'est [btop4win](https://github.com/aristocratos/btop4win) (`winget install aristocratos.btop4win`, ou `scoop install btop`), dont le programme est `btop4win.exe` : quand le paquet ne met pas aussi un `btop` dans le `PATH`, donnez à l'entrée `command = ["btop4win"]` dans `menu.toml`. L'entrée garde `btop`, le nom du programme partout ailleurs.
+Le plugin n'installe aucun de ces outils. Un outil absent ouvre tout de même son popup, qui affiche `« btop » introuvable dans le PATH : installez-le, ou changez sa commande dans menu.toml` et attend Entrée. btop s'installe avec le gestionnaire de paquets du système (`apt install btop`, `brew install btop`…) ; sous Windows, c'est [btop4win](https://github.com/aristocratos/btop4win) : `winget install aristocratos.btop4win` et `scoop install btop` le rendent tous deux disponible sous le nom `btop`. Une copie téléchargée à la main s'appelle `btop4win.exe` : listez alors les entrées dans `menu.toml` (elles remplacent toutes les entrées intégrées), celle de btop avec `command = ["btop4win"]`.
 
 Pour choisir les vôtres, écrivez `menu.toml` dans le dossier de configuration du plugin (`herdr plugin config-dir imsike.menu` l'affiche ; l'écran des réglages le crée, avec tous les réglages en commentaire, la première fois qu'il en enregistre un ou qu'il ouvre les fichiers). Ses entrées remplacent toutes les entrées intégrées ; un fichier sans entrée les garde :
 
@@ -71,7 +71,7 @@ command = ["lazygit"]     # programme et arguments, lancés sans shell
 icon = "󰊢"                # facultatif : un glyphe Nerd Font ; la touche sinon
 
 [[entries]]
-key = "t"
+key = "b"
 label = "btop"
 command = ["btop"]
 cwd = "pane"              # "workspace" (par défaut) ou "pane", voir plus bas
@@ -135,27 +135,36 @@ La fenêtre attend Entrée avant de se fermer, erreur comprise. Tant qu'elle est
 **Settings** (`s`) ouvre un écran de réglages dans un popup de 70 % de la largeur du terminal et 80 % de sa hauteur :
 
 ```
- 󰒓 Réglages                                                               1/17
+ 󰒓 Réglages                                                              1/16
 
-  Format des nombres ────────────────────────────────────── 4% · 853M · 2,4G
-  ▌ Virgule décimale                 2.4G   2,4G
-    Espace avant %                   4%   4 %
-    Unités de la mémoire             2,4G   2,4Go   2,4GB
-  …
-  Sidebar ───────────────────────────────────────────────────────────────────
-    Durée de vie des valeurs        ‹ 20 s ›
-    Shells                           bash, sh, zsh, fish, dash, nu, pwsh
-  …
-  ───────────────────────────────────────────────────────────────────────────
-    Une virgule ou un point avant les décimales.  decimal_comma · menu.toml, sidebar.toml
-    ✓ enregistré dans menu.toml
+ Format des nombres ────────────────────────────────────── 4% · 853M · 2,4G ┃
+ ▌ Virgule décimale                 2.4G   2,4G                             ┃
+   Espace avant %                   4%   4 %                                ┃
+   CPU avec une décimale            4%   4,2%                               ┃
+   Unités de la mémoire             2,4G   2,4Go   2,4GB                    ┃
+   Espace avant l'unité             2,4G   2,4 G                            ┃
+                                                                            ┃
+ Pane Tools ─────────────────────────────────────────────────────────────── ┃
+   Totaux CPU / mémoire             une ligne   barres                      ┃
+                                                                            ┃
+ Sidebar ────────────────────────────────────────────────────────────────── ┃
+   Durée de vie des valeurs        ‹ 20 s ›                                 ┃
+   Shells                           bash, sh, zsh, fish, dash, nu, pwsh, …  │
+   Totaux dans la barre d'onglets   non   oui                               │
+                                                                            │
+ Couleurs par seuil ─────────────────────────────────────────────────────── │
+   Couleurs                         non   oui                               │
+   Seuils CPU (Herdr)               ━━ 10 ━━ 25 ━━ 50 ━━ %                  │
+ ──────────────────────────────────────────────────────────────────────────
+   Une virgule ou un point avant les décimales.
+   ✓ enregistré dans menu.toml
  ↑↓ naviguer   ←→ choisir   Espace suivant   Tab section   Échap fermer
 ```
 
 - Les réglages sont groupés en sections, chaque valeur dans une colonne à elle, au centre d'un popup large. Un réglage à quelques valeurs les montre toutes, l'actuelle en évidence (en jaune sur la ligne choisie) ; les formats des nombres sont montrés comme ils écriraient un chiffre, avec le format actuel, et l'en-tête de leur section montre une part de CPU et deux tailles dans ce format. Un nombre (`‹ 20 s ›`) montre les flèches qui le changent ; un jeu de seuils montre les quatre couleurs autour de ses valeurs.
-- Sous la liste : ce que fait la ligne choisie, avec le réglage et les fichiers qu'elle écrit ; la dernière chose faite (`✓` en vert, ou `✗` en rouge avec la raison) ; et les touches de la ligne choisie.
-- Touches : haut et bas (ou `j`/`k`) choisissent une ligne, Début/Fin (ou `g`/`G`) la première ou la dernière, Tab la première ligne de la section suivante, Maj+Tab la première ligne de sa section, ou de celle au-dessus. Gauche et droite (ou `h`/`l`) déplacent un choix vers sa première ou sa dernière valeur (en s'y arrêtant) ou un nombre d'un pas ; Entrée ou Espace passent à la valeur suivante, en faisant le tour, ou commencent la saisie ; chaque changement est enregistré aussitôt. Échap, `q` ou Ctrl+C ferme l'écran.
-- Souris : survoler une ligne la choisit, un clic sur l'une de ses valeurs choisit cette valeur, un clic sur `‹` ou `›` change un nombre d'un pas, un clic ailleurs sur la ligne fait comme Entrée, et la molette déplace le choix.
+- Sous la liste : ce que fait la ligne choisie, avec le réglage et les fichiers qu'elle écrit quand le popup est assez large ; la dernière chose faite (`✓` en vert, ou `✗` en rouge avec la raison) ; et les touches de la ligne choisie.
+- Touches : haut et bas (ou `j`/`k`) choisissent une ligne, Début/Fin (ou `g`/`G`) la première ou la dernière, Tab la première ligne de la section suivante, Maj+Tab la première ligne de sa section, ou de celle au-dessus. Gauche et droite (ou `h`/`l`) déplacent un choix vers sa première ou sa dernière valeur (en s'y arrêtant) ou un nombre d'un pas, et ne font rien sur les autres lignes ; Entrée ou Espace passent un choix à sa valeur suivante, en faisant le tour, ajoutent un pas à un nombre, commencent la saisie ou lancent l'action de la ligne ; chaque changement est enregistré aussitôt. Échap, `q` ou Ctrl+C ferme l'écran.
+- Souris : survoler une ligne la sélectionne, un clic sur l'une de ses valeurs choisit cette valeur, un clic sur `‹` ou `›` change un nombre d'un pas, un clic ailleurs sur la ligne fait comme Entrée, et la molette déplace la sélection ; la barre de défilement montre seulement où en est la liste.
 - Dans un petit popup, la liste défile (une barre de défilement à sa droite dit où elle en est), et la description, puis la ligne d'état, lui laissent la place ; un nom ou une valeur trop longs sont coupés avec `…`, et un texte saisi montre sa fin.
 
 Un fichier qui est un lien (déployé par stow ou chezmoi, par exemple) reste un lien : c'est le fichier vers lequel il pointe qui est écrit. Quand le fichier reste ignoré après un changement (un autre de ses réglages est invalide), l'écran le dit en rouge, avec la raison, et affiche la nouvelle valeur, que le fichier contient : le changement suivant la remet.

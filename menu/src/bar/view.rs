@@ -1,11 +1,11 @@
 //! What the bar shows: its icons and the sidebar's totals, the disk
 //! figures, or the reload of the configuration files open in an editor.
 
-use super::colors::{gradient, level_color, zone};
 use super::geometry::{
     Grid, ICON_ROWS, LABEL_CELLS, bar_cells, button_pair, centered, covers, wanted_rows,
 };
 use super::{fit_height, folders, has_its_place, my_tab};
+use crate::colors::{gradient, level_color, zone};
 use crate::config::{self, Action, Entry, Menu, TotalsStyle};
 use crate::herdr;
 use crate::settings::files;
