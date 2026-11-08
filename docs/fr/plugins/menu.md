@@ -32,19 +32,16 @@ Les icônes sont des glyphes [Nerd Font](https://www.nerdfonts.com) : sans Nerd 
 
 ## Utilisation
 
-**Avec l'explorateur.** Le pane `Tools` s'ouvre avec l'explorateur, quelle que soit la façon dont il s'ouvre (`prefix+f`, ouverture automatique dans un nouvel onglet), et se ferme avec lui. Cliquez sur une icône ou sur son nom, ou tapez la touche de l'entrée quand le pane a le focus ; le survol affiche l'entrée en jaune. Un outil qui ne peut pas démarrer affiche pourquoi en rouge, sous les icônes, pendant 5 secondes. Un double-clic, ou une touche maintenue, lance l'entrée une seule fois. Seuls `prefix+space`, qui ferme le pane et le rouvre, et la fermeture de l'explorateur ferment le pane : aucune touche tapée dans le pane (Échap, `q`, Ctrl+C) ne le ferme, pour qu'une touche Échap de trop ne le fasse pas disparaître. Pour que l'explorateur, lui aussi, ne se ferme plus que par `prefix+f`, retirez les touches de son action `close` dans son `keys.json` (`{ "explorer": { "close": [] } }`, voir [sa documentation](https://github.com/gcaudan/herdr-explorer/blob/main/docs/configuration.md)) ; Échap ferme toujours la preview.
+**Avec l'explorateur.** Le pane `Tools` s'ouvre avec l'explorateur, quelle que soit la façon dont il s'ouvre (`prefix+f`, ouverture automatique dans un nouvel onglet), et se ferme avec lui. Cliquez sur une icône, ou tapez la touche de l'entrée quand le pane a le focus ; le survol affiche l'entrée en jaune. Un outil qui ne peut pas démarrer affiche pourquoi en rouge, sous les icônes, pendant 5 secondes. Un double-clic, ou une touche maintenue, lance l'entrée une seule fois. Seuls `prefix+space`, qui ferme le pane et le rouvre, et la fermeture de l'explorateur ferment le pane : aucune touche tapée dans le pane (Échap, `q`, Ctrl+C) ne le ferme, pour qu'une touche Échap de trop ne le fasse pas disparaître. Pour que l'explorateur, lui aussi, ne se ferme plus que par `prefix+f`, retirez les touches de son action `close` dans son `keys.json` (`{ "explorer": { "close": [] } }`, voir [sa documentation](https://github.com/gcaudan/herdr-explorer/blob/main/docs/configuration.md)) ; Échap ferme toujours la preview.
 
-Les icônes se disposent de deux façons, selon `layout` (voir [Réglages](#réglages)) :
-
-- `double` (par défaut) : deux lignes d'icônes, chacune avec son nom en dessous.
-- `single` : une ligne d'icônes ; la ligne du dessous affiche le nom de l'icône sous la souris, et rien sinon.
+Les icônes tiennent sur une ligne ; la ligne du dessous affiche le nom de l'icône sous la souris, et rien sinon.
 
 Sous les icônes, le CPU et la mémoire des processus de Herdr (son serveur et tout ce qu'il lance, panes de tous les workspaces compris, pas seulement ceux du workspace affiché), puis de la machine, tels que la [sidebar](sidebar.md) les mesure, en gras, affichés de deux façons, selon `totals` :
 
 - `line` (par défaut) : une ligne, `2% 3,1G · 󰍹 10% 22,4G`.
 - `bars` : quatre lignes, `CPU :`, `RAM :`, `CPU 󰍹 :`, `RAM 󰍹 :`, chacune avec une barre aussi large que le pane le permet, puis sa valeur. Une barre fine (`━━━━╸────`) se remplit, par demi-case, de la part de la machine (mémoire de Herdr : de la mémoire de la machine), chaque case dans la couleur que prend sa place dans un dégradé du vert au rouge passant par les [seuils](sidebar.md#couleurs-par-seuil) de son chiffre ; sa partie vide est teintée, en atténué, de la couleur de la zone de chaque seuil, si bien que la barre montre à quelle distance est le seuil suivant. La part de CPU de Herdr manque au premier passage de la sidebar : sa barre reste vide, avec `–`.
 
-Avec les couleurs par seuil de la sidebar (`colors = true` dans `sidebar.toml`), chaque chiffre est vert, jaune, orange ou rouge selon ses seuils. Sans la sidebar, ou quand ses chiffres ont plus de 30 secondes, les lignes restent vides. Le pane demande les lignes de ses icônes (2 ou 4) plus celles de ses totaux (1 ou 4).
+Avec les couleurs par seuil de la sidebar (`colors = true` dans `sidebar.toml`), chaque chiffre est vert, jaune, orange ou rouge selon ses seuils. Sans la sidebar, ou quand ses chiffres ont plus de 30 secondes, les lignes restent vides. Le pane demande les 2 lignes de ses icônes plus celles de ses totaux (1 ou 4).
 
 **Sans l'explorateur.** `prefix+space` ouvre le menu en popup, titré du nom du dossier du workspace. Choisissez une entrée par sa touche, par les flèches (ou `j`/`k`) et Entrée, ou d'un clic. Échap, `q` ou Ctrl+C ferme le menu. La touche propre à une entrée l'emporte sur `j`, `k` et `q`. L'entrée **Disk** n'appartient qu'au pane `Tools` : le menu en popup l'omet.
 
@@ -102,7 +99,7 @@ Le dossier où démarre un outil :
 
 Une commande est cherchée dans les dossiers du `PATH` écrits en entier : une entrée vide (`PATH=:/usr/bin`) ou `.` lancerait un programme de ce nom trouvé dans le dossier du workspace, celui d'un dépôt cloné par exemple. Sous Windows, elle est cherchée avant les dossiers du système (`bash` est le premier du `PATH`, Git Bash par exemple, pas celui de WSL), et un fichier batch (`code` est `code.cmd`) se lance sans préciser son extension ; un nom donné avec son extension (`code.cmd`, `bash.exe`) est cherché de la même façon.
 
-Un fichier illisible ou invalide (champ inconnu, commande vide, commande et action à la fois, touche utilisée deux fois) est ignoré : le menu affiche les entrées intégrées, et affiche l'erreur : le menu en popup au-dessus de sa ligne d'aide, le pane `Tools` en rouge sous les icônes pendant 5 secondes. Le menu en popup lit le fichier à chaque ouverture ; le pane `Tools` le relit dans les 2 secondes qui suivent un changement, et prend la hauteur de sa nouvelle disposition. Un outil démarre tel que le menu l'affichait, même si le fichier a changé entre-temps.
+Un fichier illisible ou invalide (champ inconnu, commande vide, commande et action à la fois, touche utilisée deux fois) est ignoré : le menu affiche les entrées intégrées, et affiche l'erreur : le menu en popup au-dessus de sa ligne d'aide, le pane `Tools` en rouge sous les icônes pendant 5 secondes. Le menu en popup lit le fichier à chaque ouverture ; le pane `Tools` le relit dans les 2 secondes qui suivent un changement, et prend la hauteur de ses nouveaux totaux. Un outil démarre tel que le menu l'affichait, même si le fichier a changé entre-temps.
 
 ## Réglages
 
@@ -115,8 +112,9 @@ En tête de `menu.toml`, avant les entrées ; l'écran des réglages les change 
 | `cpu_decimal` | `false` | les parts de CPU des totaux : `4%` (`false`) ou `4,2%` (`true`) |
 | `memory_unit` | `"M"` | `853M`, `2,4G` (`"M"`) ; `853Mo`, `2,4Go` (`"Mo"`) ; `853MB`, `2,4GB` (`"MB"`) ; `K`, `M` ou `G` selon la taille |
 | `memory_space` | `false` | `2,4Go` (`false`) ou `2,4 Go` avec une espace fine insécable avant l'unité (`true`) |
-| `layout` | `"double"` | les icônes du pane `Tools` : `"double"` (deux lignes, avec leurs noms) ou `"single"` (une ligne, le nom de l'icône survolée en dessous) |
 | `totals` | `"line"` | les totaux du pane `Tools` : `"line"` (une ligne) ou `"bars"` (quatre lignes avec barres), voir [Utilisation](#utilisation) |
+
+Le réglage `layout` des versions précédentes, qui proposait deux lignes d'icônes, a disparu : un fichier qui le contient encore reste valide, le réglage est ignoré.
 
 ## Entrées intégrées
 
@@ -141,7 +139,7 @@ La fenêtre attend Entrée avant de se fermer, erreur comprise. Tant qu'elle est
 | Ligne | Effet | Fichier |
 |---|---|---|
 | Virgule décimale, Espace avant %, CPU avec une décimale, Unités de la mémoire, Espace avant l'unité | `decimal_comma`, `percent_space`, `cpu_decimal`, `memory_unit`, `memory_space` | `menu.toml` et `sidebar.toml` |
-| Icônes, Totaux CPU / mémoire | `layout`, `totals` | `menu.toml` |
+| Totaux CPU / mémoire | `totals` | `menu.toml` |
 | Durée de vie des valeurs | `ttl_seconds`, par pas de 5 secondes, de 5 à 600 | `sidebar.toml` |
 | Shells | `shells` : Entrée pour les taper, séparés par des virgules, Entrée pour enregistrer, Échap pour annuler | `sidebar.toml` |
 | Totaux dans la barre d'onglets | `tab_bar` | `sidebar.toml` |
@@ -169,7 +167,7 @@ Le plugin ne fait qu'ouvrir le `config.toml` de Herdr : il ne l'écrit jamais ([
 - Il s'ouvre sur l'événement `pane.created` de l'explorateur, une fois que celui-ci ne bouge plus (il se place et se dimensionne juste après son ouverture : environ une seconde). Il se ferme sur l'événement `pane.closed`, dès que son onglet n'a plus d'explorateur, ou plus de pane terminal en dehors de lui et des panes propres à l'explorateur (Preview, Search…), pour que l'explorateur puisse fermer son onglet comme il le fait seul.
 - Un pane `Tools` se reconnaît à son libellé et à un fichier vide au nom de son id de pane dans le dossier `bars` du dossier de la session (voir plus bas), écrit à son ouverture et retiré à sa fermeture : un pane que vous renommez `Tools` n'est jamais fermé ni pris pour la barre. Les panes de l'explorateur se reconnaissent toujours à leur seul libellé (Explorer, Preview…) : un terminal renommé ainsi ne compte plus comme terminal. `prefix+space` et l'ouverture d'un explorateur passent chacun leur tour sur la barre d'un onglet, par un verrou de l'onglet (`opening-<id de l'onglet>.lock`, retiré au démarrage de Herdr une fois son onglet disparu) : un onglet n'a jamais deux barres.
 - Herdr donne à un plugin un seul dossier d'état pour toutes ses sessions (`herdr --session <nom>`), dont les ids de panes et d'onglets recommencent à `w1`. Ce qui nomme un pane ou un onglet (le dossier `bars`, les verrous des onglets, les drapeaux des fichiers ouverts depuis un pane `Tools`, `files-open-*`) est donc gardé dans un dossier de la session, `sessions/<session>/` du dossier d'état (`default` pour la session que `herdr` lance sans `--session`). Les chiffres d'un dossier et le verrou de la mise à jour sont partagés par toutes les sessions.
-- Il demande 5 lignes (3 dans la disposition `single` ; 3 de plus avec `totals = "bars"` : 8 ou 6), mais Herdr ne donne jamais moins d'un dixième d'un split à chacun de ses côtés : sur un écran de moins de dix fois cela (50 ou 30 lignes, 80 ou 60 avec les barres), il est plus haut. Il reprend sa hauteur quand la fenêtre change de taille.
+- Il demande 3 lignes (6 avec `totals = "bars"`), mais Herdr ne donne jamais moins d'un dixième d'un split à chacun de ses côtés : sur un écran de moins de dix fois cela (30 lignes, 60 avec les barres), il est plus haut. Il reprend sa hauteur quand la fenêtre change de taille.
 - **Tant qu'il est ouvert, l'explorateur ne garde plus sa largeur** : `<` et `>` ne font plus rien, et sa largeur suit celle de la fenêtre en proportion. L'explorateur ne cherche sa largeur que sur toute la hauteur de son propre pane ; une correction lui est proposée.
 - Les lignes des totaux lisent, toutes les 2 secondes, un fichier que la sidebar écrit dans son dossier de la session à chacun de ses passages (toutes les 5 secondes) : le pane ne mesure rien lui-même.
 - Les chiffres du disque sont mesurés en arrière-plan, seulement pendant que la page Disk est affichée (revenir arrête une lecture en cours, sauf si le dossier est sur un partage réseau qui ne répond plus : sa lecture l'attend, et les lectures suivantes du dossier attendent celle-là) : tout le dossier est lu, ce qui prend un moment sur un gros dossier (`node_modules`, dossiers de build). La lecture s'arrête après 200 000 fichiers et dossiers ou 2 secondes, au premier atteint : les chiffres commencent alors par `≥` (au moins). Une lecture demandée d'un clic va jusqu'à 5 millions de fichiers et dossiers ou 60 secondes.

@@ -17,10 +17,6 @@
 # Espace (fine, insécable) avant l'unité : 2,4 Go plutôt que 2,4Go.
 # memory_space = false
 
-# Icônes du pane Tools : "double" (deux lignes, avec les noms) ou "single"
-# (une ligne, le nom de l'icône survolée en dessous).
-# layout = "double"
-
 # Totaux CPU / mémoire du pane Tools : "line" (une ligne) ou "bars" (quatre
 # lignes : CPU, RAM, puis ceux de la machine, chacun avec une barre en dégradé
 # selon ses seuils, réglés dans sidebar.toml).

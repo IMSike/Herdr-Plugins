@@ -2,9 +2,11 @@
 //! figures, or the reload of the configuration files open in an editor.
 
 use super::colors::{gradient, level_color, zone};
-use super::geometry::{Grid, LABEL_CELLS, bar_cells, button_pair, centered, covers, wanted_rows};
+use super::geometry::{
+    Grid, ICON_ROWS, LABEL_CELLS, bar_cells, button_pair, centered, covers, wanted_rows,
+};
 use super::{fit_height, folders, has_its_place, my_tab};
-use crate::config::{self, Action, Entry, IconLayout, Menu, TotalsStyle};
+use crate::config::{self, Action, Entry, Menu, TotalsStyle};
 use crate::herdr;
 use crate::settings::files;
 use crate::stats::{self, Measured, Stats};
@@ -449,7 +451,7 @@ impl<'a> State<'a> {
             if changed != self.menu_changed {
                 self.menu_changed = changed;
                 let (menu, error) = crate::menu_config();
-                if (menu.layout, menu.totals) != (self.view.menu.layout, self.view.menu.totals) {
+                if menu.totals != self.view.menu.totals {
                     self.check_at = Some(Instant::now());
                 }
                 self.view.menu = menu;
@@ -528,8 +530,7 @@ impl<'a> State<'a> {
             Event::Mouse(mouse) => {
                 let button = button_at(view.page, width, mouse.row, mouse.column);
                 let hit = match view.page {
-                    Page::Tools => Grid::new(width, &view.menu.entries, view.menu.layout)
-                        .at(mouse.row, mouse.column),
+                    Page::Tools => Grid::new(width, &view.menu.entries).at(mouse.row, mouse.column),
                     _ => None,
                 };
                 // Not while a message stands in for the figures.
@@ -712,7 +713,7 @@ fn draw(view: &View) -> io::Result<()> {
     // A message under the rest: the last row the page asks for.
     if let Some((message, color)) = &view.message {
         let row = match view.page {
-            Page::Tools => Grid::new(width, &view.menu.entries, view.menu.layout).rows(),
+            Page::Tools => ICON_ROWS,
             _ => 2,
         };
         let text = cut(message);
@@ -727,45 +728,34 @@ fn draw(view: &View) -> io::Result<()> {
     out.show()
 }
 
-/// The icons, their names, and the totals of the sidebar under them.
+/// The icons, the name of the hovered one, and the totals of the sidebar
+/// under them.
 fn draw_tools(out: &mut impl Write, view: &View, width: u16, rows: u16) -> io::Result<()> {
-    let grid = Grid::new(width, &view.menu.entries, view.menu.layout);
+    let grid = Grid::new(width, &view.menu.entries);
     let slot = grid.slot();
     for (i, entry) in view.menu.entries.iter().enumerate() {
-        let (left, top) = grid.place(i);
-        if top >= rows {
+        let left = grid.left(i);
+        // More icons than columns: those past the edge are left out.
+        if rows == 0 || left >= width {
             break;
         }
-        // More icons than columns: those past the edge are left out.
-        if left >= width {
-            continue;
-        }
-        let hovered = view.hover == Some(i);
-        let color = if hovered { Color::Yellow } else { Color::Reset };
-        // The icon (one cell in most fonts) over the middle of the name.
+        let color = if view.hover == Some(i) {
+            Color::Yellow
+        } else {
+            Color::Reset
+        };
+        // The icon (one cell in most fonts) in the middle of its slot.
         let icon = fit(&entry.icon(), usize::from(slot));
         queue!(
             out,
-            MoveTo(centered(left, slot, &icon), top),
+            MoveTo(centered(left, slot, &icon), 0),
             SetForegroundColor(color),
             Print(&icon),
             ResetColor
         )?;
-        if view.menu.layout == IconLayout::Double && top + 1 < rows {
-            let name = fit(&entry.label, usize::from(slot));
-            queue!(out, MoveTo(centered(left, slot, &name), top + 1))?;
-            if hovered {
-                queue!(out, SetForegroundColor(Color::Yellow))?;
-            } else {
-                queue!(out, SetAttribute(Attribute::Dim))?;
-            }
-            queue!(out, Print(name), SetAttribute(Attribute::Reset), ResetColor)?;
-        }
     }
-    // One row of icons: the name of the one under the pointer below it.
-    if view.menu.layout == IconLayout::Single
-        && let Some(entry) = view.hover.and_then(|i| view.menu.entries.get(i))
-    {
+    // The name of the icon under the pointer, below the icons.
+    if let Some(entry) = view.hover.and_then(|i| view.menu.entries.get(i)) {
         let name = fit(&entry.label, usize::from(width));
         queue!(
             out,
@@ -778,10 +768,10 @@ fn draw_tools(out: &mut impl Write, view: &View, width: u16, rows: u16) -> io::R
     if view.message.is_none()
         && let Some(totals) = &view.totals
     {
-        let row = grid.rows();
+        let (numbers, row) = (&view.menu.numbers, ICON_ROWS);
         match view.menu.totals {
-            TotalsStyle::Line => draw_line(out, totals, &view.menu.numbers, width, row, rows)?,
-            TotalsStyle::Bars => draw_bars(out, totals, &view.menu.numbers, width, row, rows)?,
+            TotalsStyle::Line => draw_line(out, totals, numbers, width, row, rows)?,
+            TotalsStyle::Bars => draw_bars(out, totals, numbers, width, row, rows)?,
         }
     }
     Ok(())

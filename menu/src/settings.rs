@@ -5,7 +5,7 @@
 pub mod files;
 mod store;
 
-use crate::config::{self, IconLayout, Menu, TotalsStyle};
+use crate::config::{self, Menu, TotalsStyle};
 use crate::ui::{Frame, Screen, fit, is_control};
 use crossterm::cursor::MoveTo;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind};
@@ -45,7 +45,6 @@ enum Item {
     CpuDecimal,
     MemoryUnit,
     MemorySpace,
-    Layout,
     Totals,
     Ttl,
     Shells,
@@ -137,7 +136,6 @@ impl State {
             Row::Item(Item::MemoryUnit),
             Row::Item(Item::MemorySpace),
             Row::Header("Pane Tools"),
-            Row::Item(Item::Layout),
             Row::Item(Item::Totals),
         ];
         if self.sidebar.is_some() {
@@ -198,14 +196,6 @@ impl State {
             Item::MemorySpace => (
                 "Espace avant l'unité",
                 numbers.size(2_576_980_378).replace('\u{202F}', " "),
-            ),
-            Item::Layout => (
-                "Icônes",
-                match self.menu.layout {
-                    IconLayout::Single => "une ligne, nom au survol",
-                    IconLayout::Double => "deux lignes, avec les noms",
-                }
-                .into(),
             ),
             Item::Totals => (
                 "Totaux CPU / mémoire",
@@ -377,13 +367,6 @@ impl State {
                 self.set_number("memory_unit", herdr_api::name_of(&value).into(), |n| {
                     n.memory_unit = value
                 })
-            }
-            Item::Layout => {
-                let value = match self.menu.layout {
-                    IconLayout::Single => IconLayout::Double,
-                    IconLayout::Double => IconLayout::Single,
-                };
-                self.switch_menu("layout", &herdr_api::name_of(&value), |m| m.layout = value)
             }
             Item::Totals => {
                 let value = match self.menu.totals {

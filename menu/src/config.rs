@@ -32,17 +32,6 @@ pub enum Action {
     Disk,
 }
 
-/// How the `Tools` pane lays out its icons.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum IconLayout {
-    /// One row of icons; the name of the one under the pointer below it.
-    Single,
-    /// Two rows of icons, each with its name below it.
-    #[default]
-    Double,
-}
-
 /// How the `Tools` pane shows the sidebar's totals.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -93,7 +82,6 @@ pub struct Menu {
     pub entries: Vec<Entry>,
     /// How the `Tools` pane writes its figures.
     pub numbers: NumberFormat,
-    pub layout: IconLayout,
     pub totals: TotalsStyle,
 }
 
@@ -102,7 +90,6 @@ impl Default for Menu {
         Self {
             entries: defaults(),
             numbers: NumberFormat::default(),
-            layout: IconLayout::default(),
             totals: TotalsStyle::default(),
         }
     }
@@ -117,8 +104,11 @@ struct File {
     cpu_decimal: bool,
     memory_unit: MemoryUnit,
     memory_space: bool,
-    layout: IconLayout,
     totals: TotalsStyle,
+    /// The icons' layout of earlier versions, which had two: still read so
+    /// that a file that sets it stays valid, and ignored.
+    #[serde(rename = "layout", skip_serializing)]
+    _layout: Option<toml::Value>,
 }
 
 impl Default for File {
@@ -131,8 +121,8 @@ impl Default for File {
             cpu_decimal: numbers.cpu_decimal,
             memory_unit: numbers.memory_unit,
             memory_space: numbers.memory_space,
-            layout: IconLayout::default(),
             totals: TotalsStyle::default(),
+            _layout: None,
         }
     }
 }
@@ -204,7 +194,6 @@ pub fn parse(text: &str) -> Result<Menu, String> {
             memory_unit: file.memory_unit,
             memory_space: file.memory_space,
         },
-        layout: file.layout,
         totals: file.totals,
     })
 }
@@ -230,7 +219,6 @@ mod tests {
         let menu = parse(
             r#"
             percent_space = true
-            layout = "single"
 
             [[entries]]
             key = "l"
@@ -261,7 +249,6 @@ mod tests {
         assert!(entries[0].popup && !entries[1].popup);
         assert_eq!(entries[2].action, Some(Action::Update));
         assert!(menu.numbers.decimal_comma && menu.numbers.percent_space);
-        assert_eq!(menu.layout, IconLayout::Single);
     }
 
     #[test]
@@ -294,7 +281,14 @@ mod tests {
             )
             .is_err()
         );
-        assert!(parse("layout = \"triple\"").is_err());
+        assert!(parse("totals = \"triple\"").is_err());
+    }
+
+    #[test]
+    fn the_layout_of_earlier_versions_is_ignored() {
+        for text in ["layout = \"double\"", "layout = \"single\"", "layout = 2"] {
+            assert_eq!(parse(text).unwrap(), Menu::default(), "{text}");
+        }
     }
 
     #[test]
@@ -302,7 +296,6 @@ mod tests {
         let menu = parse("# Only comments.\ndecimal_comma = false\n").unwrap();
         assert_eq!(menu.entries, defaults());
         assert!(!menu.numbers.decimal_comma);
-        assert_eq!(menu.layout, IconLayout::Double);
     }
 
     #[test]

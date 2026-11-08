@@ -1,24 +1,20 @@
 //! Where the bar draws and what a click hits, and how far to move the split
 //! it tops to keep its height: arithmetic on sizes and Herdr's layout only.
 
-use crate::config::{Entry, IconLayout, Menu, TotalsStyle};
+use crate::config::{Entry, Menu, TotalsStyle};
 use serde::Deserialize;
 
-/// Narrowest column of one entry with its name under it.
-const MIN_SLOT: u16 = 9;
-/// Widest column of one icon alone, on one row.
+/// Widest column of one icon.
 const MAX_ICON_SLOT: u16 = 6;
 /// Smallest share Herdr gives a side of a split.
 const MIN_RATIO: f64 = 0.1;
+/// Rows of the entries: the icons, then the name of the hovered one.
+pub const ICON_ROWS: u16 = 2;
 
-/// Rows the bar asks for: its icons and their names, then the totals of
-/// the sidebar (one line, or four bars).
+/// Rows the bar asks for: its icons and the name under them, then the
+/// totals of the sidebar (one line, or four bars).
 pub fn wanted_rows(menu: &Menu) -> u16 {
-    let icons = match menu.layout {
-        IconLayout::Single => 2,
-        IconLayout::Double => 4,
-    };
-    icons + totals_rows(menu.totals)
+    ICON_ROWS + totals_rows(menu.totals)
 }
 
 /// Rows of the totals.
@@ -29,48 +25,19 @@ pub fn totals_rows(style: TotalsStyle) -> u16 {
     }
 }
 
-/// Where the entries are drawn: one row of icons, or two rows of icons with
-/// their names, each row centered.
+/// Where the entries are drawn: one row of icons, centered, the name of
+/// the hovered one under it.
 pub struct Grid {
     slot: u16,
-    per_row: usize,
     count: usize,
     width: u16,
-    layout: IconLayout,
 }
 
 impl Grid {
-    pub fn new(width: u16, entries: &[Entry], layout: IconLayout) -> Self {
+    pub fn new(width: u16, entries: &[Entry]) -> Self {
         let count = entries.len();
-        let (per_row, slot) = match layout {
-            IconLayout::Single => {
-                let per_row = count.max(1);
-                (
-                    per_row,
-                    (width / count_cells(per_row)).clamp(1, MAX_ICON_SLOT),
-                )
-            }
-            IconLayout::Double => {
-                let per_row = count.div_ceil(2).max(1);
-                let longest = entries
-                    .iter()
-                    .map(|e| count_cells(crate::ui::width(&e.label)))
-                    .max()
-                    .unwrap_or(0);
-                let slot = longest
-                    .saturating_add(2)
-                    .max(MIN_SLOT)
-                    .min(width / count_cells(per_row));
-                (per_row, slot.max(1))
-            }
-        };
-        Self {
-            slot,
-            per_row,
-            count,
-            width,
-            layout,
-        }
+        let slot = (width / count_cells(count.max(1))).clamp(1, MAX_ICON_SLOT);
+        Self { slot, count, width }
     }
 
     /// Columns of one entry.
@@ -78,40 +45,24 @@ impl Grid {
         self.slot
     }
 
-    /// Rows the entries take: each row of icons and the row of names under it.
-    pub fn rows(&self) -> u16 {
-        count_cells(self.count.div_ceil(self.per_row).max(1)).saturating_mul(2)
+    /// The first column of entry `i`'s slot.
+    pub fn left(&self, i: usize) -> u16 {
+        self.start()
+            .saturating_add(self.slot.saturating_mul(count_cells(i)))
     }
 
-    /// The first column of entry `i`'s slot, and the row of its icon.
-    pub fn place(&self, i: usize) -> (u16, u16) {
-        let line = i / self.per_row;
-        let first = line * self.per_row;
-        let start = self.start(first);
-        (
-            start.saturating_add(self.slot.saturating_mul(count_cells(i - first))),
-            count_cells(line).saturating_mul(2),
-        )
+    fn start(&self) -> u16 {
+        let slots = self.slot.saturating_mul(count_cells(self.count));
+        self.width.saturating_sub(slots) / 2
     }
 
-    fn start(&self, first: usize) -> u16 {
-        let in_line = count_cells((self.count - first).min(self.per_row));
-        self.width.saturating_sub(self.slot.saturating_mul(in_line)) / 2
-    }
-
-    /// The entry under a click: its icon or its name (the row under it).
+    /// The entry under a click: its icon or the row under it.
     pub fn at(&self, row: u16, column: u16) -> Option<usize> {
-        let line = usize::from(row / 2);
-        if self.layout == IconLayout::Single && line > 0 {
+        if row >= ICON_ROWS {
             return None;
         }
-        let first = line * self.per_row;
-        if first >= self.count {
-            return None;
-        }
-        let index = usize::from(column.checked_sub(self.start(first))? / self.slot);
-        let in_line = (self.count - first).min(self.per_row);
-        (index < in_line).then_some(first + index)
+        let index = usize::from(column.checked_sub(self.start())? / self.slot);
+        (index < self.count).then_some(index)
     }
 }
 
@@ -240,17 +191,14 @@ mod tests {
 
     #[test]
     fn the_bar_asks_for_its_icons_and_totals() {
-        let rows = |layout, totals| {
+        let rows = |totals| {
             wanted_rows(&Menu {
-                layout,
                 totals,
                 ..Menu::default()
             })
         };
-        assert_eq!(rows(IconLayout::Single, TotalsStyle::Line), 3);
-        assert_eq!(rows(IconLayout::Double, TotalsStyle::Line), 5);
-        assert_eq!(rows(IconLayout::Single, TotalsStyle::Bars), 6);
-        assert_eq!(rows(IconLayout::Double, TotalsStyle::Bars), 8);
+        assert_eq!(rows(TotalsStyle::Line), 3);
+        assert_eq!(rows(TotalsStyle::Bars), 6);
     }
 
     fn rect(x: u16, y: u16, width: u16, height: u16) -> Rect {
@@ -284,48 +232,31 @@ mod tests {
     }
 
     #[test]
-    fn two_rows_of_entries_are_centered() {
-        let grid = Grid::new(40, &entries(), IconLayout::Double);
-        // "Settings" and a column on each side: 3 slots of 10 in 40 columns.
-        assert_eq!(grid.slot(), 10);
-        assert_eq!(grid.rows(), 4);
-        assert_eq!(grid.place(0), (5, 0));
-        assert_eq!(grid.place(5), (25, 2));
-        assert_eq!(centered(5, 10, "lazygit"), 6);
-        // An odd count, and slots of 9 without "Settings": the last row is
-        // centered on its own.
-        let five = &entries()[..5];
-        assert_eq!(Grid::new(40, five, IconLayout::Double).place(3), (11, 2));
-    }
-
-    #[test]
     fn one_row_of_icons_fits_the_width() {
-        let grid = Grid::new(40, &entries(), IconLayout::Single);
+        let grid = Grid::new(40, &entries());
         assert_eq!(grid.slot(), MAX_ICON_SLOT);
-        assert_eq!(grid.rows(), 2);
-        assert_eq!(grid.place(1), (8, 0));
+        assert_eq!(grid.left(1), 8);
+        assert_eq!(centered(2, 6, "x"), 4);
         // Too narrow: the slots share the width.
-        assert_eq!(Grid::new(18, &entries(), IconLayout::Single).slot(), 3);
+        assert_eq!(Grid::new(18, &entries()).slot(), 3);
         // More entries than a screen has columns: nothing wraps or divides by zero.
         let many = vec![entry("x"); 65_536];
-        let grid = Grid::new(40, &many, IconLayout::Single);
+        let grid = Grid::new(40, &many);
         assert_eq!(grid.slot(), 1);
-        assert_eq!(grid.place(65_535), (u16::MAX, 0));
+        assert_eq!(grid.left(65_535), u16::MAX);
+        // No entry at all.
+        assert_eq!(Grid::new(40, &[]).at(0, 20), None);
     }
 
     #[test]
     fn clicks_map_to_entries() {
-        let grid = Grid::new(40, &entries(), IconLayout::Double);
-        assert_eq!(grid.at(0, 5), Some(0));
-        assert_eq!(grid.at(1, 16), Some(1));
-        assert_eq!(grid.at(3, 34), Some(5));
-        assert_eq!(grid.at(0, 4), None);
-        assert_eq!(grid.at(2, 35), None);
-        assert_eq!(grid.at(4, 10), None);
-        let single = Grid::new(40, &entries(), IconLayout::Single);
-        assert_eq!(single.at(0, 8), Some(1));
-        assert_eq!(single.at(2, 8), None);
-        assert_eq!(single.at(0, 38), None);
+        let grid = Grid::new(40, &entries());
+        assert_eq!(grid.at(0, 2), Some(0));
+        assert_eq!(grid.at(0, 8), Some(1));
+        assert_eq!(grid.at(1, 8), Some(1));
+        assert_eq!(grid.at(2, 8), None);
+        assert_eq!(grid.at(0, 1), None);
+        assert_eq!(grid.at(0, 38), None);
     }
 
     #[test]

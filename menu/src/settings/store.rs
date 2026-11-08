@@ -83,11 +83,11 @@ mod tests {
 
     #[test]
     fn uncomments_the_template_line() {
-        let text = "# Help.\n# layout = \"double\"\n\n# [[entries]]\n# key = \"l\"\n";
-        let set = with_value(text, "layout", "single".into()).unwrap();
+        let text = "# Help.\n# totals = \"line\"\n\n# [[entries]]\n# key = \"l\"\n";
+        let set = with_value(text, "totals", "bars".into()).unwrap();
         assert_eq!(
             set,
-            "# Help.\nlayout = \"single\"\n\n# [[entries]]\n# key = \"l\"\n"
+            "# Help.\ntotals = \"bars\"\n\n# [[entries]]\n# key = \"l\"\n"
         );
         // `key` is only commented out in the entries' example, below its
         // table: added, the example left as it is.

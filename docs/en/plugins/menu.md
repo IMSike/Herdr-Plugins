@@ -32,19 +32,16 @@ The icons are [Nerd Font](https://www.nerdfonts.com) glyphs: without a Nerd Font
 
 ## Use
 
-**With the explorer.** The `Tools` pane opens with the explorer, however it is opened (`prefix+f`, opening on its own in a new tab), and closes with it. Click an icon or its name, or type the entry's key while the pane has the focus; hovering shows the entry in yellow. A tool that cannot start shows why in red, under the icons, for 5 seconds. A double click, or a key held down, starts the entry once. Only `prefix+space`, which closes the pane and opens it again, and the closing of the explorer close the pane: no key typed in the pane (Escape, `q`, Ctrl+C) closes it, so that one Escape too many does not take it away. For the explorer, too, to close with `prefix+f` alone, take the keys away from its `close` action in its `keys.json` (`{ "explorer": { "close": [] } }`, see [its documentation](https://github.com/gcaudan/herdr-explorer/blob/main/docs/configuration.md)); Escape still closes the preview.
+**With the explorer.** The `Tools` pane opens with the explorer, however it is opened (`prefix+f`, opening on its own in a new tab), and closes with it. Click an icon, or type the entry's key while the pane has the focus; hovering shows the entry in yellow. A tool that cannot start shows why in red, under the icons, for 5 seconds. A double click, or a key held down, starts the entry once. Only `prefix+space`, which closes the pane and opens it again, and the closing of the explorer close the pane: no key typed in the pane (Escape, `q`, Ctrl+C) closes it, so that one Escape too many does not take it away. For the explorer, too, to close with `prefix+f` alone, take the keys away from its `close` action in its `keys.json` (`{ "explorer": { "close": [] } }`, see [its documentation](https://github.com/gcaudan/herdr-explorer/blob/main/docs/configuration.md)); Escape still closes the preview.
 
-The icons are laid out one of two ways, set by `layout` (see [Settings](#settings)):
-
-- `double` (default): two rows of icons, each with its name under it.
-- `single`: one row of icons; the row under it shows the name of the icon under the mouse, and nothing otherwise.
+The icons stand on one row; the row under it shows the name of the icon under the mouse, and nothing otherwise.
 
 Under the icons, the CPU and memory of Herdr's processes (its server and everything it runs, every workspace's panes included, not the current workspace's alone), then of the machine, as the [sidebar](sidebar.md) measures them, in bold, shown one of two ways, set by `totals`:
 
 - `line` (default): one row, `2% 3,1G · 󰍹 10% 22,4G`.
 - `bars`: four rows, `CPU :`, `RAM :`, `CPU 󰍹 :`, `RAM 󰍹 :`, each with a bar as wide as the pane allows, then its value. A thin bar (`━━━━╸────`) fills by half cells with the share of the machine (Herdr's memory: of the machine's memory), each cell in the color its place takes in a gradient from green to red through the [thresholds](sidebar.md#threshold-colors) of its figure; its empty part is tinted, dimmed, with the color of each threshold's zone, so the bar shows how far the next threshold is. Herdr's CPU share is missing on the sidebar's first run: its bar stays empty, with `–`.
 
-With the sidebar's threshold colors on (`colors = true` in `sidebar.toml`), each figure is green, yellow, orange or red as its thresholds set. Without the sidebar, or when its figures are more than 30 seconds old, the rows stay empty. The pane asks for its icons' rows (2 or 4) plus its totals' (1 or 4).
+With the sidebar's threshold colors on (`colors = true` in `sidebar.toml`), each figure is green, yellow, orange or red as its thresholds set. Without the sidebar, or when its figures are more than 30 seconds old, the rows stay empty. The pane asks for its icons' 2 rows plus its totals' (1 or 4).
 
 **Without the explorer.** `prefix+space` opens the popup menu, titled with the workspace's folder name. Choose an entry with its key, with the arrows (or `j`/`k`) and Enter, or with a click. Escape, `q` or Ctrl+C closes the menu. An entry's own key wins over `j`, `k` and `q`. The **Disk** entry belongs to the `Tools` pane only: the popup menu leaves it out.
 
@@ -102,7 +99,7 @@ The folder a tool starts in:
 
 A command name is looked up in the folders of `PATH` written in full: an empty entry (`PATH=:/usr/bin`) or `.` would run a program of that name found in the workspace's folder, a cloned repository's for instance. On Windows it is looked up before the system folders (`bash` is the first one on `PATH`, Git Bash for instance, not WSL's), and a batch file (`code` is `code.cmd`) runs without naming its extension; a name given with its extension (`code.cmd`, `bash.exe`) is looked up the same way.
 
-A file that cannot be read or is invalid (unknown field, empty command, both a command and an action, a key used twice) is ignored: the menu shows the built-in entries, and shows the error: the popup menu above its help line, the `Tools` pane in red under the icons for 5 seconds. The popup menu reads the file each time it opens; the `Tools` pane reads it again within 2 seconds of a change, and takes the height of its new layout. A tool starts as the menu showed it, even when the file changed in between.
+A file that cannot be read or is invalid (unknown field, empty command, both a command and an action, a key used twice) is ignored: the menu shows the built-in entries, and shows the error: the popup menu above its help line, the `Tools` pane in red under the icons for 5 seconds. The popup menu reads the file each time it opens; the `Tools` pane reads it again within 2 seconds of a change, and takes the height of its new totals. A tool starts as the menu showed it, even when the file changed in between.
 
 ## Settings
 
@@ -115,8 +112,9 @@ At the top of `menu.toml`, before the entries; the settings screen changes them 
 | `cpu_decimal` | `false` | the CPU shares of the totals: `4%` (`false`) or `4,2%` (`true`) |
 | `memory_unit` | `"M"` | `853M`, `2,4G` (`"M"`); `853Mo`, `2,4Go` (`"Mo"`); `853MB`, `2,4GB` (`"MB"`); `K`, `M` or `G` as the size needs |
 | `memory_space` | `false` | `2,4Go` (`false`) or `2,4 Go` with a narrow no-break space before the unit (`true`) |
-| `layout` | `"double"` | the icons of the `Tools` pane: `"double"` (two rows, with their names) or `"single"` (one row, the name of the hovered icon under it) |
 | `totals` | `"line"` | the totals of the `Tools` pane: `"line"` (one row) or `"bars"` (four rows with bars), see [Use](#use) |
+
+The `layout` setting of earlier versions, which offered two rows of icons, is gone: a file that still sets it stays valid, the setting is ignored.
 
 ## Built-in entries
 
@@ -141,7 +139,7 @@ The window waits for Enter before closing, an error included. While it is open, 
 | Line | Effect | File |
 |---|---|---|
 | Virgule décimale, Espace avant %, CPU avec une décimale, Unités de la mémoire, Espace avant l'unité | `decimal_comma`, `percent_space`, `cpu_decimal`, `memory_unit`, `memory_space` | `menu.toml` and `sidebar.toml` |
-| Icônes, Totaux CPU / mémoire | `layout`, `totals` | `menu.toml` |
+| Totaux CPU / mémoire | `totals` | `menu.toml` |
 | Durée de vie des valeurs | `ttl_seconds`, by 5 seconds, from 5 to 600 | `sidebar.toml` |
 | Shells | `shells`: Enter to type them, separated by commas, Enter to save, Escape to cancel | `sidebar.toml` |
 | Totaux dans la barre d'onglets | `tab_bar` | `sidebar.toml` |
@@ -169,7 +167,7 @@ The plugin only opens Herdr's `config.toml`: it never writes it ([ADR 0004](../a
 - It opens on Herdr's `pane.created` event of the explorer, once the explorer stops moving (it places and sizes itself right after it opens: about one second). It closes on the `pane.closed` event, as soon as its tab has no explorer, or no terminal pane besides it and the explorer's own panes (Preview, Search…), so that the explorer can close its tab as it does on its own.
 - A `Tools` pane is known by its label and by an empty file named after its pane id in the `bars` folder of the session's folder (see below), written when it opens and removed when it closes: a pane you rename `Tools` is never closed or taken for the bar. The explorer's panes are still known by their label alone (Explorer, Preview…): a terminal renamed so no longer counts as a terminal. `prefix+space` and the opening of an explorer take turns on a tab's bar, through a lock of the tab (`opening-<tab id>.lock`, removed at Herdr's start once its tab is gone): a tab never gets two bars.
 - Herdr gives a plugin one state folder for all its sessions (`herdr --session <name>`), whose pane and tab ids start over at `w1`. What names a pane or a tab (the `bars` folder, the tabs' locks, the flags of the files open from a `Tools` pane, `files-open-*`) is therefore kept in a folder of the session, `sessions/<session>/` in the state folder (`default` for the session `herdr` runs without `--session`). The figures of a folder and the update's lock are shared by every session.
-- It asks for 5 rows (3 in the `single` layout; 3 more with `totals = "bars"`: 8 or 6), but Herdr never gives a side of a split less than a tenth of it: on a screen of fewer than ten times that (50 or 30 rows, 80 or 60 with the bars), it is taller. It takes its height back when the window is resized.
+- It asks for 3 rows (6 with `totals = "bars"`), but Herdr never gives a side of a split less than a tenth of it: on a screen of fewer than ten times that (30 rows, 60 with the bars), it is taller. It takes its height back when the window is resized.
 - **While it is open, the explorer no longer keeps its width**: `<` and `>` do nothing and its width follows the window's in proportion. The explorer only looks for its width at the full height of its own pane; a change to it is proposed upstream.
 - The totals rows read a file the sidebar writes in its folder of the session at each of its runs (every 5 seconds), every 2 seconds: the pane measures nothing itself.
 - The disk figures are measured in the background, only while the Disk page is shown (going back stops a reading under way, unless the folder is on a network share that no longer answers: its reading waits for it, and the folder's next readings wait for that one): the whole folder is read, which takes a moment on a large one (`node_modules`, build folders). The reading stops after 200,000 files and folders or 2 seconds, whichever comes first: the figures then start with `≥` (at least). A reading asked for with a click goes up to 5 million files and folders or 60 seconds.
