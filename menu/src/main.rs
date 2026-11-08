@@ -19,6 +19,7 @@
 //! editor (`edit-tab`, `edit` for a terminal one), `Disk` a view of the bar.
 
 mod bar;
+mod colors;
 mod config;
 mod herdr;
 mod launch;
@@ -289,34 +290,24 @@ fn run_entry() -> Result<(), String> {
     let json = herdr_api::var(ENTRY_ENV)?;
     let entry: Entry =
         serde_json::from_str(&json).map_err(|e| format!("{ENTRY_ENV} illisible : {e}"))?;
-    // A missing program says so the same way on every system, with what to do.
-    let name = entry.command.first().map_or("", String::as_str);
-    let missing = || {
-        format!(
+    // A bare name missing from `PATH` says so the same way on every system,
+    // with what to do; a path is left to the system's own error.
+    if let Some(name) = entry.command.first()
+        && Path::new(name).components().count() == 1
+        && launch::find_on_path(name).is_none()
+    {
+        return Err(format!(
             "{} : installez-le, ou changez sa commande dans menu.toml",
             launch::not_found(name)
-        )
-    };
-    let mut command = launch::command(&entry.command).map_err(|e| {
-        if e == launch::not_found(name) {
-            missing()
-        } else {
-            e
-        }
-    })?;
+        ));
+    }
+    let mut command = launch::command(&entry.command)?;
     if let Some(cwd) = std::env::var_os(CWD_ENV) {
         command.current_dir(cwd);
     }
-    // On Windows a name not found on `PATH` is left to Rust's own search,
-    // which fails with `NotFound`; elsewhere that error would rather be the
-    // folder the tool starts in.
-    let status = command.status().map_err(|e| {
-        if cfg!(windows) && e.kind() == io::ErrorKind::NotFound {
-            missing()
-        } else {
-            format!("impossible de lancer « {} » : {e}", entry.label)
-        }
-    })?;
+    let status = command
+        .status()
+        .map_err(|e| format!("impossible de lancer « {} » : {e}", entry.label))?;
     if status.success() {
         Ok(())
     } else {
