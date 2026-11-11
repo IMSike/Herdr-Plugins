@@ -94,7 +94,6 @@ impl Checked {
     }
 }
 
-/// Seconds since the Unix epoch.
 /// The file of the last check, whose changes a pane watches.
 pub fn last_file() -> Option<PathBuf> {
     Some(herdr_api::state_dir().ok()?.join(FILE))
@@ -160,6 +159,7 @@ fn check_and_keep() -> Found {
             herdr: Herdr::Unknown("vérification interrompue".into()),
             installed: None,
             answered: false,
+            nothing_to_ask: false,
         });
         (herdr, plugins)
     });
@@ -181,8 +181,12 @@ fn merged(
     herdr: HerdrCheck,
     plugins: Result<Vec<(Plugin, Ref)>, String>,
 ) -> (Found, bool) {
+    // Settled too when nothing was to be asked: the preview channel, and
+    // no repository left silent.
     let answered = herdr.answered
-        || (plugins.iter().flatten()).any(|(_, r)| matches!(r, Ref::Moved | Ref::Same));
+        || (plugins.iter().flatten()).any(|(_, r)| matches!(r, Ref::Moved | Ref::Same))
+        || (herdr.nothing_to_ask
+            && (plugins.as_ref()).is_ok_and(|p| p.iter().all(|(_, r)| *r != Ref::Silent)));
     let herdr = match last.as_ref().map(|l| &l.herdr) {
         // Unless that version was installed since.
         Some(known @ Herdr::Newer { latest, .. })
@@ -218,9 +222,11 @@ struct HerdrCheck {
     herdr: Herdr,
     /// The installed version, when `herdr status` gave it.
     installed: Option<String>,
-    /// Whether herdr.dev answered, or was not to be asked (the preview
-    /// channel, which it does not give): the check is settled.
+    /// Whether herdr.dev answered.
     answered: bool,
+    /// Whether herdr.dev was not to be asked: the preview channel, of which
+    /// it gives no version.
+    nothing_to_ask: bool,
 }
 
 /// Herdr's installed version against the latest stable one.
@@ -229,6 +235,7 @@ fn herdr_version() -> HerdrCheck {
         herdr: Herdr::Unknown(why),
         installed: installed.map(str::to_string),
         answered: false,
+        nothing_to_ask: false,
     };
     let status = match status() {
         Ok(status) => status,
@@ -238,7 +245,7 @@ fn herdr_version() -> HerdrCheck {
     let installed = client["version"].as_str();
     if client["channel"].as_str().is_some_and(|c| c != "stable") {
         return HerdrCheck {
-            answered: true,
+            nothing_to_ask: true,
             ..unknown("canal preview".into(), installed)
         };
     }
@@ -257,6 +264,7 @@ fn herdr_version() -> HerdrCheck {
         herdr,
         installed: Some(installed.into()),
         answered: true,
+        nothing_to_ask: false,
     }
 }
 
@@ -370,7 +378,9 @@ fn has_moved(source: &Source) -> Ref {
     else {
         return Ref::NotAsked;
     };
-    let url = format!("https://github.com/{owner}/{repo}.git");
+    // With its port: a user's `url.<base>.insteadOf` of `https://github.com/`
+    // does not rewrite it to SSH, which is refused below.
+    let url = format!("https://github.com:443/{owner}/{repo}.git");
     let names = ref_names(source.requested_ref.as_deref());
     let mut command = Command::new("git");
     // HTTPS only, even when the user's configuration sends GitHub's URLs
@@ -596,6 +606,7 @@ mod tests {
             herdr,
             installed: installed.map(str::to_string),
             answered,
+            nothing_to_ask: false,
         };
         let offline = |installed| herdr(Herdr::Unknown("pas de réponse".into()), installed, false);
         // Nothing answered: all is kept, and nothing is saved.
@@ -627,5 +638,16 @@ mod tests {
         // A plugin not asked is no answer: offline, nothing is saved.
         let (found, answered) = merged(None, offline(None), Ok(vec![(plugin("a"), Ref::NotAsked)]));
         assert!(found.plugins.is_empty() && !answered);
+        // The preview channel: settled unless a repository was silent.
+        let preview = || HerdrCheck {
+            nothing_to_ask: true,
+            ..offline(None)
+        };
+        let (_, answered) = merged(None, preview(), Ok(vec![(plugin("a"), Ref::NotAsked)]));
+        assert!(answered);
+        let (_, answered) = merged(None, preview(), Ok(vec![(plugin("a"), Ref::Silent)]));
+        assert!(!answered);
+        let (_, answered) = merged(None, preview(), Err("".into()));
+        assert!(!answered);
     }
 }
