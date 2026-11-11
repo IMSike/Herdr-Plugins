@@ -3,7 +3,8 @@
 //! stable version is read from `herdr.dev/latest.json`; a plugin's latest
 //! commit from its repository (`git ls-remote`), on the branch or tag it
 //! was installed from. The result is kept in the plugin's state folder for
-//! every pane, and checked again at Herdr's start and every `CHECK_EVERY`.
+//! every pane, and checked again at Herdr's start, then every `CHECK_EVERY`
+//! while a `Tools` pane is open.
 
 use crate::herdr;
 use serde::{Deserialize, Serialize};
@@ -20,16 +21,18 @@ const CHECK_EVERY: Duration = Duration::from_secs(4 * 3600);
 const FILE: &str = "updates.json";
 /// Held by the check that runs: one at a time, for every pane and window.
 const LOCK: &str = "updates.lock";
-/// How long the update window waits for a check under way to end.
-const LOCK_WAIT: Duration = Duration::from_secs(60);
 /// Herdr's latest stable version.
 const LATEST_URL: &str = "https://herdr.dev/latest.json";
 /// How long a download or a repository may take to answer.
 const ANSWER_WITHIN: Duration = Duration::from_secs(20);
+/// How long the update window waits for a check under way to end: longer
+/// than a check takes at most (`herdr status`, then herdr.dev).
+const LOCK_WAIT: Duration = ANSWER_WITHIN.saturating_mul(3);
 
 /// Herdr's version, as the last check found it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Herdr {
+    /// A new version is out.
     Newer {
         installed: String,
         latest: String,
@@ -73,7 +76,7 @@ impl Found {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Checked {
     /// Seconds since the Unix epoch.
-    pub at: u64,
+    at: u64,
     pub found: Found,
 }
 
@@ -101,6 +104,11 @@ pub fn last_file() -> Option<PathBuf> {
     Some(herdr_api::state_dir().ok()?.join(FILE))
 }
 
+/// The lock held by the check that runs.
+fn lock_file() -> Option<PathBuf> {
+    Some(herdr_api::state_dir().ok()?.join(LOCK))
+}
+
 /// The last check; `None` before the first one.
 pub fn last() -> Option<Checked> {
     herdr_api::read_json(&last_file()?)
@@ -109,7 +117,7 @@ pub fn last() -> Option<Checked> {
 /// Checks when the last check is `CHECK_EVERY` old, or `always`, unless
 /// another process checks meanwhile: it keeps its result.
 pub fn when_due(always: bool) {
-    let Some(lock) = last_file().map(|f| f.with_file_name(LOCK)) else {
+    let Some(lock) = lock_file() else {
         return;
     };
     let Ok(Some(_lock)) = herdr_api::Lock::take(&lock) else {
@@ -124,7 +132,7 @@ pub fn when_due(always: bool) {
 /// `LOCK_WAIT`): the update window's, whose result no older check may
 /// overwrite.
 pub fn now_and_keep() -> Found {
-    let lock = last_file().map(|f| f.with_file_name(LOCK));
+    let lock = lock_file();
     let deadline = Instant::now() + LOCK_WAIT;
     let _lock = loop {
         match lock.as_deref().map(herdr_api::Lock::take) {
