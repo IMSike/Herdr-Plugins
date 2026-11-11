@@ -83,7 +83,7 @@ pub struct Checked {
 impl Checked {
     /// Whether it is time to check again.
     pub fn is_due(&self) -> bool {
-        self.is_due_at(now())
+        self.is_due_at(crate::stats::unix_now())
     }
 
     /// Whether it is time to check again at `now`: `CHECK_EVERY` later, or
@@ -95,10 +95,6 @@ impl Checked {
 }
 
 /// Seconds since the Unix epoch.
-fn now() -> u64 {
-    herdr_api::unix_millis() / 1000
-}
-
 /// The file of the last check, whose changes a pane watches.
 pub fn last_file() -> Option<PathBuf> {
     Some(herdr_api::state_dir().ok()?.join(FILE))
@@ -170,7 +166,7 @@ fn check_and_keep() -> Found {
     let (found, answered) = merged(last, herdr, plugins);
     if answered && let Some(file) = last_file() {
         let checked = Checked {
-            at: now(),
+            at: crate::stats::unix_now(),
             found: found.clone(),
         };
         let _ = herdr_api::write_json(&file, &checked);
@@ -222,7 +218,8 @@ struct HerdrCheck {
     herdr: Herdr,
     /// The installed version, when `herdr status` gave it.
     installed: Option<String>,
-    /// Whether herdr.dev answered.
+    /// Whether herdr.dev answered, or was not to be asked (the preview
+    /// channel, which it does not give): the check is settled.
     answered: bool,
 }
 
@@ -240,7 +237,10 @@ fn herdr_version() -> HerdrCheck {
     let client = &status["client"];
     let installed = client["version"].as_str();
     if client["channel"].as_str().is_some_and(|c| c != "stable") {
-        return unknown("canal preview".into(), installed);
+        return HerdrCheck {
+            answered: true,
+            ..unknown("canal preview".into(), installed)
+        };
     }
     let Some(installed) = installed else {
         return unknown("version installée inconnue".into(), None);
@@ -373,7 +373,10 @@ fn has_moved(source: &Source) -> Ref {
     let url = format!("https://github.com/{owner}/{repo}.git");
     let names = ref_names(source.requested_ref.as_deref());
     let mut command = Command::new("git");
-    // No prompt, nor credentials window, for a repository gone private. A
+    // HTTPS only, even when the user's configuration sends GitHub's URLs
+    // to SSH (`url.<base>.insteadOf`), which could ask for a passphrase or
+    // a host key in the pane. No prompt, nor credentials window, for a
+    // repository gone private. A
     // stalled connection ends on its own: stopping `git` at the time limit
     // leaves running the program it starts for HTTPS (`git-remote-https`).
     command
@@ -382,6 +385,10 @@ fn has_moved(source: &Source) -> Ref {
             "credential.helper=",
             "-c",
             "core.askPass=",
+            "-c",
+            "protocol.allow=never",
+            "-c",
+            "protocol.https.allow=always",
             "-c",
             "http.lowSpeedLimit=1",
             "-c",
@@ -467,7 +474,10 @@ fn output_within(command: &mut Command, limit: Duration) -> Result<String, Strin
     loop {
         match child.try_wait().map_err(|e| e.to_string())? {
             Some(status) if status.success() => {
-                let left = deadline.saturating_duration_since(Instant::now());
+                // Its output may still be on its way, even at the limit.
+                let left = deadline
+                    .saturating_duration_since(Instant::now())
+                    .max(Duration::from_millis(500));
                 return match read.recv_timeout(left) {
                     Ok(text) => text.map_err(|e| e.to_string()),
                     Err(_) => Err("sortie illisible".into()),
@@ -606,7 +616,7 @@ mod tests {
         assert_eq!(found.herdr, Herdr::UpToDate);
         assert_eq!(found.plugins, [plugin("b")]);
         assert!(answered);
-        // Herdr's server unreachable: the plugins found are kept.
+        // The plugins unknown (`plugin.list` failed): those found are kept.
         let (found, _) = merged(Some(last.clone()), offline(None), Err("".into()));
         assert_eq!(found, last);
         // The new version known was installed since: no longer new.
