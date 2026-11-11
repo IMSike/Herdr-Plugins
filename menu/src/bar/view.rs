@@ -502,11 +502,7 @@ impl<'a> State<'a> {
             self.versions_changed = changed;
             self.versions = check::last();
         }
-        self.view.new_versions = self
-            .versions
-            .as_ref()
-            .filter(|c| c.found.any())
-            .map(|c| c.found.summary());
+        self.view.new_versions = self.versions.as_ref().and_then(|c| c.found.news());
         if Instant::now() >= self.check_versions_from
             && self.versions.as_ref().is_none_or(Checked::is_due)
         {
@@ -786,7 +782,7 @@ fn draw_tools(out: &mut impl Write, view: &View, width: u16, rows: u16) -> io::R
         }
         let color = if view.hover == Some(i) {
             Color::Yellow
-        } else if is_new_version(view, entry) {
+        } else if news_for(view, entry).is_some() {
             NEW_VERSION_COLOR
         } else {
             Color::Reset
@@ -803,9 +799,9 @@ fn draw_tools(out: &mut impl Write, view: &View, width: u16, rows: u16) -> io::R
     }
     // The name of the icon under the pointer, below the icons.
     if let Some(entry) = view.hover.and_then(|i| view.menu.entries.get(i)) {
-        let name = match &view.new_versions {
-            Some(found) if is_new_version(view, entry) => format!("{} · {found}", entry.label),
-            _ => entry.label.clone(),
+        let name = match news_for(view, entry) {
+            Some(news) => format!("{} · {news}", entry.label),
+            None => entry.label.clone(),
         };
         let name = fit(&name, usize::from(width));
         queue!(
@@ -828,9 +824,11 @@ fn draw_tools(out: &mut impl Write, view: &View, width: u16, rows: u16) -> io::R
     Ok(())
 }
 
-/// Whether `entry` is the `Update` entry while a new version is out.
-fn is_new_version(view: &View, entry: &Entry) -> bool {
-    entry.action == Some(Action::Update) && view.new_versions.is_some()
+/// What has a new version, when `entry` is the `Update` entry.
+fn news_for<'a>(view: &'a View, entry: &Entry) -> Option<&'a str> {
+    view.new_versions
+        .as_deref()
+        .filter(|_| entry.action == Some(Action::Update))
 }
 
 /// The totals on one line, centered.

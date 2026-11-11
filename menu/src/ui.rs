@@ -4,7 +4,7 @@
 //! click), a list of boxes to tick (`pick`), and the plain prompts of a
 //! terminal (`ask`, `pause`).
 
-use crate::config::Entry;
+use crate::config::{Action, Entry};
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
@@ -97,13 +97,12 @@ pub fn is_control(modifiers: KeyModifiers) -> bool {
 }
 
 /// Shows the menu; returns the index of the chosen entry, or `None` when
-/// closed. `marked`: the `Update` entry when a new version is out, and what
-/// has one.
+/// closed. `news`: what has a new version, shown on the `Update` entry.
 pub fn choose(
     title: &str,
     entries: &[Entry],
     error: Option<&str>,
-    marked: Option<(usize, &str)>,
+    news: Option<&str>,
 ) -> io::Result<Option<usize>> {
     let _screen = Screen::enter()?;
     let mut selected = 0usize;
@@ -114,7 +113,7 @@ pub fn choose(
         let (_, height) = terminal::size()?;
         let visible = visible_rows(height);
         top = scrolled(top, selected, visible);
-        draw(title, entries, top, error, selected, visible, marked)?.show_if_new(&mut shown)?;
+        draw(title, entries, top, error, selected, visible, news)?.show_if_new(&mut shown)?;
         match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => {
                 if is_control(key.modifiers) {
@@ -284,7 +283,7 @@ fn draw(
     error: Option<&str>,
     selected: usize,
     visible: usize,
-    marked: Option<(usize, &str)>,
+    news: Option<&str>,
 ) -> io::Result<Frame> {
     let (width, height) = terminal::size()?;
     let width = usize::from(width);
@@ -303,8 +302,8 @@ fn draw(
             queue!(out, SetAttribute(Attribute::Reverse))?;
         }
         let mut line = format!("  {}  {}", entry.key, entry.label);
-        if let Some((_, note)) = marked.filter(|&(m, _)| m == i) {
-            line = format!("{line} · {note}");
+        if let Some(news) = news.filter(|_| entry.action == Some(Action::Update)) {
+            line = format!("{line} · {news}");
             queue!(out, SetForegroundColor(crate::colors::NEW_VERSION_COLOR))?;
         }
         queue!(

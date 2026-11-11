@@ -265,19 +265,12 @@ fn menu() -> Result<(), String> {
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| "Outils".into());
     // The last check of the versions: the menu does not check itself.
-    let found = menu
+    let news = menu
         .check_updates
         .then(update::check::last)
         .flatten()
-        .filter(|c| c.found.any())
-        .map(|c| c.found.summary());
-    let marked = found.as_deref().and_then(|found| {
-        let update = entries
-            .iter()
-            .position(|e| e.action == Some(Action::Update))?;
-        Some((update, found))
-    });
-    let chosen = ui::choose(&title, &entries, error.as_deref(), marked);
+        .and_then(|c| c.found.news());
+    let chosen = ui::choose(&title, &entries, error.as_deref(), news.as_deref());
     // Always answer the waiting action, even when the menu failed.
     let choice = chosen.as_ref().ok().copied().flatten().map(|i| Choice {
         entry: entries[i].clone(),

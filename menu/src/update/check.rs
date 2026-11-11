@@ -16,7 +16,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 /// How often the versions are checked again.
-pub const CHECK_EVERY: Duration = Duration::from_secs(4 * 3600);
+const CHECK_EVERY: Duration = Duration::from_secs(4 * 3600);
 /// The file of the last check, in the plugin's state folder.
 const FILE: &str = "updates.json";
 /// Held by the check that runs: one at a time, for every pane and window.
@@ -55,22 +55,18 @@ pub struct Found {
 }
 
 impl Found {
-    /// Whether a new version is known.
-    pub fn any(&self) -> bool {
-        matches!(self.herdr, Herdr::Newer { .. }) || !self.plugins.is_empty()
-    }
-
-    /// `Herdr 0.9.6 · Explorer`: what has a new version.
-    pub fn summary(&self) -> String {
+    /// `Herdr 0.9.6 · Explorer`: what has a new version; `None` when
+    /// nothing has one.
+    pub fn news(&self) -> Option<String> {
         let herdr = match &self.herdr {
             Herdr::Newer { latest, .. } => Some(format!("Herdr {latest}")),
             _ => None,
         };
-        herdr
+        let names: Vec<String> = herdr
             .into_iter()
             .chain(self.plugins.iter().map(|p| p.name.clone()))
-            .collect::<Vec<_>>()
-            .join(" · ")
+            .collect();
+        (!names.is_empty()).then(|| names.join(" · "))
     }
 }
 
@@ -465,23 +461,27 @@ mod tests {
 
     #[test]
     fn says_what_has_a_new_version() {
-        let found = Found {
-            herdr: Herdr::Newer {
-                installed: "0.9.5".into(),
-                latest: "0.9.6".into(),
-            },
-            plugins: vec![Plugin {
-                id: "gcaudan.explorer".into(),
-                name: "Explorer".into(),
-            }],
+        let explorer = Plugin {
+            id: "gcaudan.explorer".into(),
+            name: "Explorer".into(),
         };
-        assert!(found.any());
-        assert_eq!(found.summary(), "Herdr 0.9.6 · Explorer");
-        let unknown = Found {
-            herdr: Herdr::Unknown("canal preview".into()),
-            plugins: Vec::new(),
+        let found = |herdr, plugins| Found { herdr, plugins };
+        let newer = Herdr::Newer {
+            installed: "0.9.5".into(),
+            latest: "0.9.6".into(),
         };
-        assert!(!unknown.any());
+        assert_eq!(
+            found(newer, vec![explorer.clone()]).news().as_deref(),
+            Some("Herdr 0.9.6 · Explorer")
+        );
+        assert_eq!(
+            found(Herdr::UpToDate, vec![explorer]).news().as_deref(),
+            Some("Explorer")
+        );
+        assert_eq!(
+            found(Herdr::Unknown("canal preview".into()), Vec::new()).news(),
+            None
+        );
     }
 
     #[test]
