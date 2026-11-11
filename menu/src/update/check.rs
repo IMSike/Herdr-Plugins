@@ -143,7 +143,18 @@ pub fn now_and_keep() -> Found {
 /// last check found: offline, a new version known stays shown.
 fn check_and_keep() -> Found {
     let last = last().map(|c| c.found);
-    let (found, answered) = merged(last, herdr_version(), plugins());
+    // Herdr and the plugins at the same time.
+    let (herdr, plugins) = std::thread::scope(|scope| {
+        let herdr = scope.spawn(herdr_version);
+        let plugins = plugins();
+        let herdr = herdr.join().unwrap_or_else(|_| HerdrCheck {
+            herdr: Herdr::Unknown("vérification interrompue".into()),
+            installed: None,
+            answered: false,
+        });
+        (herdr, plugins)
+    });
+    let (found, answered) = merged(last, herdr, plugins);
     if answered && let Some(file) = last_file() {
         let checked = Checked {
             at: now(),
