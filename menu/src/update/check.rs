@@ -158,13 +158,19 @@ fn check_and_keep() -> Found {
 /// where they did not answer; and whether anything answered.
 fn merged(
     last: Option<Found>,
-    (herdr, herdr_answered): (Herdr, bool),
+    herdr: HerdrCheck,
     plugins: Result<Vec<(Plugin, Option<bool>)>, String>,
 ) -> (Found, bool) {
-    let answered = herdr_answered || plugins.iter().flatten().any(|(_, moved)| moved.is_some());
+    let answered = herdr.answered || plugins.iter().flatten().any(|(_, moved)| moved.is_some());
     let herdr = match last.as_ref().map(|l| &l.herdr) {
-        Some(known @ Herdr::Newer { .. }) if !herdr_answered => known.clone(),
-        _ => herdr,
+        // Unless that version was installed since.
+        Some(known @ Herdr::Newer { latest, .. })
+            if !herdr.answered
+                && (herdr.installed.as_deref()).is_none_or(|now| is_newer(latest, now)) =>
+        {
+            known.clone()
+        }
+        _ => herdr.herdr,
     };
     let was_new = |plugin: &Plugin| {
         last.as_ref()
@@ -181,30 +187,47 @@ fn merged(
     (Found { herdr, plugins }, answered)
 }
 
-/// Herdr's installed version against the latest stable one, and whether
-/// they could be read (the preview channel, which is not compared, counts).
-fn herdr_version() -> (Herdr, bool) {
+/// What a check found of Herdr.
+#[derive(Debug)]
+struct HerdrCheck {
+    herdr: Herdr,
+    /// The installed version, when `herdr status` gave it.
+    installed: Option<String>,
+    /// Whether both versions could be read (the preview channel, which is
+    /// not compared, counts).
+    answered: bool,
+}
+
+/// Herdr's installed version against the latest stable one.
+fn herdr_version() -> HerdrCheck {
+    let unknown = |why: String, installed: Option<&str>, answered| HerdrCheck {
+        herdr: Herdr::Unknown(why),
+        installed: installed.map(str::to_string),
+        answered,
+    };
     let status = match status() {
         Ok(status) => status,
-        Err(e) => return (Herdr::Unknown(e), false),
+        Err(e) => return unknown(e, None, false),
     };
     let client = &status["client"];
     if client["channel"].as_str().is_some_and(|c| c != "stable") {
-        return (Herdr::Unknown("canal preview".into()), true);
+        return unknown("canal preview".into(), None, true);
     }
     let Some(installed) = client["version"].as_str() else {
-        return (Herdr::Unknown("version installée inconnue".into()), true);
+        return unknown("version installée inconnue".into(), None, true);
     };
-    match latest_version() {
-        Ok(latest) if is_newer(&latest, installed) => (
-            Herdr::Newer {
-                installed: installed.into(),
-                latest,
-            },
-            true,
-        ),
-        Ok(_) => (Herdr::UpToDate, true),
-        Err(e) => (Herdr::Unknown(e), false),
+    let herdr = match latest_version() {
+        Ok(latest) if is_newer(&latest, installed) => Herdr::Newer {
+            installed: installed.into(),
+            latest,
+        },
+        Ok(_) => Herdr::UpToDate,
+        Err(e) => return unknown(e, Some(installed), false),
+    };
+    HerdrCheck {
+        herdr,
+        installed: Some(installed.into()),
+        answered: true,
     }
 }
 
@@ -512,11 +535,16 @@ mod tests {
             herdr: newer.clone(),
             plugins: vec![plugin("a"), plugin("b")],
         };
-        let offline = || (Herdr::Unknown("pas de réponse".into()), false);
+        let herdr = |herdr, installed: Option<&str>, answered| HerdrCheck {
+            herdr,
+            installed: installed.map(str::to_string),
+            answered,
+        };
+        let offline = |installed| herdr(Herdr::Unknown("pas de réponse".into()), installed, false);
         // Nothing answered: all is kept, and nothing is saved.
         let (found, answered) = merged(
             Some(last.clone()),
-            offline(),
+            offline(None),
             Ok(vec![(plugin("a"), None), (plugin("c"), None)]),
         );
         assert_eq!(found.herdr, newer);
@@ -525,17 +553,19 @@ mod tests {
         // What answered wins.
         let (found, answered) = merged(
             Some(last.clone()),
-            (Herdr::UpToDate, true),
+            herdr(Herdr::UpToDate, Some("0.9.6"), true),
             Ok(vec![(plugin("a"), Some(false)), (plugin("b"), None)]),
         );
         assert_eq!(found.herdr, Herdr::UpToDate);
         assert_eq!(found.plugins, [plugin("b")]);
         assert!(answered);
         // Herdr's server unreachable: the plugins found are kept.
-        let (found, _) = merged(Some(last.clone()), offline(), Err("".into()));
+        let (found, _) = merged(Some(last.clone()), offline(None), Err("".into()));
         assert_eq!(found, last);
-        // A new version only known as unknown stays unknown.
-        let (found, _) = merged(None, offline(), Ok(Vec::new()));
-        assert_eq!(found.herdr, offline().0);
+        // The new version known was installed since: no longer new.
+        let (found, _) = merged(Some(last.clone()), offline(Some("0.9.6")), Ok(Vec::new()));
+        assert_eq!(found.herdr, offline(None).herdr);
+        let (found, _) = merged(Some(last), offline(Some("0.9.5")), Ok(Vec::new()));
+        assert_eq!(found.herdr, newer);
     }
 }
