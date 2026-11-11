@@ -324,6 +324,15 @@ fn has_moved(source: &Source) -> Option<bool> {
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_ASKPASS", "")
         .env("GCM_INTERACTIVE", "never");
+    // Not from the pane's folder: the configuration of a repository found
+    // there could run a command, or send the request elsewhere.
+    let neutral = herdr_api::state_dir()
+        .ok()
+        .filter(|dir| dir.is_dir())
+        .unwrap_or_else(std::env::temp_dir);
+    command
+        .current_dir(&neutral)
+        .env("GIT_CEILING_DIRECTORIES", &neutral);
     let listing = output_within(&mut command, ANSWER_WITHIN).ok()?;
     Some(commit_of(&listing, &names).is_some_and(|latest| latest != *installed))
 }
