@@ -220,13 +220,11 @@ fn pane(file: FilePane) -> Pane {
 
 impl Layout {
     pub fn counts(&self) -> Counts {
-        let tabs = self.workspaces.iter().flat_map(|w| &w.tabs);
-        let panes: Vec<&Pane> = tabs.clone().flat_map(|t| &t.panes).collect();
         Counts {
             workspaces: self.workspaces.len(),
-            tabs: tabs.count(),
-            panes: panes.len(),
-            agents: panes.iter().filter(|p| p.agent.is_some()).count(),
+            tabs: self.workspaces.iter().map(|w| w.tabs.len()).sum(),
+            panes: self.panes().count(),
+            agents: self.panes().filter(|p| p.agent.is_some()).count(),
         }
     }
 

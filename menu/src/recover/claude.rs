@@ -7,7 +7,7 @@
 //! alone. Nothing is written, and only these two kinds of lines are read.
 
 use serde::Deserialize;
-use std::io::BufRead;
+use std::io::{BufRead, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 /// The folder of Claude Code's settings, which Claude Code reads from
@@ -52,9 +52,34 @@ struct Line {
     last_prompt: Option<String>,
 }
 
+/// The end of a transcript read first. Claude Code writes a title again
+/// and again as the conversation goes on (over a thousand times in a
+/// 140 MB transcript): its end mostly holds the last one.
+const TAIL: u64 = 1 << 20;
+
 /// The last title of a transcript, else its last prompt, on one line.
 fn read_title(path: &Path) -> Option<String> {
-    let mut reader = std::io::BufReader::new(std::fs::File::open(path).ok()?);
+    let mut file = std::fs::File::open(path).ok()?;
+    let start = file.metadata().ok()?.len().saturating_sub(TAIL);
+    // From the middle of a line, the first one read is cut: not JSON, and
+    // passed over.
+    file.seek(SeekFrom::Start(start)).ok()?;
+    let (title, prompt) = match scan(&mut file) {
+        (None, _) if start > 0 => {
+            file.seek(SeekFrom::Start(0)).ok()?;
+            scan(&mut file)
+        }
+        found => found,
+    };
+    title
+        .or(prompt)
+        .map(|text| text.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|text| !text.is_empty())
+}
+
+/// The last title and the last prompt of what `file` holds from where it is.
+fn scan(file: &mut std::fs::File) -> (Option<String>, Option<String>) {
+    let mut reader = std::io::BufReader::new(file);
     let (mut title, mut prompt) = (None, None);
     let mut line = Vec::new();
     loop {
@@ -76,10 +101,7 @@ fn read_title(path: &Path) -> Option<String> {
             _ => {}
         }
     }
-    title
-        .or(prompt)
-        .map(|text| text.split_whitespace().collect::<Vec<_>>().join(" "))
-        .filter(|text| !text.is_empty())
+    (title, prompt)
 }
 
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
@@ -119,5 +141,25 @@ mod tests {
         assert_eq!(title_in(&dir, "9999"), None);
         assert_eq!(title_in(&dir, "../C--src-app/1234-abcd"), None);
         assert_eq!(title_in(&dir.join("none"), "1234-abcd"), None);
+    }
+
+    #[test]
+    fn reads_a_long_transcript_from_its_end_first() {
+        let dir = herdr_api::TempDir::new("menu-claude-long").unwrap();
+        let filler = "{\"type\":\"user\",\"message\":\"x\"}\n".repeat(TAIL as usize / 16);
+        let title = |text: &str| format!("{{\"type\":\"ai-title\",\"aiTitle\":\"{text}\"}}\n");
+        let prompt = "{\"type\":\"last-prompt\",\"lastPrompt\":\"Dernier message\"}\n";
+        // A title at the end.
+        let path = dir.join("end.jsonl");
+        std::fs::write(
+            &path,
+            [title("Début"), filler.clone(), title("Fin")].concat(),
+        )
+        .unwrap();
+        assert_eq!(read_title(&path).as_deref(), Some("Fin"));
+        // A title before the end only: still found, before the last prompt.
+        let path = dir.join("start.jsonl");
+        std::fs::write(&path, [title("Début"), filler, prompt.into()].concat()).unwrap();
+        assert_eq!(read_title(&path).as_deref(), Some("Début"));
     }
 }

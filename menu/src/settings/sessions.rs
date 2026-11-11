@@ -43,6 +43,8 @@ struct Browser {
     detail_top: usize,
     /// The titles of the Claude Code conversations, by id, once looked for.
     titles: HashMap<String, Option<String>>,
+    /// For each snapshot, the panes the session lacks now (see `missing_of`).
+    missing: Vec<Vec<bool>>,
     /// Why the snapshot could not be restored.
     error: Option<String>,
     now: SystemTime,
@@ -54,10 +56,26 @@ impl Browser {
             Ok(s) => (recover::snapshots(s), recover::current(s)),
             Err(_) => (Vec::new(), Ok(Layout::default())),
         };
+        Self::of(session, snapshots, current)
+    }
+
+    fn of(
+        session: Result<Session, String>,
+        snapshots: Vec<Snapshot>,
+        current: Result<Layout, String>,
+    ) -> Self {
+        let missing = snapshots
+            .iter()
+            .map(|s| match &s.layout {
+                Ok(layout) => missing_of(layout, &current),
+                Err(_) => Vec::new(),
+            })
+            .collect();
         Self {
             session,
             snapshots,
             current,
+            missing,
             selected: 0,
             top: 0,
             detail_top: 0,
@@ -91,14 +109,14 @@ impl Browser {
             }
         }
     }
+}
 
-    /// The panes of `snapshot` the session lacks now: none when its layout
-    /// now is unknown.
-    fn missing(&self, layout: &Layout) -> Vec<bool> {
-        match &self.current {
-            Ok(current) => layout.missing_from(current),
-            Err(_) => vec![false; layout.counts().panes],
-        }
+/// The panes of `layout` the session lacks now (`current`): none when its
+/// layout now is unknown.
+fn missing_of(layout: &Layout, current: &Result<Layout, String>) -> Vec<bool> {
+    match current {
+        Ok(current) => layout.missing_from(current),
+        Err(_) => vec![false; layout.counts().panes],
     }
 }
 
@@ -291,11 +309,10 @@ fn render(browser: &Browser, width: u16, height: u16, home: Option<&Path>) -> Dr
                 Ok(layout) => {
                     // What the session lacks first: what tells the snapshot
                     // to restore, even on a narrow screen.
-                    let gone = browser.missing(layout).iter().filter(|&&m| m).count();
+                    let gone = browser.missing[offset].iter().filter(|&&m| m).count();
                     x += 2;
                     if gone > 0 {
-                        let absent = if gone > 1 { "absents" } else { "absent" };
-                        let text = format!("+{gone} {absent}");
+                        let text = format!("+{}", crate::ui::plural(gone, "absent"));
                         x = canvas.text(x, y, &text, on(Style::fg(YELLOW).bold())) + 2;
                     }
                     canvas.text(x, y, &recover::summary(layout.counts()), on(Style::fg(FG4)));
@@ -315,7 +332,12 @@ fn render(browser: &Browser, width: u16, height: u16, home: Option<&Path>) -> Dr
             let first = rule_y + 1;
             let room = usize::from(last - first);
             if let Some(Ok(layout)) = browser.snapshots.get(browser.selected).map(|s| &s.layout) {
-                let lines = details(layout, &browser.missing(layout), &browser.titles, home);
+                let lines = details(
+                    layout,
+                    &browser.missing[browser.selected],
+                    &browser.titles,
+                    home,
+                );
                 let start = browser.detail_top.min(lines.len().saturating_sub(room));
                 detail_top = start;
                 for (i, line) in lines.iter().skip(start).take(room).enumerate() {
@@ -455,13 +477,14 @@ mod tests {
             session_dir: "/s".into(),
             socket_path: "/s/herdr.sock".into(),
         };
-        let mut browser = Browser::new(Err(String::new()));
-        browser.session = Ok(session);
-        browser.snapshots = vec![
-            snapshot(12, parse(SNAPSHOT)),
-            snapshot(130, Err("version 4 inconnue (connue : 3)".into())),
-        ];
-        browser.current = parse(NOW);
+        let mut browser = Browser::of(
+            Ok(session),
+            vec![
+                snapshot(12, parse(SNAPSHOT)),
+                snapshot(130, Err("version 4 inconnue (connue : 3)".into())),
+            ],
+            parse(NOW),
+        );
         browser.now = now;
         browser
             .titles
