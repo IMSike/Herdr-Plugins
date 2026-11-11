@@ -61,13 +61,16 @@ const TAIL: u64 = 1 << 20;
 fn read_title(path: &Path) -> Option<String> {
     let mut file = std::fs::File::open(path).ok()?;
     let start = file.metadata().ok()?.len().saturating_sub(TAIL);
-    // From the middle of a line, the first one read is cut: not JSON, and
-    // passed over.
     file.seek(SeekFrom::Start(start)).ok()?;
-    let (title, prompt) = match scan(&mut file) {
+    let mut reader = std::io::BufReader::new(file);
+    // From the middle of a line, the first one is cut: passed over.
+    if start > 0 {
+        reader.read_until(b'\n', &mut Vec::new()).ok()?;
+    }
+    let (title, prompt) = match scan(&mut reader) {
         (None, _) if start > 0 => {
-            file.seek(SeekFrom::Start(0)).ok()?;
-            scan(&mut file)
+            reader.seek(SeekFrom::Start(0)).ok()?;
+            scan(&mut reader)
         }
         found => found,
     };
@@ -77,9 +80,9 @@ fn read_title(path: &Path) -> Option<String> {
         .filter(|text| !text.is_empty())
 }
 
-/// The last title and the last prompt of what `file` holds from where it is.
-fn scan(file: &mut std::fs::File) -> (Option<String>, Option<String>) {
-    let mut reader = std::io::BufReader::new(file);
+/// The last title and the last prompt of what `reader` holds from where it
+/// is.
+fn scan(reader: &mut impl BufRead) -> (Option<String>, Option<String>) {
     let (mut title, mut prompt) = (None, None);
     let mut line = Vec::new();
     loop {
