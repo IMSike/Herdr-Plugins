@@ -638,7 +638,7 @@ mod tests {
         // The new version known was installed since: no longer new.
         let (found, _) = merged(Some(last.clone()), offline(Some("0.9.6")), Ok(Vec::new()));
         assert_eq!(found.herdr, offline(None).herdr);
-        let (found, _) = merged(Some(last), offline(Some("0.9.5")), Ok(Vec::new()));
+        let (found, _) = merged(Some(last.clone()), offline(Some("0.9.5")), Ok(Vec::new()));
         assert_eq!(found.herdr, newer);
         // A plugin not asked is no answer: offline, nothing is saved.
         let (found, answered) = merged(None, offline(None), Ok(vec![(plugin("a"), Ref::NotAsked)]));
@@ -656,5 +656,8 @@ mod tests {
         assert!(!answered);
         let (_, answered) = merged(None, preview(), Err("".into()));
         assert!(!answered);
+        // A stable version known as new means nothing there.
+        let (found, _) = merged(Some(last), preview(), Ok(Vec::new()));
+        assert_ne!(found.herdr, newer);
     }
 }
