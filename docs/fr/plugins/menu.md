@@ -201,10 +201,10 @@ Le plugin ne fait qu'ouvrir le `config.toml` de Herdr : il ne l'écrit jamais ([
 
 Quand Herdr ou un plugin installé depuis GitHub a une nouvelle version, l'icône Update du pane `Tools` passe en vert, et son nom au survol dit laquelle (`Update · Herdr 0.9.6 · Explorer`) ; dans le menu en popup, la ligne Update est verte, suivie de la même liste. La vérification a lieu au démarrage de Herdr, puis toutes les 4 heures tant qu'un pane `Tools` est ouvert ([ADR 0009](../adr/0009-new-version-check.md)) :
 
-- **Herdr** : sa version installée (`herdr status --json`) est comparée à celle de `https://herdr.dev/latest.json`, le fichier qu'interroge la vérification de Herdr elle-même (avec `curl`). Sur le canal preview, rien n'est comparé : Herdr y annonce lui-même ses nouvelles versions.
+- **Herdr** : sa version installée (`herdr status --json`) est comparée à la dernière version stable, que donne `https://herdr.dev/latest.json` (avec `curl`). Sur le canal preview, rien n'est comparé : ce fichier donne la version stable.
 - **Plugins** : pour chaque plugin installé depuis GitHub, le commit installé (que donne Herdr) est comparé à celui que la référence d'installation désigne maintenant sur GitHub (`git ls-remote` : la branche par défaut sans `--ref`, sinon la branche, ou le tag, de ce nom exact). Un plugin installé sur un commit précis ne change jamais.
 
-Le résultat est gardé dans le dossier d'état du plugin (`updates.json`) et partagé par tous les panes `Tools` ; une seule vérification tourne à la fois (`updates.lock`). Pour ne plus rien vérifier ni afficher, `check_updates = false` (ligne **Signaler les mises à jour** des réglages) : l'entrée Update cherche toujours, elle, ce qui a une nouvelle version quand vous cliquez dessus.
+Le résultat est gardé dans le dossier d'état du plugin (`updates.json`) et partagé par tous les panes `Tools` et le menu en popup ; une seule vérification tourne à la fois (`updates.lock`). Pour ne plus rien vérifier ni afficher, `check_updates = false` (ligne **Signaler les mises à jour** des réglages) : l'entrée Update cherche toujours, elle, ce qui a une nouvelle version quand vous cliquez dessus. L'annonce des nouvelles versions par Herdr lui-même (`update.version_check` dans son `config.toml`) est indépendante : chacune se désactive sans l'autre.
 
 ## Fonctionnement, implications
 
@@ -240,6 +240,9 @@ Le résultat est gardé dans le dossier d'état du plugin (`updates.json`) et pa
 - L'écran des réglages est un popup : Herdr attend tant qu'il est ouvert, mais il ne reste ouvert que le temps de changer des réglages. Les éditeurs tournent en dehors, dans leur fenêtre ou dans un onglet.
 - La fenêtre de mise à jour tourne hors de Herdr, sans la variable par laquelle Herdr signale ses panes (`HERDR_ENV`) ; elle continue si le pane `Tools` se ferme.
 - La recherche des nouvelles versions interroge `herdr.dev` (une requête) et GitHub (une par plugin installé depuis GitHub), sans rien envoyer d'autre que ces requêtes, au démarrage de Herdr (par la commande de démarrage du plugin) puis toutes les 4 heures (par un pane `Tools`, sur un fil à part : il n'attend jamais). Chaque requête s'arrête au bout de 20 secondes. Ce qui ne répond pas garde ce que la vérification précédente avait trouvé : hors ligne, rien de nouveau ne passe au vert, une nouvelle version déjà trouvée reste affichée, et quand rien n'a répondu, un pane `Tools` vérifie de nouveau 10 minutes plus tard.
+- Le commit d'un plugin est comparé, pas sa release : juste après un push sur son dépôt, avant la publication de sa release, un plugin peut passer au vert, et sa mise à jour compiler avec `cargo` ou échouer ([ADR 0008](../adr/0008-prebuilt-binaries.md)).
+- Dans un dépôt à plusieurs plugins, un commit sur l'un d'eux les fait tous passer au vert : Herdr retient le commit du dépôt, pas celui du plugin.
+- Un Herdr installé par un gestionnaire de paquets (Homebrew, mise, Nix) passe au vert comme un autre ; il se met à jour par son gestionnaire, pas par `herdr update`.
 - Un programme lancé à part (`popup = false`, un éditeur qui a sa propre fenêtre) et Herdr relancé depuis la fenêtre de mise à jour ne reçoivent aucune des variables qui ne valent que dans le pane `Tools` : `HERDR_ENV`, `HERDR_PANE_ID`, `HERDR_WORKSPACE_ID`, `HERDR_TAB_ID`, `HERDR_BIN_PATH`, `HERDR_PLUGIN_*` et `HERDR_MENU_*`.
 
 Les commandes tournent sous votre compte, avec votre environnement, comme tout programme lancé dans un pane.

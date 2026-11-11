@@ -1,10 +1,9 @@
 //! Whether Herdr or a plugin installed from GitHub has a new version: what
 //! the `Update` entry offers, and what turns its icon green. Herdr's latest
-//! stable version is read from the file its own check reads
-//! (`herdr.dev/latest.json`); a plugin's latest commit from its repository
-//! (`git ls-remote`), on the branch or tag it was installed from. The
-//! result is kept in the plugin's state folder for every `Tools` pane, and
-//! checked again at Herdr's start and every `CHECK_EVERY`.
+//! stable version is read from `herdr.dev/latest.json`; a plugin's latest
+//! commit from its repository (`git ls-remote`), on the branch or tag it
+//! was installed from. The result is kept in the plugin's state folder for
+//! every pane, and checked again at Herdr's start and every `CHECK_EVERY`.
 
 use crate::herdr;
 use serde::{Deserialize, Serialize};
@@ -23,7 +22,7 @@ const FILE: &str = "updates.json";
 const LOCK: &str = "updates.lock";
 /// How long the update window waits for a check under way to end.
 const LOCK_WAIT: Duration = Duration::from_secs(60);
-/// Herdr's latest stable version, as its own check reads it.
+/// Herdr's latest stable version.
 const LATEST_URL: &str = "https://herdr.dev/latest.json";
 /// How long a download or a repository may take to answer.
 const ANSWER_WITHIN: Duration = Duration::from_secs(20);

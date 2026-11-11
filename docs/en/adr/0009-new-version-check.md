@@ -9,7 +9,7 @@ Nothing updates on its own: Herdr through `herdr update`, its plugins installed 
 
 What Herdr offers to know whether something is new:
 
-- `herdr status --json` gives the installed version and the channel (`stable` or `preview`), but not the latest published version. Herdr reads it, for its own announcement, from `https://herdr.dev/latest.json` (`preview.json` for the preview channel): an address found in its binary, not in its documentation.
+- `herdr status --json` gives the installed version and the channel (`stable` or `preview`), but not the latest published version. Its documentation gives `https://herdr.dev/latest.json`, the latest stable version, to download the binary on a remote machine; its binary shows that Herdr's own announcement reads it too (`preview.json` for the preview channel). That announcement can be turned off (`update.version_check`), and only concerns Herdr.
 - `plugin.list` (the API) gives, for a plugin installed from GitHub, its repository, the ref asked at install (`requested_ref`, missing for the default branch) and the installed commit (`resolved_commit`). `herdr plugin update` fetches that ref again and skips the plugin when the commit did not change; it has no "check only" mode.
 - On Windows, the server cannot hand its sessions over to a new version: running the new Herdr stops every agent.
 
@@ -36,8 +36,9 @@ Option b, chosen by the maintainer:
 - The plugin only compares versions: no code is installed without a click, and the server's restart is still asked, with what it stops.
 - Network requests go out without the user doing anything: one to herdr.dev, one to GitHub per plugin installed from GitHub, at start then every 4 hours while a `Tools` pane is open. Without a `Tools` pane, only the check at start runs.
 - What does not answer keeps what the last check found, and no error is shown: offline, a new version already found stays shown; when nothing answered, nothing is kept, and a `Tools` pane checks again 10 minutes later.
-- `latest.json` is not documented: should its shape change, Herdr is no longer shown (its version stays "unknown"), but the Update entry still offers it and `herdr update` works as before.
+- Herdr's own announcement and this check are independent: each can be turned off without the other.
+- `latest.json` is documented to download the binary, not as a way to compare versions: should its shape change, Herdr is no longer shown (its version stays "unknown"), but the Update entry still offers it and `herdr update` works as before.
 - A plugin's commit is compared, not its release: right after a push to `main`, before its release is published, a plugin of this repository can turn green, and its update build with `cargo` or fail ([ADR 0008](0008-prebuilt-binaries.md)).
-- A commit that does not touch a plugin of a repository with several plugins still shows it: `herdr plugin update` would install it again too.
+- In a repository with several plugins, a commit to one of them shows them all: Herdr records the repository's commit, not the plugin's.
 - A Herdr installed by a package manager (Homebrew, mise, Nix) is shown like the others, whereas `herdr update` is only for Herdr's own installer: it updates through its manager.
-- It needs `curl` and `git`, which Windows 10 (1803 and later) and the plugins' install already require.
+- It needs `curl`, which Windows ships since Windows 10 1803, and `git`, which the plugins' install already requires.
