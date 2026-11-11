@@ -18,7 +18,7 @@ pub fn wanted_rows(menu: &Menu) -> u16 {
 }
 
 /// Rows of the totals.
-pub fn totals_rows(style: TotalsStyle) -> u16 {
+fn totals_rows(style: TotalsStyle) -> u16 {
     match style {
         TotalsStyle::Line => 1,
         TotalsStyle::Bars => 4,

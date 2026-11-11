@@ -27,7 +27,7 @@ pub fn write(path: &Path, text: &str) -> Result<(), String> {
 /// `text` with `key` set: in place when the file sets it, on its
 /// commented-out line (`# key = …`, before any table, commented out or
 /// not) when it has one, else added to the top level.
-pub fn with_value(text: &str, key: &str, value: Value) -> Result<String, String> {
+fn with_value(text: &str, key: &str, value: Value) -> Result<String, String> {
     let mut doc: DocumentMut = text
         .parse()
         .map_err(|e: toml_edit::TomlError| e.to_string().trim().to_string())?;

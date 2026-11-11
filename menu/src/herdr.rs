@@ -51,7 +51,7 @@ pub struct Context {
     pub workspace_id: Option<String>,
     pub tab_id: Option<String>,
     pub workspace_cwd: Option<PathBuf>,
-    pub focused_pane_cwd: Option<PathBuf>,
+    focused_pane_cwd: Option<PathBuf>,
 }
 
 impl Context {
@@ -107,7 +107,7 @@ fn panes(params: Value) -> Result<Vec<Pane>, String> {
 }
 
 /// The panes of a workspace.
-pub fn workspace_panes(workspace_id: &str) -> Result<Vec<Pane>, String> {
+fn workspace_panes(workspace_id: &str) -> Result<Vec<Pane>, String> {
     panes(json!({ "workspace_id": workspace_id }))
 }
 

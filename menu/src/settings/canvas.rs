@@ -139,7 +139,7 @@ impl Canvas {
 
     /// Row `y` as plain text, its trailing blanks left out.
     #[cfg(test)]
-    pub fn row_text(&self, y: u16) -> String {
+    fn row_text(&self, y: u16) -> String {
         let start = usize::from(y) * usize::from(self.width);
         let row = &self.cells[start..start + usize::from(self.width)];
         let text: String = row.iter().map(|c| c.text.as_str()).collect();
