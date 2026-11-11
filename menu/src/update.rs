@@ -64,8 +64,8 @@ fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
         return Ok("Herdr et les plugins installés depuis GitHub sont à jour.".into());
     }
     let labels: Vec<String> = offered.iter().map(|(_, label)| label.clone()).collect();
-    let ticked =
-        crate::ui::pick("Mises à jour", &labels).map_err(|e| format!("liste impossible : {e}"))?;
+    let ticked = crate::ui::pick("Mises à jour", &labels, "mettre à jour")
+        .map_err(|e| format!("liste impossible : {e}"))?;
     let chosen: Vec<&Offer> = offered
         .iter()
         .zip(ticked.unwrap_or_default())

@@ -6,6 +6,7 @@
 //! the clipboard.
 
 use crate::herdr;
+use crate::ui::plural;
 use herdr_api::env::INSIDE as INSIDE_HERDR;
 use std::ffi::OsStr;
 use std::io::Write;
@@ -147,15 +148,6 @@ fn count_stopping(panes: usize, agents: usize, working: usize) -> String {
         }
     }
     text
-}
-
-/// `1 pane`, `2 panes`.
-pub fn plural(n: usize, word: &str) -> String {
-    if n > 1 {
-        format!("{n} {word}s")
-    } else {
-        format!("{n} {word}")
-    }
 }
 
 /// Puts `start`, the command that starts Herdr again, in the clipboard;

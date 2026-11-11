@@ -16,7 +16,8 @@ pub mod claude;
 pub mod layout;
 
 use crate::herdr::{self, Session};
-use crate::window::{self, herdr_shown, plural};
+use crate::ui::plural;
+use crate::window::{self, herdr_shown};
 use chrono::{DateTime, Local};
 use layout::{Counts, Layout};
 use std::path::{Path, PathBuf};

@@ -9,7 +9,7 @@ use super::canvas::{Canvas, Style};
 use super::view::{AQUA, BG1, BG2, FG, FG4, GREY, RED, YELLOW, ellipsize};
 use crate::herdr::{self, Session};
 use crate::recover::{self, Snapshot, claude, layout::Layout};
-use crate::ui::{Frame, Screen, is_control, width};
+use crate::ui::{Frame, Nav, Screen, hit, is_control, nav, width};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind};
 use crossterm::terminal;
 use std::collections::HashMap;
@@ -110,14 +110,6 @@ struct Drawn {
     rows: usize,
     /// The first row of the details on screen.
     detail_top: usize,
-}
-
-impl Drawn {
-    /// The snapshot at screen row `y`, if a drawn one.
-    fn at(&self, y: u16, count: usize) -> Option<usize> {
-        let row = usize::from(y.checked_sub(LIST_TOP)?);
-        Some(self.top + row).filter(|&i| row < self.rows && i < count)
-    }
 }
 
 /// `~/src/app` for a folder in the home folder.
@@ -391,25 +383,12 @@ pub fn browse() -> io::Result<Outcome> {
         let count = browser.snapshots.len();
         let last = count.saturating_sub(1);
         match event::read()? {
-            Event::Key(key) if key.kind == KeyEventKind::Press && is_control(key.modifiers) => {
-                if key.code == KeyCode::Char('c') {
-                    return Ok(Outcome::Back);
-                }
-            }
-            Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-                KeyCode::Esc | KeyCode::Char('q') => return Ok(Outcome::Back),
-                KeyCode::Up | KeyCode::Char('k') if count > 0 => {
-                    browser.select((browser.selected + last) % count);
-                }
-                KeyCode::Down | KeyCode::Char('j') if count > 0 => {
-                    browser.select((browser.selected + 1) % count);
-                }
-                KeyCode::Home | KeyCode::Char('g') => browser.select(0),
-                KeyCode::End | KeyCode::Char('G') => browser.select(last),
-                KeyCode::PageDown => browser.detail_top += 5,
-                KeyCode::PageUp => browser.detail_top = browser.detail_top.saturating_sub(5),
-                KeyCode::Enter => {
-                    if let Some(snapshot) = browser.snapshots.get(browser.selected) {
+            Event::Key(key) if key.kind == KeyEventKind::Press => {
+                match nav(key, browser.selected, count) {
+                    Nav::Cancel => return Ok(Outcome::Back),
+                    Nav::Select(i) => browser.select(i),
+                    Nav::Confirm => {
+                        let snapshot = &browser.snapshots[browser.selected];
                         let opened = match &snapshot.layout {
                             Ok(_) => recover::open_window(&snapshot.path),
                             Err(e) => Err(format!("ce snapshot ne peut pas être restauré : {e}")),
@@ -419,12 +398,21 @@ pub fn browse() -> io::Result<Outcome> {
                             Err(e) => browser.error = Some(e),
                         }
                     }
+                    Nav::Nothing if is_control(key.modifiers) => {}
+                    Nav::Nothing => match key.code {
+                        KeyCode::Home | KeyCode::Char('g') => browser.select(0),
+                        KeyCode::End | KeyCode::Char('G') => browser.select(last),
+                        KeyCode::PageDown => browser.detail_top += 5,
+                        KeyCode::PageUp => {
+                            browser.detail_top = browser.detail_top.saturating_sub(5);
+                        }
+                        _ => {}
+                    },
                 }
-                _ => {}
-            },
+            }
             Event::Mouse(mouse) => match mouse.kind {
                 MouseEventKind::Moved | MouseEventKind::Down(MouseButton::Left) => {
-                    if let Some(i) = drawn.at(mouse.row, count) {
+                    if let Some(i) = hit(mouse.row, LIST_TOP, drawn.top, drawn.rows, count) {
                         browser.select(i);
                     }
                 }
@@ -529,20 +517,6 @@ mod tests {
         lost.now = SystemTime::now();
         let text = render(&lost, 60, 10, None).canvas.to_text();
         assert!(text.contains("✗ session introuvable"), "{text}");
-    }
-
-    #[test]
-    fn only_a_drawn_row_answers_the_pointer() {
-        let drawn = Drawn {
-            canvas: Canvas::new(1, 1),
-            top: 3,
-            rows: 2,
-            detail_top: 0,
-        };
-        assert_eq!(drawn.at(LIST_TOP, 10), Some(3));
-        assert_eq!(drawn.at(LIST_TOP + 1, 10), Some(4));
-        assert_eq!(drawn.at(LIST_TOP + 2, 10), None);
-        assert_eq!(drawn.at(LIST_TOP - 1, 10), None);
     }
 
     #[test]

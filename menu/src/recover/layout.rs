@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 /// The only version of the file this reading knows.
-pub const VERSION: u64 = 3;
+const VERSION: u64 = 3;
 
 #[derive(Deserialize)]
 struct File {

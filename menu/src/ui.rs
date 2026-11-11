@@ -98,7 +98,7 @@ pub fn is_control(modifiers: KeyModifiers) -> bool {
 
 /// What a key does in a list of `count` rows, once the list's own keys
 /// (an entry's key, Space) are set aside.
-enum Nav {
+pub(crate) enum Nav {
     Cancel,
     Confirm,
     /// The row to select.
@@ -108,7 +108,7 @@ enum Nav {
 
 /// The keys every list shares: Esc, q or Ctrl+C close it, Enter confirms,
 /// the arrows (or `k`, `j`) move the selection round.
-fn nav(key: event::KeyEvent, selected: usize, count: usize) -> Nav {
+pub(crate) fn nav(key: event::KeyEvent, selected: usize, count: usize) -> Nav {
     if is_control(key.modifiers) {
         return if key.code == KeyCode::Char('c') {
             Nav::Cancel
@@ -128,10 +128,16 @@ fn nav(key: event::KeyEvent, selected: usize, count: usize) -> Nav {
 }
 
 /// The row of a list of `count` rows, drawn from the `top` one in
-/// `visible` rows, that the screen row `row` shows: only a drawn row
-/// answers the pointer.
-fn hit(row: u16, top: usize, visible: usize, count: usize) -> Option<usize> {
-    let row = usize::from(row.checked_sub(LIST_TOP)?);
+/// `visible` rows from the screen row `list_top`, that the screen row `row`
+/// shows: only a drawn row answers the pointer.
+pub(crate) fn hit(
+    row: u16,
+    list_top: u16,
+    top: usize,
+    visible: usize,
+    count: usize,
+) -> Option<usize> {
+    let row = usize::from(row.checked_sub(list_top)?);
     Some(top + row).filter(|&i| row < visible && i < count)
 }
 
@@ -170,11 +176,13 @@ pub fn choose(
                     Nav::Nothing => {}
                 }
             }
-            Event::Mouse(mouse) => match (mouse.kind, hit(mouse.row, top, visible, count)) {
-                (MouseEventKind::Down(MouseButton::Left), Some(i)) => return Ok(Some(i)),
-                (MouseEventKind::Moved, Some(i)) => selected = i,
-                _ => {}
-            },
+            Event::Mouse(mouse) => {
+                match (mouse.kind, hit(mouse.row, LIST_TOP, top, visible, count)) {
+                    (MouseEventKind::Down(MouseButton::Left), Some(i)) => return Ok(Some(i)),
+                    (MouseEventKind::Moved, Some(i)) => selected = i,
+                    _ => {}
+                }
+            }
             _ => {}
         }
     }
@@ -182,7 +190,8 @@ pub fn choose(
 
 /// Shows `items`, each with a box ticked at first, and lets them be
 /// unticked; returns the ticks once confirmed, `None` when cancelled.
-pub fn pick(title: &str, items: &[String]) -> io::Result<Option<Vec<bool>>> {
+/// `confirm`: what Enter does, in the help line.
+pub fn pick(title: &str, items: &[String], confirm: &str) -> io::Result<Option<Vec<bool>>> {
     let _screen = Screen::enter()?;
     let mut ticked = vec![true; items.len()];
     let mut selected = 0usize;
@@ -193,7 +202,8 @@ pub fn pick(title: &str, items: &[String]) -> io::Result<Option<Vec<bool>>> {
         let (_, height) = terminal::size()?;
         let visible = visible_rows(height);
         top = scrolled(top, selected, visible);
-        draw_pick(title, items, &ticked, top, selected, visible)?.show_if_new(&mut shown)?;
+        draw_pick(title, items, &ticked, top, selected, visible, confirm)?
+            .show_if_new(&mut shown)?;
         match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => {
                 if key.code == KeyCode::Char(' ') && count > 0 {
@@ -207,14 +217,16 @@ pub fn pick(title: &str, items: &[String]) -> io::Result<Option<Vec<bool>>> {
                     Nav::Nothing => {}
                 }
             }
-            Event::Mouse(mouse) => match (mouse.kind, hit(mouse.row, top, visible, count)) {
-                (MouseEventKind::Down(MouseButton::Left), Some(i)) => {
-                    selected = i;
-                    ticked[i] = !ticked[i];
+            Event::Mouse(mouse) => {
+                match (mouse.kind, hit(mouse.row, LIST_TOP, top, visible, count)) {
+                    (MouseEventKind::Down(MouseButton::Left), Some(i)) => {
+                        selected = i;
+                        ticked[i] = !ticked[i];
+                    }
+                    (MouseEventKind::Moved, Some(i)) => selected = i,
+                    _ => {}
                 }
-                (MouseEventKind::Moved, Some(i)) => selected = i,
-                _ => {}
-            },
+            }
             _ => {}
         }
     }
@@ -274,11 +286,10 @@ fn draw_pick(
     top: usize,
     selected: usize,
     visible: usize,
+    confirm: &str,
 ) -> io::Result<Frame> {
-    let (mut out, width, _) = framed(
-        title,
-        " Espace ou clic : cocher · Entrée : mettre à jour · Échap : annuler",
-    )?;
+    let help = format!(" Espace ou clic : cocher · Entrée : {confirm} · Échap : annuler");
+    let (mut out, width, _) = framed(title, &help)?;
     let rows = items.iter().zip(ticked).enumerate().skip(top).take(visible);
     for (i, (item, &on)) in rows {
         let tick = if on { "[x]" } else { "[ ]" };
@@ -334,6 +345,15 @@ fn draw(
         )?;
     }
     Ok(out)
+}
+
+/// `1 pane`, `2 panes`.
+pub(crate) fn plural(n: usize, word: &str) -> String {
+    if n > 1 {
+        format!("{n} {word}s")
+    } else {
+        format!("{n} {word}")
+    }
 }
 
 /// The cells `text` takes on screen, as `fit` shows it: two for a wide
@@ -439,10 +459,10 @@ mod tests {
     #[test]
     fn only_a_drawn_row_answers_the_pointer() {
         // Rows 2 to 11 show entries 3 to 12 of 20.
-        assert_eq!(hit(2, 3, 10, 20), Some(3));
-        assert_eq!(hit(11, 3, 10, 20), Some(12));
-        assert_eq!(hit(12, 3, 10, 20), None);
-        assert_eq!(hit(1, 3, 10, 20), None);
-        assert_eq!(hit(4, 0, 10, 2), None);
+        assert_eq!(hit(2, LIST_TOP, 3, 10, 20), Some(3));
+        assert_eq!(hit(11, LIST_TOP, 3, 10, 20), Some(12));
+        assert_eq!(hit(12, LIST_TOP, 3, 10, 20), None);
+        assert_eq!(hit(1, LIST_TOP, 3, 10, 20), None);
+        assert_eq!(hit(4, LIST_TOP, 0, 10, 2), None);
     }
 }
