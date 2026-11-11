@@ -124,23 +124,25 @@ impl Drawn {
 fn short(path: &Path, home: Option<&Path>) -> String {
     let text = path.to_string_lossy();
     let text = text.trim_end_matches(['/', '\\']);
-    match home.map(|h| {
+    let Some(home) = home.map(|h| {
         h.to_string_lossy()
             .trim_end_matches(['/', '\\'])
             .to_string()
-    }) {
-        Some(home) if !home.is_empty() && text.len() >= home.len() => {
-            let (start, rest) = text.split_at(home.len());
-            let same = if cfg!(windows) {
-                start.eq_ignore_ascii_case(&home)
-            } else {
-                start == home
-            };
-            if same && (rest.is_empty() || rest.starts_with(['/', '\\'])) {
-                format!("~{rest}")
-            } else {
-                text.to_string()
-            }
+    }) else {
+        return text.to_string();
+    };
+    // `get` gives nothing past the end or inside a character.
+    match (text.get(..home.len()), text.get(home.len()..)) {
+        (Some(start), Some(rest))
+            if !home.is_empty()
+                && (rest.is_empty() || rest.starts_with(['/', '\\']))
+                && if cfg!(windows) {
+                    start.eq_ignore_ascii_case(&home)
+                } else {
+                    start == home
+                } =>
+        {
+            format!("~{rest}")
         }
         _ => text.to_string(),
     }
@@ -549,6 +551,11 @@ mod tests {
         assert_eq!(short(Path::new("/home/u/app/"), home), "~/app");
         assert_eq!(short(Path::new("/home/u"), home), "~");
         assert_eq!(short(Path::new("/home/user2"), home), "/home/user2");
+        // A cut inside a character is no prefix.
+        assert_eq!(
+            short(Path::new("/home/aé/x"), Some(Path::new("/home/ab"))),
+            "/home/aé/x"
+        );
         assert_eq!(short(Path::new("/srv"), None), "/srv");
     }
 }
