@@ -220,37 +220,36 @@ fn is_newer(latest: &str, installed: &str) -> bool {
 #[derive(Debug, Deserialize)]
 struct Source {
     kind: String,
-    #[serde(default)]
-    owner: String,
-    #[serde(default)]
-    repo: String,
-    #[serde(default)]
+    owner: Option<String>,
+    repo: Option<String>,
+    /// Missing for the default branch.
     requested_ref: Option<String>,
-    #[serde(default)]
     resolved_commit: Option<String>,
 }
 
+/// A plugin as `plugin.list` gives it.
 #[derive(Debug, Deserialize)]
 struct Installed {
     plugin_id: String,
-    name: String,
-    #[serde(default)]
+    name: Option<String>,
     source: Option<Source>,
 }
 
 /// The plugins installed from GitHub whose ref has moved since.
 fn plugins() -> Result<Vec<Plugin>, String> {
-    let installed: Vec<Installed> = herdr_api::request_field("plugin.list", json!({}), "plugins")?;
-    Ok(installed
+    let listed: Vec<Value> = herdr_api::request_field("plugin.list", json!({}), "plugins")?;
+    // An entry Herdr describes otherwise (its manifest gone…) is left out.
+    Ok(listed
         .into_iter()
+        .filter_map(|p| serde_json::from_value::<Installed>(p).ok())
         .filter(|p| {
             p.source
                 .as_ref()
                 .is_some_and(|s| s.kind == "github" && has_moved(s))
         })
         .map(|p| Plugin {
+            name: p.name.unwrap_or_else(|| p.plugin_id.clone()),
             id: p.plugin_id,
-            name: p.name,
         })
         .collect())
 }
@@ -259,10 +258,12 @@ fn plugins() -> Result<Vec<Plugin>, String> {
 /// commit installed by its hash never moves; an unanswered repository is
 /// not known to have moved.
 fn has_moved(source: &Source) -> bool {
-    let Some(installed) = &source.resolved_commit else {
+    let (Some(owner), Some(repo), Some(installed)) =
+        (&source.owner, &source.repo, &source.resolved_commit)
+    else {
         return false;
     };
-    let url = format!("https://github.com/{}/{}.git", source.owner, source.repo);
+    let url = format!("https://github.com/{owner}/{repo}.git");
     let names = ref_names(source.requested_ref.as_deref());
     let mut command = Command::new("git");
     // No prompt, nor credentials window, for a repository gone private.
