@@ -157,6 +157,17 @@ pub fn detach_command(mut command: Command) -> Result<(), String> {
     Ok(())
 }
 
+/// Opens no console window for `command` on Windows; nothing elsewhere.
+pub fn no_window(command: &mut Command) {
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        std::os::windows::process::CommandExt::creation_flags(command, CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    let _ = command;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

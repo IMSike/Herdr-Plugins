@@ -72,10 +72,9 @@ pub fn open_window() -> Result<(), String> {
 #[cfg(windows)]
 fn terminal_window(me: &std::path::Path) -> Result<Command, String> {
     use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     let mut command = Command::new("cmd");
     command.env(SELF_ENV, me).raw_arg(window_line());
-    command.creation_flags(CREATE_NO_WINDOW);
+    crate::launch::no_window(&mut command);
     Ok(command)
 }
 
