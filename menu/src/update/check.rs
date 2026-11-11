@@ -191,6 +191,7 @@ fn merged(
         // Unless that version was installed since.
         Some(known @ Herdr::Newer { latest, .. })
             if !herdr.answered
+                && !herdr.nothing_to_ask
                 && (herdr.installed.as_deref()).is_none_or(|now| is_newer(latest, now)) =>
         {
             known.clone()
@@ -378,9 +379,11 @@ fn has_moved(source: &Source) -> Ref {
     else {
         return Ref::NotAsked;
     };
-    // With its port: a user's `url.<base>.insteadOf` of `https://github.com/`
-    // does not rewrite it to SSH, which is refused below.
-    let url = format!("https://github.com:443/{owner}/{repo}.git");
+    // With its port, mapped to itself: Git takes the longest `insteadOf`
+    // that matches, and a user's own (`https://github.com/`, `https://`…)
+    // would send it to SSH, which is refused below.
+    const BASE: &str = "https://github.com:443/";
+    let url = format!("{BASE}{owner}/{repo}.git");
     let names = ref_names(source.requested_ref.as_deref());
     let mut command = Command::new("git");
     // HTTPS only, even when the user's configuration sends GitHub's URLs
@@ -399,6 +402,8 @@ fn has_moved(source: &Source) -> Ref {
             "protocol.allow=never",
             "-c",
             "protocol.https.allow=always",
+            "-c",
+            &format!("url.{BASE}.insteadOf={BASE}"),
             "-c",
             "http.lowSpeedLimit=1",
             "-c",
@@ -644,6 +649,8 @@ mod tests {
             ..offline(None)
         };
         let (_, answered) = merged(None, preview(), Ok(vec![(plugin("a"), Ref::NotAsked)]));
+        assert!(answered);
+        let (_, answered) = merged(None, preview(), Ok(Vec::new()));
         assert!(answered);
         let (_, answered) = merged(None, preview(), Ok(vec![(plugin("a"), Ref::Silent)]));
         assert!(!answered);
