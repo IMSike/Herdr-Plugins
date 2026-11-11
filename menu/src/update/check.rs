@@ -394,11 +394,12 @@ fn has_moved(source: &Source) -> Ref {
         .env("GIT_ASKPASS", "")
         .env("GCM_INTERACTIVE", "never");
     // Not from the pane's folder: the configuration of a repository found
-    // there could run a command, or send the request elsewhere.
-    let neutral = herdr_api::state_dir()
-        .ok()
-        .filter(|dir| dir.is_dir())
-        .unwrap_or_else(std::env::temp_dir);
+    // there could run a command, or send the request elsewhere. Nor from
+    // the system's temporary folder, which any user can write: from the
+    // plugin's state folder only.
+    let Some(neutral) = herdr_api::state_dir().ok().filter(|dir| dir.is_dir()) else {
+        return Ref::Silent;
+    };
     command
         .current_dir(&neutral)
         .env("GIT_CEILING_DIRECTORIES", &neutral);
