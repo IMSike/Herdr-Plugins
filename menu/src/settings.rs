@@ -559,14 +559,14 @@ impl State {
         }))
     }
 
-    /// Sets a choice of `menu.toml` to `name`, and the menu as `apply` does.
+    /// Sets a setting of `menu.toml` to `value`, and the menu as `apply` does.
     fn switch_menu(
         &mut self,
         key: &str,
-        name: &str,
+        value: Value,
         apply: impl FnOnce(&mut Menu),
     ) -> Result<String, String> {
-        self.set_menu(key, name.into()).and_then(|ignored| {
+        self.set_menu(key, value).and_then(|ignored| {
             apply(&mut self.menu);
             written(ignored, &[config::FILE_NAME])
         })
@@ -658,15 +658,13 @@ impl State {
                     TotalsStyle::Line => TotalsStyle::Bars,
                     TotalsStyle::Bars => TotalsStyle::Line,
                 };
-                self.switch_menu("totals", &herdr_api::name_of(&value), |m| m.totals = value)
+                self.switch_menu("totals", herdr_api::name_of(&value).into(), |m| {
+                    m.totals = value
+                })
             }
             Item::CheckUpdates => {
                 let value = !self.menu.check_updates;
-                self.set_menu("check_updates", value.into())
-                    .and_then(|ignored| {
-                        self.menu.check_updates = value;
-                        written(ignored, &[config::FILE_NAME])
-                    })
+                self.switch_menu("check_updates", value.into(), |m| m.check_updates = value)
             }
             Item::Ttl => {
                 let current = self.sidebar.as_ref()?.ttl_seconds;
