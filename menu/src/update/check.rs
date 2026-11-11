@@ -130,13 +130,18 @@ pub fn when_due(always: bool) {
 
 /// Checks now, once the check under way, if any, has ended (or after
 /// `LOCK_WAIT`): the update window's, whose result no older check may
-/// overwrite.
+/// overwrite. Says so while it waits.
 pub fn now_and_keep() -> Found {
     let lock = lock_file();
     let deadline = Instant::now() + LOCK_WAIT;
+    let mut said = false;
     let _lock = loop {
         match lock.as_deref().map(herdr_api::Lock::take) {
             Some(Ok(None)) if Instant::now() < deadline => {
+                if !said {
+                    println!("Une autre vérification est en cours, attente de sa fin…");
+                    said = true;
+                }
                 std::thread::sleep(Duration::from_millis(200));
             }
             Some(Ok(Some(lock))) => break Some(lock),
