@@ -182,11 +182,31 @@ fn recover() -> Result<String, String> {
     if !crate::ui::ask("Restaurer ? [o/N] ", false) {
         return Ok("Rien n'a été restauré.".into());
     }
-    // Asked again: the server may have stopped while the question waited.
-    if running(&session.name)? {
+    // Asked again: the server may have stopped, or started, while the
+    // question waited; started, it would stop without the warning above.
+    let stopping = running(&session.name)?;
+    if stopping && !session.running {
+        return Err(
+            "Herdr a démarré pendant la question : rien n'a été restauré, \
+                    recommencez depuis les réglages."
+                .into(),
+        );
+    }
+    if stopping {
         herdr_shown(&session.stop_args())?;
         wait_until_stopped(&session)?;
     }
+    // Herdr stopped here: an error says how to start it again.
+    let failed = |e: String| {
+        if stopping {
+            format!(
+                "{e}. Rien n'a été restauré : relancez Herdr avec « {} ».",
+                session.start_command()
+            )
+        } else {
+            e
+        }
+    };
     let session_file = dir.join(SESSION_FILE);
     // The session as its server left it, to go back to.
     let kept = if session_file.exists() {
@@ -195,13 +215,17 @@ fn recover() -> Result<String, String> {
             Local::now().format("%Y%m%d-%H%M%S")
         ));
         std::fs::copy(&session_file, &kept)
-            .map_err(|e| format!("copie de {SESSION_FILE} impossible : {e}"))?;
+            .map_err(|e| failed(format!("copie de {SESSION_FILE} impossible : {e}")))?;
         Some(kept)
     } else {
         None
     };
-    herdr_api::write_atomic(&session_file, &bytes)
-        .map_err(|e| format!("écriture de {} impossible : {e}", session_file.display()))?;
+    herdr_api::write_atomic(&session_file, &bytes).map_err(|e| {
+        failed(format!(
+            "écriture de {} impossible : {e}",
+            session_file.display()
+        ))
+    })?;
     let mut message = String::from("Session restaurée.");
     if let Some(kept) = kept {
         message.push_str(&format!(

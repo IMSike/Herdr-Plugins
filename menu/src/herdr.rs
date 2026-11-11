@@ -82,12 +82,13 @@ impl Session {
 
     /// The arguments, after `herdr`, that stop its server, as Herdr's
     /// documentation gives them: `server stop` for the default session,
-    /// `session stop <name>` for a named one.
+    /// `session stop <name>` for a named one; after `--`, since a name may
+    /// start with `-`.
     pub fn stop_args(&self) -> Vec<&str> {
         if self.default {
             vec!["server", "stop"]
         } else {
-            vec!["session", "stop", &self.name]
+            vec!["session", "stop", "--", &self.name]
         }
     }
 }
@@ -331,7 +332,7 @@ mod tests {
         assert_eq!(sessions[1].start_command(), "herdr --session work");
         assert_eq!(sessions[1].start_args(), ["--session", "work"]);
         assert_eq!(sessions[0].stop_args(), ["server", "stop"]);
-        assert_eq!(sessions[1].stop_args(), ["session", "stop", "work"]);
+        assert_eq!(sessions[1].stop_args(), ["session", "stop", "--", "work"]);
     }
 
     #[test]
