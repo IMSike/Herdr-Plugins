@@ -2,7 +2,7 @@
 
 **English** · [Français](../../fr/plugins/menu.md)
 
-Starts a tool (lazygit, gh-dash, VS Code…) from one click or one key, updates Herdr, and sets the plugins. In a tab that shows the file explorer of [herdr-explorer](https://github.com/gcaudan/herdr-explorer), the menu is a short `Tools` pane above it, in its column: a row of icons, the name of the one under the mouse, and the CPU and memory of Herdr and of the machine. Elsewhere it is a small popup. Tools that run in the terminal open in a large popup over the current workspace; tabs and panes stay as they are behind it, and quitting the tool closes the popup.
+Starts a tool (lazygit, gh-dash, VS Code…) from one click or one key, updates Herdr and the plugins installed from GitHub, and sets the plugins. In a tab that shows the file explorer of [herdr-explorer](https://github.com/gcaudan/herdr-explorer), the menu is a short `Tools` pane above it, in its column: a row of icons, the name of the one under the mouse, and the CPU and memory of Herdr and of the machine. Elsewhere it is a small popup. Tools that run in the terminal open in a large popup over the current workspace; tabs and panes stay as they are behind it, and quitting the tool closes the popup.
 
 ```
    󰊢    󰊤    󰨞    󰋊    󰄪    󰚰    󰒓
@@ -56,7 +56,7 @@ Without configuration the menu offers:
 | `c` | VS Code | `code .`: the workspace's folder in VS Code |
 | `d` | Disk | built-in action `disk`: the figures on the workspace folder, see [below](#built-in-entries) |
 | `b` | btop | `btop` (on Windows, `btop4win` when only it is on `PATH`): the [btop](https://github.com/aristocratos/btop) system monitor (CPU, memory, disks, network, processes) |
-| `u` | Update | built-in action `update`: updates Herdr, see [below](#built-in-entries) |
+| `u` | Update | built-in action `update`: updates Herdr and the plugins installed from GitHub, green when one of them has a new version, see [below](#built-in-entries) |
 | `s` | Settings | built-in action `settings`: the settings screen, see [below](#built-in-entries) |
 
 The plugin installs none of these tools. One that is missing opens its popup anyway, which says `« btop » introuvable dans le PATH : installez-le, ou changez sa commande dans menu.toml` and waits for Enter. btop is installed by the system's package manager (`apt install btop`, `brew install btop`…); on Windows it is [btop4win](https://github.com/aristocratos/btop4win) (`winget install aristocratos.btop4win`, or `scoop install btop`). Scoop installs it as `btop`; winget as `btop` when it can make that link (Developer Mode or administrator), and otherwise puts its folder on `PATH`, where it is `btop4win`. The entry runs `btop`, or `btop4win` when only it is on `PATH`; Herdr sees a `PATH` changed by an installation once restarted.
@@ -111,6 +111,7 @@ At the top of `menu.toml`, before the entries; the settings screen changes them 
 | `memory_unit` | `"M"` | `853M`, `2,4G` (`"M"`); `853Mo`, `2,4Go` (`"Mo"`); `853MB`, `2,4GB` (`"MB"`); `K`, `M` or `G` as the size needs |
 | `memory_space` | `false` | `2,4Go` (`false`) or `2,4 Go` with a narrow no-break space before the unit (`true`) |
 | `totals` | `"line"` | the totals of the `Tools` pane: `"line"` (one row) or `"bars"` (four rows with bars), see [Use](#use) |
+| `check_updates` | `true` | the Update entry in green when Herdr or a plugin installed from GitHub has a new version, see [New versions](#new-versions) |
 
 The `layout` setting of earlier versions, which offered two rows of icons, is gone: a file that still sets it stays valid, the setting is ignored.
 
@@ -125,17 +126,20 @@ The folder is only measured while this page is shown: going back stops the measu
 
 **Update** (`u`) opens a terminal window of its own, outside Herdr: Herdr refuses to update from one of its panes. On Windows it is a new console window (opened by `cmd /c start`); elsewhere, the first terminal found among `x-terminal-emulator`, `gnome-terminal`, `konsole`, `xfce4-terminal`, `kitty`, `alacritty`, `wezterm`, `foot` and `xterm`. In it:
 
-1. `herdr update` installs the latest Herdr (with `--handoff` where the server can hand its sessions over to the new version, which it cannot on Windows).
-2. `herdr status --json` tells whether the running server is still the old version. If not, the window says Herdr is up to date: the client already open keeps its old version until you detach (`prefix+q`) and start `herdr` again.
-3. If so, it says how many panes close and how many agents stop (`5 panes, dont 2 agents (1 au travail)`) and asks `Redémarrer maintenant ? [o/N]`. Anything but `o`, `oui`, `y` or `yes` cancels: the new version runs at the server's next start.
-4. Once confirmed, it stops the server (`herdr server stop`): **every pane closes and every agent stops**, as when Herdr is quit. Then it offers to start Herdr again in that window (`[o/N]`); otherwise it puts `herdr` in the clipboard (with `clip`, `wl-copy`, `xclip` or `xsel`, whichever works), to paste in a terminal.
+1. It looks for what has a new version (see [New versions](#new-versions)): Herdr, and each plugin installed from GitHub. Herdr is also listed when its new version could not be known (the preview channel, no answer), since `herdr update` finds it on its own. When nothing has a new version, it says so and stops.
+2. It shows the list, all ticked: Space or a click unticks (or ticks again) a line, up and down (or `j`/`k`) move, Enter updates what stays ticked, Escape cancels.
+3. Herdr first, when ticked (a plugin's new version may need Herdr's): `herdr update` installs the latest Herdr, with `--handoff` where the server can hand its sessions over to the new version, which it cannot on Windows.
+4. Then the ticked plugins: `herdr plugin update <id>…`, without `--yes`: Herdr may ask for a confirmation there, as at install. Their panes and commands take the new version from their next start; nothing stops.
+5. When Herdr was updated, `herdr status --json` tells whether the running server is still the old version. If not, the window says Herdr is up to date: the client already open keeps its old version until you detach (`prefix+q`) and start `herdr` again.
+6. If so, it says how many panes close and how many agents stop (`5 panes, dont 2 agents (1 au travail)`) and asks `Redémarrer maintenant ? [o/N]`. Anything but `o`, `oui`, `y` or `yes` cancels: the new version runs at the server's next start.
+7. Once confirmed, it stops the server (`herdr server stop`): **every pane closes and every agent stops**, as when Herdr is quit. Then it offers to start Herdr again in that window (`[o/N]`); otherwise it puts `herdr` in the clipboard (with `clip`, `wl-copy`, `xclip` or `xsel`, whichever works), to paste in a terminal.
 
-The window waits for Enter before closing, an error included. While it is open, another click on Update says that an update is under way instead of opening a second one. Without a graphical display (over SSH), or when the terminal closes at once, the `Tools` pane says so in red: run `herdr update` outside Herdr.
+The window waits for Enter before closing, an error included. While it is open, another click on Update says that an update is under way instead of opening a second one. Without a graphical display (over SSH), or when the terminal closes at once, the `Tools` pane says so in red: run `herdr update` (and `herdr plugin update`) outside Herdr. A plugin linked from a folder (`herdr plugin link`) is never offered: Herdr does not update it.
 
 **Settings** (`s`) opens a settings screen in a popup of 70% of the terminal's width and 80% of its height:
 
 ```
- 󰒓 Réglages                                                              1/16
+ 󰒓 Réglages                                                              1/17
 
  Format des nombres ────────────────────────────────────── 4% · 853M · 2,4G ┃
  ▌ Virgule décimale                 2.4G   2,4G                             ┃
@@ -146,15 +150,15 @@ The window waits for Enter before closing, an error included. While it is open, 
                                                                             ┃
  Pane Tools ─────────────────────────────────────────────────────────────── ┃
    Totaux CPU / mémoire             une ligne   barres                      ┃
+   Signaler les mises à jour        non   oui                               ┃
                                                                             ┃
  Sidebar ────────────────────────────────────────────────────────────────── ┃
-   Durée de vie des valeurs        ‹ 20 s ›                                 ┃
+   Durée de vie des valeurs        ‹ 20 s ›                                 │
    Shells                           bash, sh, zsh, fish, dash, nu, pwsh, …  │
    Totaux dans la barre d'onglets   non   oui                               │
                                                                             │
  Couleurs par seuil ─────────────────────────────────────────────────────── │
    Couleurs                         non   oui                               │
-   Seuils CPU (Herdr)               ━━ 10 ━━ 25 ━━ 50 ━━ %                  │
  ──────────────────────────────────────────────────────────────────────────
    Une virgule ou un point avant les décimales.
    ✓ enregistré dans menu.toml
@@ -173,6 +177,7 @@ A file that is a link (deployed by stow or chezmoi, say) stays a link: the file 
 |---|---|---|
 | Virgule décimale, Espace avant %, CPU avec une décimale, Unités de la mémoire, Espace avant l'unité | `decimal_comma`, `percent_space`, `cpu_decimal`, `memory_unit`, `memory_space` | `menu.toml` and `sidebar.toml` |
 | Totaux CPU / mémoire | `totals` | `menu.toml` |
+| Signaler les mises à jour | `check_updates` | `menu.toml` |
 | Durée de vie des valeurs | `ttl_seconds`, by 5 seconds, from 5 to 600 | `sidebar.toml` |
 | Shells | `shells`: Enter to type them, separated by commas, Enter to save, Escape to cancel | `sidebar.toml` |
 | Totaux dans la barre d'onglets | `tab_bar` | `sidebar.toml` |
@@ -192,6 +197,15 @@ Opened from a `Tools` pane, the screen also turns that pane to two buttons: **�
 
 The plugin only opens Herdr's `config.toml`: it never writes it ([ADR 0004](../adr/0004-plugin-settings.md), [ADR 0005](../adr/0005-herdr-update-entry.md)).
 
+## New versions
+
+When Herdr or a plugin installed from GitHub has a new version, the Update icon of the `Tools` pane turns green, and its name on hover says which (`Update · Herdr 0.9.6 · Explorer`); in the popup menu, the Update line is green, followed by the same list. The check runs at Herdr's start, then every 4 hours while a `Tools` pane is open ([ADR 0009](../adr/0009-new-version-check.md)):
+
+- **Herdr**: its installed version (`herdr status --json`) is compared with the one of `https://herdr.dev/latest.json`, the file Herdr's own check asks (with `curl`). On the preview channel nothing is compared: Herdr announces its new versions there itself.
+- **Plugins**: for each plugin installed from GitHub, the installed commit (which Herdr gives) is compared with the one the install's ref now names on GitHub (`git ls-remote`, the default branch without `--ref`), as `herdr plugin update` would. A plugin installed at a given commit never changes.
+
+The result is kept in the plugin's state folder (`updates.json`) and shared by every `Tools` pane; one check runs at a time (`updates.lock`). To check and show nothing, `check_updates = false` (the **Signaler les mises à jour** line of the settings): the Update entry itself still looks for what has a new version when you click it.
+
 ## How it works, implications
 
 **The `Tools` pane**
@@ -199,7 +213,7 @@ The plugin only opens Herdr's `config.toml`: it never writes it ([ADR 0004](../a
 - It is a normal Herdr pane. Herdr only splits to the right or downwards: the pane opens below the explorer, then swaps places with it, and the focus goes back to the pane that had it.
 - It opens on Herdr's `pane.created` event of the explorer, once the explorer stops moving (it places and sizes itself right after it opens: about one second). It closes on the `pane.closed` event, as soon as its tab has no explorer, or no terminal pane besides it and the explorer's own panes (Preview, Search…), so that the explorer can close its tab as it does on its own.
 - A `Tools` pane is known by its label and by an empty file named after its pane id in the `bars` folder of the session's folder (see below), written when it opens and removed when it closes: a pane you rename `Tools` is never closed or taken for the bar. The explorer's panes are still known by their label alone (Explorer, Preview…): a terminal renamed so no longer counts as a terminal. `prefix+space` and the opening of an explorer take turns on a tab's bar, through a lock of the tab (`opening-<tab id>.lock`, removed at Herdr's start once its tab is gone): a tab never gets two bars.
-- Herdr gives a plugin one state folder for all its sessions (`herdr --session <name>`), whose pane and tab ids start over at `w1`. What names a pane or a tab (the `bars` folder, the tabs' locks, the flags of the files open from a `Tools` pane, `files-open-*`) is therefore kept in a folder of the session, `sessions/<session>/` in the state folder (`default` for the session `herdr` runs without `--session`). The figures of a folder and the update's lock are shared by every session.
+- Herdr gives a plugin one state folder for all its sessions (`herdr --session <name>`), whose pane and tab ids start over at `w1`. What names a pane or a tab (the `bars` folder, the tabs' locks, the flags of the files open from a `Tools` pane, `files-open-*`) is therefore kept in a folder of the session, `sessions/<session>/` in the state folder (`default` for the session `herdr` runs without `--session`). The figures of a folder, the update's lock and the last search for new versions are shared by every session.
 - It asks for 3 rows (6 with `totals = "bars"`), but Herdr never gives a side of a split less than a tenth of it: on a screen of fewer than ten times that (30 rows, 60 with the bars), it is taller. It takes its height back when the window is resized.
 - **While it is open, the explorer no longer keeps its width**: `<` and `>` do nothing and its width follows the window's in proportion. The explorer only looks for its width at the full height of its own pane; a change to it is proposed upstream.
 - The totals rows read a file the sidebar writes in its folder of the session at each of its runs (every 5 seconds), every 2 seconds: the pane measures nothing itself.
@@ -225,10 +239,11 @@ The plugin only opens Herdr's `config.toml`: it never writes it ([ADR 0004](../a
 
 - The settings screen is a popup: Herdr waits while it is open, but it only stays open while you change settings. The editors run outside it, in their window or in a tab.
 - The update window runs outside Herdr, without the variable by which Herdr tells its panes (`HERDR_ENV`); it keeps running if the `Tools` pane closes.
+- The search for new versions asks `herdr.dev` (one request) and GitHub (one per plugin installed from GitHub), sending nothing but these requests, at Herdr's start (by the plugin's startup command) then every 4 hours (by a `Tools` pane, on a thread of its own: it never waits). Each request stops after 20 seconds; offline, nothing turns green, and the next check runs 4 hours later (10 minutes when its result could not be kept).
 - A program started on its own (`popup = false`, an editor with a window of its own) and Herdr started again from the update window get none of the variables that only hold in the `Tools` pane: `HERDR_ENV`, `HERDR_PANE_ID`, `HERDR_WORKSPACE_ID`, `HERDR_TAB_ID`, `HERDR_BIN_PATH`, `HERDR_PLUGIN_*` and `HERDR_MENU_*`.
 
 Commands run as your user, with your environment, like any program you would start in a pane.
 
 ## Turn it off
 
-To drop a built-in entry, list in `menu.toml` the entries to keep. To turn the whole menu off, remove the key from `config.toml`, then `herdr plugin disable imsike.menu` (or `herdr plugin uninstall imsike.menu`): the `Tools` panes close with their explorer; those Herdr restores at its next start, plain shells by then, are closed by hand. `menu.toml` stays in the config folder, and the figures' files (`stats-<hash>.json`, with their lock `stats-<hash>.lock`), the update's lock (`update.lock`), and the sessions' folders (`sessions`: the tabs' locks and the `bars` folder of each session) in the state folder, until you delete them.
+To drop a built-in entry, list in `menu.toml` the entries to keep. To turn the whole menu off, remove the key from `config.toml`, then `herdr plugin disable imsike.menu` (or `herdr plugin uninstall imsike.menu`): the `Tools` panes close with their explorer; those Herdr restores at its next start, plain shells by then, are closed by hand. `menu.toml` stays in the config folder, and the figures' files (`stats-<hash>.json`, with their lock `stats-<hash>.lock`), the update's lock (`update.lock`), the last search for new versions (`updates.json`, with its lock `updates.lock`), and the sessions' folders (`sessions`: the tabs' locks and the `bars` folder of each session) in the state folder, until you delete them.

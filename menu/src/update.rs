@@ -1,7 +1,11 @@
 //! The `Update` entry. Herdr refuses `herdr update` inside one of its panes
 //! (`HERDR_ENV`), so the entry opens a terminal window of its own, outside
-//! Herdr, which runs `herdr-menu update`: the update, then, when the server
-//! must restart to run the new version, a confirmation that says what stops.
+//! Herdr, which runs `herdr-menu update`: what has a new version (see
+//! `check`), ticked, to untick; the update of what stays ticked; then, when
+//! the server must restart to run Herdr's new version, a confirmation that
+//! says what stops.
+
+pub mod check;
 
 use crate::herdr;
 use herdr_api::env::INSIDE as INSIDE_HERDR;
@@ -161,14 +165,56 @@ pub fn run() -> Result<(), String> {
 
 /// The update, holding `lock`; what to tell once done.
 fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
-    let before = status()?;
-    // Where the server can hand its sessions over, nothing stops.
-    let handoff = before["server"]["capabilities"]["live_handoff"] == true;
-    println!("Mise à jour de Herdr…\n");
-    if handoff {
-        herdr_shown(&["update", "--handoff"])?;
-    } else {
-        herdr_shown(&["update"])?;
+    println!("Recherche des mises à jour…");
+    let found = check::check();
+    let _ = check::keep(found.clone());
+    let offered = offers(&found);
+    if offered.is_empty() {
+        return Ok("Herdr et les plugins installés depuis GitHub sont à jour.".into());
+    }
+    let labels: Vec<String> = offered.iter().map(|(_, label)| label.clone()).collect();
+    let ticked = crate::ui::pick("Mises à jour", &labels).map_err(|e| e.to_string())?;
+    let chosen: Vec<&Offer> = offered
+        .iter()
+        .zip(ticked.unwrap_or_default())
+        .filter(|(_, ticked)| *ticked)
+        .map(|((offer, _), _)| offer)
+        .collect();
+    if chosen.is_empty() {
+        return Ok("Rien n'a été mis à jour.".into());
+    }
+    let herdr = chosen.contains(&&Offer::Herdr);
+    let plugins: Vec<String> = chosen
+        .iter()
+        .filter_map(|offer| match offer {
+            Offer::Plugin(id) => Some(id.clone()),
+            Offer::Herdr => None,
+        })
+        .collect();
+    // Herdr first: a plugin's new version may need Herdr's.
+    if herdr {
+        // Where the server can hand its sessions over, nothing stops.
+        let handoff = status()?["server"]["capabilities"]["live_handoff"] == true;
+        println!("Mise à jour de Herdr…\n");
+        if handoff {
+            herdr_shown(&["update", "--handoff"])?;
+        } else {
+            herdr_shown(&["update"])?;
+        }
+    }
+    if !plugins.is_empty() {
+        println!("\nMise à jour des plugins…\n");
+        let mut args = vec!["plugin", "update"];
+        args.extend(plugins.iter().map(String::as_str));
+        herdr_shown(&args)?;
+    }
+    let _ = check::keep(found.without(herdr, &plugins));
+    if !herdr {
+        return Ok(
+            "Plugins à jour : leurs panes et commandes prennent la nouvelle \
+                   version dès leur prochain lancement."
+                .into(),
+        );
     }
     if !restart_needed(&status()?) {
         return Ok(
@@ -212,6 +258,35 @@ fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
         "Relancez Herdr avec « herdr »."
     }
     .into())
+}
+
+/// Something the window offers to update.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Offer {
+    Herdr,
+    /// A plugin installed from GitHub, by its id.
+    Plugin(String),
+}
+
+/// What the window offers, and how it names each: Herdr also when its new
+/// version is not known (the preview channel, no answer), since
+/// `herdr update` finds it on its own.
+fn offers(found: &check::Found) -> Vec<(Offer, String)> {
+    let herdr = match &found.herdr {
+        check::Herdr::Newer { installed, latest } => Some(format!("Herdr {installed} → {latest}")),
+        check::Herdr::Unknown(why) => Some(format!("Herdr (nouvelle version inconnue : {why})")),
+        check::Herdr::UpToDate => None,
+    };
+    herdr
+        .map(|label| (Offer::Herdr, label))
+        .into_iter()
+        .chain(found.plugins.iter().map(|p| {
+            (
+                Offer::Plugin(p.id.clone()),
+                format!("Plugin {} ({})", p.name, p.id),
+            )
+        }))
+        .collect()
 }
 
 /// `5 panes, dont 2 agents (1 au travail)`.
@@ -274,6 +349,35 @@ mod tests {
         assert_eq!(stopping(1, 0, 0), "1 pane");
         assert_eq!(stopping(5, 2, 1), "5 panes, dont 2 agents (1 au travail)");
         assert_eq!(stopping(3, 1, 0), "3 panes, dont 1 agent");
+    }
+
+    #[test]
+    fn offers_herdr_unless_up_to_date_and_each_new_plugin() {
+        let plugin = check::Plugin {
+            id: "gcaudan.explorer".into(),
+            name: "Explorer".into(),
+        };
+        let found = |herdr| check::Found {
+            herdr,
+            plugins: vec![plugin.clone()],
+        };
+        let newer = check::Herdr::Newer {
+            installed: "0.9.5".into(),
+            latest: "0.9.6".into(),
+        };
+        assert_eq!(
+            offers(&found(newer)),
+            [
+                (Offer::Herdr, "Herdr 0.9.5 → 0.9.6".to_string()),
+                (
+                    Offer::Plugin("gcaudan.explorer".into()),
+                    "Plugin Explorer (gcaudan.explorer)".to_string()
+                ),
+            ]
+        );
+        let unknown = offers(&found(check::Herdr::Unknown("canal preview".into())));
+        assert_eq!(unknown[0].0, Offer::Herdr);
+        assert_eq!(offers(&found(check::Herdr::UpToDate)).len(), 1);
     }
 
     #[test]

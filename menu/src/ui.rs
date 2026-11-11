@@ -1,7 +1,8 @@
 //! The screens drawn in a pane: the terminal taken over (`Screen`), a frame
 //! drawn in one write (`Frame`), text cut to the cells it takes (`fit`,
 //! `width`), the popup menu (one row per entry, chosen by key, arrows or
-//! click), and the plain prompts of a terminal (`ask`, `pause`).
+//! click), a list of boxes to tick (`pick`), and the plain prompts of a
+//! terminal (`ask`, `pause`).
 
 use crate::config::Entry;
 use crossterm::cursor::{Hide, MoveTo, Show};
@@ -95,8 +96,15 @@ pub fn is_control(modifiers: KeyModifiers) -> bool {
     modifiers.contains(KeyModifiers::CONTROL) && !modifiers.contains(KeyModifiers::ALT)
 }
 
-/// Shows the menu; returns the index of the chosen entry, or `None` when closed.
-pub fn choose(title: &str, entries: &[Entry], error: Option<&str>) -> io::Result<Option<usize>> {
+/// Shows the menu; returns the index of the chosen entry, or `None` when
+/// closed. `marked`: the `Update` entry when a new version is out, and what
+/// has one.
+pub fn choose(
+    title: &str,
+    entries: &[Entry],
+    error: Option<&str>,
+    marked: Option<(usize, &str)>,
+) -> io::Result<Option<usize>> {
     let _screen = Screen::enter()?;
     let mut selected = 0usize;
     // The first entry drawn: the list scrolls to keep the selection visible.
@@ -106,7 +114,7 @@ pub fn choose(title: &str, entries: &[Entry], error: Option<&str>) -> io::Result
         let (_, height) = terminal::size()?;
         let visible = visible_rows(height);
         top = scrolled(top, selected, visible);
-        draw(title, &entries[top..], error, selected - top, visible)?.show_if_new(&mut shown)?;
+        draw(title, entries, top, error, selected, visible, marked)?.show_if_new(&mut shown)?;
         match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => {
                 if is_control(key.modifiers) {
@@ -160,6 +168,98 @@ pub fn choose(title: &str, entries: &[Entry], error: Option<&str>) -> io::Result
     }
 }
 
+/// Shows `items`, each with a box ticked at first, and lets them be
+/// unticked; returns the ticks once confirmed, `None` when cancelled.
+pub fn pick(title: &str, items: &[String]) -> io::Result<Option<Vec<bool>>> {
+    let _screen = Screen::enter()?;
+    let mut ticked = vec![true; items.len()];
+    let mut selected = 0usize;
+    let mut shown = Vec::new();
+    let count = items.len();
+    loop {
+        draw_pick(title, items, &ticked, selected)?.show_if_new(&mut shown)?;
+        match event::read()? {
+            Event::Key(key) if key.kind == KeyEventKind::Press => {
+                if is_control(key.modifiers) {
+                    if key.code == KeyCode::Char('c') {
+                        return Ok(None);
+                    }
+                    continue;
+                }
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('q') => return Ok(None),
+                    KeyCode::Enter => return Ok(Some(ticked)),
+                    KeyCode::Up | KeyCode::Char('k') if count > 0 => {
+                        selected = (selected + count - 1) % count;
+                    }
+                    KeyCode::Down | KeyCode::Char('j') if count > 0 => {
+                        selected = (selected + 1) % count;
+                    }
+                    KeyCode::Char(' ') if count > 0 => ticked[selected] = !ticked[selected],
+                    _ => {}
+                }
+            }
+            Event::Mouse(mouse) => {
+                let hit = mouse
+                    .row
+                    .checked_sub(LIST_TOP)
+                    .map(usize::from)
+                    .filter(|&i| i < count);
+                match (mouse.kind, hit) {
+                    (MouseEventKind::Down(MouseButton::Left), Some(i)) => {
+                        selected = i;
+                        ticked[i] = !ticked[i];
+                    }
+                    (MouseEventKind::Moved, Some(i)) => selected = i,
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Draws the items of `pick`, their boxes, and the keys.
+fn draw_pick(title: &str, items: &[String], ticked: &[bool], selected: usize) -> io::Result<Frame> {
+    let (width, height) = terminal::size()?;
+    let width = usize::from(width);
+    let mut out = Frame::new()?;
+    queue!(
+        out,
+        MoveTo(0, 0),
+        SetAttribute(Attribute::Bold),
+        Print(fit(&format!(" {title}"), width)),
+        SetAttribute(Attribute::Reset)
+    )?;
+    for (i, (item, &on)) in items.iter().zip(ticked).enumerate() {
+        let row = LIST_TOP + i as u16;
+        if row >= height.saturating_sub(1) {
+            break;
+        }
+        queue!(out, MoveTo(0, row))?;
+        if i == selected {
+            queue!(out, SetAttribute(Attribute::Reverse))?;
+        }
+        let tick = if on { "[x]" } else { "[ ]" };
+        queue!(
+            out,
+            Print(pad(&format!("  {tick} {item}"), width)),
+            SetAttribute(Attribute::Reset)
+        )?;
+    }
+    queue!(
+        out,
+        MoveTo(0, height.saturating_sub(1)),
+        SetAttribute(Attribute::Dim),
+        Print(fit(
+            " Espace ou clic : cocher · Entrée : mettre à jour · Échap : annuler",
+            width
+        )),
+        SetAttribute(Attribute::Reset)
+    )?;
+    Ok(out)
+}
+
 /// Rows of the list: the title and a gap above, the error and help lines below.
 fn visible_rows(height: u16) -> usize {
     usize::from(height.saturating_sub(LIST_TOP + 2))
@@ -176,13 +276,15 @@ fn scrolled(top: usize, selected: usize, visible: usize) -> usize {
     }
 }
 
-/// Draws `entries` (from the first visible one) in `visible` rows.
+/// Draws `entries`, from the `top` one, in `visible` rows.
 fn draw(
     title: &str,
     entries: &[Entry],
+    top: usize,
     error: Option<&str>,
     selected: usize,
     visible: usize,
+    marked: Option<(usize, &str)>,
 ) -> io::Result<Frame> {
     let (width, height) = terminal::size()?;
     let width = usize::from(width);
@@ -194,16 +296,21 @@ fn draw(
         Print(fit(&format!(" {title}"), width)),
         SetAttribute(Attribute::Reset)
     )?;
-    for (i, entry) in entries.iter().take(visible).enumerate() {
-        let row = LIST_TOP + i as u16;
+    for (i, entry) in entries.iter().enumerate().skip(top).take(visible) {
+        let row = LIST_TOP + (i - top) as u16;
         queue!(out, MoveTo(0, row))?;
         if i == selected {
             queue!(out, SetAttribute(Attribute::Reverse))?;
         }
-        let line = format!("  {}  {}", entry.key, entry.label);
+        let mut line = format!("  {}  {}", entry.key, entry.label);
+        if let Some((_, note)) = marked.filter(|&(m, _)| m == i) {
+            line = format!("{line} · {note}");
+            queue!(out, SetForegroundColor(crate::colors::NEW_VERSION_COLOR))?;
+        }
         queue!(
             out,
             Print(pad(&line, width)),
+            ResetColor,
             SetAttribute(Attribute::Reset)
         )?;
     }

@@ -24,7 +24,8 @@ pub enum StartIn {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Action {
-    /// Updates Herdr in a terminal window of its own, outside Herdr.
+    /// Updates Herdr and the plugins installed from GitHub, in a terminal
+    /// window of its own, outside Herdr.
     Update,
     /// Opens the settings screen.
     Settings,
@@ -83,6 +84,9 @@ pub struct Menu {
     /// How the `Tools` pane writes its figures.
     pub numbers: NumberFormat,
     pub totals: TotalsStyle,
+    /// Whether the `Update` entry turns green when Herdr or a plugin has a
+    /// new version.
+    pub check_updates: bool,
 }
 
 impl Default for Menu {
@@ -91,6 +95,7 @@ impl Default for Menu {
             entries: defaults(),
             numbers: NumberFormat::default(),
             totals: TotalsStyle::default(),
+            check_updates: true,
         }
     }
 }
@@ -105,6 +110,7 @@ struct File {
     memory_unit: MemoryUnit,
     memory_space: bool,
     totals: TotalsStyle,
+    check_updates: bool,
     /// The icons' layout of earlier versions, which had two: still read so
     /// that a file that sets it stays valid, and ignored.
     #[serde(rename = "layout", skip_serializing)]
@@ -122,6 +128,7 @@ impl Default for File {
             memory_unit: numbers.memory_unit,
             memory_space: numbers.memory_space,
             totals: TotalsStyle::default(),
+            check_updates: true,
             _layout: None,
         }
     }
@@ -214,6 +221,7 @@ pub fn parse(text: &str) -> Result<Menu, String> {
             memory_space: file.memory_space,
         },
         totals: file.totals,
+        check_updates: file.check_updates,
     })
 }
 

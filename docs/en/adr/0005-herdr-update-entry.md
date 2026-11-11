@@ -26,6 +26,8 @@ Option b, as the menu's built-in entry **Update** (`update`), run in a terminal 
 
 *Revised on 2026-11-01: the entry first ran in the menu's popup, where `herdr update` refused to run.*
 
+*Revised on 2026-11-11: the window first lists what has a new version, Herdr and the plugins installed from GitHub, each line can be unticked, and runs `herdr update` only when Herdr stays ticked ([ADR 0009](0009-new-version-check.md)).*
+
 ## Consequences
 
 - No agent stops without a confirmation that says so.

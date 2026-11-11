@@ -165,7 +165,7 @@ pub fn on_pane_closed() -> Result<(), String> {
 }
 
 /// Closes the bars Herdr restored as plain shells after a restart; the
-/// explorer reopens with a new bar.
+/// explorer reopens with a new bar. Then checks for new versions.
 pub fn startup() -> Result<(), String> {
     let all = herdr::all_panes()?;
     let known = Bars::new();
@@ -175,6 +175,9 @@ pub fn startup() -> Result<(), String> {
     for bar in dead(bars) {
         let _ = herdr::close(&bar.pane_id);
         known.forget(&bar.pane_id);
+    }
+    if crate::menu_config().0.check_updates {
+        crate::update::check::when_due(true);
     }
     Ok(())
 }

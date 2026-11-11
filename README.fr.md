@@ -10,7 +10,7 @@ Des plugins [Herdr](https://herdr.dev) : ceux qu'[OS-Setup](https://github.com/I
 
 | Plugin | Contenu |
 |---|---|
-| [`menu`](docs/fr/plugins/menu.md) | Lance un outil (lazygit, gh-dash, VS Code…) depuis un pane `Tools` d'icônes au-dessus de l'explorateur de fichiers, ou depuis un menu en popup ; chiffres sur le dossier du workspace ; met à jour Herdr, ouvre les réglages |
+| [`menu`](docs/fr/plugins/menu.md) | Lance un outil (lazygit, gh-dash, VS Code…) depuis un pane `Tools` d'icônes au-dessus de l'explorateur de fichiers, ou depuis un menu en popup ; chiffres sur le dossier du workspace ; met à jour Herdr et les plugins, en vert quand une nouvelle version sort ; ouvre les réglages |
 | [`sidebar`](docs/fr/plugins/sidebar.md) | Un arbre workspace → agents dans le panneau Agents de Herdr, avec CPU, mémoire et nombre de shells ; totaux des processus de Herdr et de la machine entière pour le pane `Tools` du menu ou la barre d'onglets |
 
 ## Installation
@@ -31,7 +31,7 @@ Les mises à jour ne sont jamais automatiques : `herdr plugin update` récupère
 |---|---|
 | [Plugins](docs/fr/README.md) | Ce que chaque plugin affiche ou fait, implications, comment le désactiver |
 | [Ajouter un plugin](docs/fr/adding-plugins.md) | Organisation, crate, manifeste, essai, documentation |
-| [Décisions d'architecture](docs/fr/adr/) | Pourquoi Rust et un workspace Cargo, versions et mises à jour, le menu au-dessus de l'explorateur de fichiers, réglages des plugins, mise à jour de Herdr depuis le menu, couleurs par seuil, état par session, binaires précompilés |
+| [Décisions d'architecture](docs/fr/adr/) | Pourquoi Rust et un workspace Cargo, versions et mises à jour, le menu au-dessus de l'explorateur de fichiers, réglages des plugins, mise à jour de Herdr depuis le menu, couleurs par seuil, état par session, binaires précompilés, nouvelles versions signalées |
 
 ## Contribuer
 

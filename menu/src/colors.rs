@@ -1,6 +1,7 @@
 //! The colors of the threshold levels (gruvbox), the gradient of the bars
 //! through them, and the zones of the levels on the empty part of a bar;
-//! the settings screen draws with them too.
+//! the settings screen draws with them too, and the `Update` entry is green
+//! with them when a new version is out.
 
 use crossterm::style::Color;
 use herdr_api::sidebar::{Level, Thresholds};
@@ -9,6 +10,8 @@ use herdr_api::sidebar::{Level, Thresholds};
 const TRACK: (u8, u8, u8) = (0x3c, 0x38, 0x36);
 /// The same, as a color.
 pub const TRACK_COLOR: Color = rgb(TRACK);
+/// The `Update` entry when a new version is out.
+pub const NEW_VERSION_COLOR: Color = level_color(Level::Green);
 /// How much of its level's color the empty part of a bar takes.
 const ZONE_TINT: f64 = 0.45;
 

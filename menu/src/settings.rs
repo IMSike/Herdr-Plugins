@@ -105,6 +105,7 @@ enum Item {
     MemoryUnit,
     MemorySpace,
     Totals,
+    CheckUpdates,
     Ttl,
     Shells,
     TabBar,
@@ -124,6 +125,7 @@ impl Item {
             Self::MemoryUnit => "Unités de la mémoire",
             Self::MemorySpace => "Espace avant l'unité",
             Self::Totals => "Totaux CPU / mémoire",
+            Self::CheckUpdates => "Signaler les mises à jour",
             Self::Ttl => "Durée de vie des valeurs",
             Self::Shells => "Shells",
             Self::TabBar => "Totaux dans la barre d'onglets",
@@ -232,6 +234,7 @@ impl State {
             Row::Blank,
             Row::Header(Section::Tools),
             Row::Item(Item::Totals),
+            Row::Item(Item::CheckUpdates),
         ];
         if self.sidebar.is_some() {
             rows.extend([
@@ -369,6 +372,7 @@ impl State {
                 options: vec!["une ligne".into(), "barres".into()],
                 current: usize::from(self.menu.totals == TotalsStyle::Bars),
             },
+            Item::CheckUpdates => yes_no(self.menu.check_updates),
             Item::Ttl => Shown::Number(format!("{} s", sidebar.map_or(0, |s| s.ttl_seconds))),
             Item::Shells => Shown::Text(sidebar.map_or_else(String::new, |s| s.shells.join(", "))),
             Item::TabBar => yes_no(sidebar.is_some_and(|s| s.tab_bar)),
@@ -416,6 +420,11 @@ impl State {
             Item::Totals => (
                 "Les totaux sous les icônes : une ligne, ou quatre barres.",
                 "totals",
+                menu.into(),
+            ),
+            Item::CheckUpdates => (
+                "Update en vert quand Herdr ou un plugin a une nouvelle version (vérifié toutes les 4 h).",
+                "check_updates",
                 menu.into(),
             ),
             Item::Ttl => (
@@ -650,6 +659,14 @@ impl State {
                     TotalsStyle::Bars => TotalsStyle::Line,
                 };
                 self.switch_menu("totals", &herdr_api::name_of(&value), |m| m.totals = value)
+            }
+            Item::CheckUpdates => {
+                let value = !self.menu.check_updates;
+                self.set_menu("check_updates", value.into())
+                    .and_then(|ignored| {
+                        self.menu.check_updates = value;
+                        written(ignored, &[config::FILE_NAME])
+                    })
             }
             Item::Ttl => {
                 let current = self.sidebar.as_ref()?.ttl_seconds;

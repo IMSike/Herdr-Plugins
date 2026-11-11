@@ -1,16 +1,18 @@
-//! What the bar shows: its icons and the sidebar's totals, the disk
-//! figures, or the reload of the configuration files open in an editor.
+//! What the bar shows: its icons (`Update` in green when a new version is
+//! out) and the sidebar's totals, the disk figures, or the reload of the
+//! configuration files open in an editor.
 
 use super::geometry::{
     Grid, ICON_ROWS, LABEL_CELLS, bar_cells, button_pair, centered, covers, wanted_rows,
 };
 use super::{fit_height, folders, has_its_place, my_tab};
-use crate::colors::{gradient, level_color, zone};
+use crate::colors::{NEW_VERSION_COLOR, gradient, level_color, zone};
 use crate::config::{self, Action, Entry, Menu, TotalsStyle};
 use crate::herdr;
 use crate::settings::files;
 use crate::stats::{self, Measured, Stats};
 use crate::ui::{Frame, Screen, fit};
+use crate::update::check::{self, Checked};
 use crossterm::cursor::MoveTo;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind};
 use crossterm::queue;
@@ -47,6 +49,10 @@ const READ_EVERY: Duration = Duration::from_secs(2);
 const TOTALS_FOR_AT_MOST: Duration = Duration::from_secs(30);
 /// How long an entry, once started, does not start again.
 const LAUNCH_AGAIN_AFTER: Duration = Duration::from_secs(1);
+/// How long a bar waits before it checks for new versions again, when its
+/// check kept nothing (another one was under way, the state folder could
+/// not be written).
+const CHECK_AGAIN_AFTER: Duration = Duration::from_secs(600);
 
 /// The glyphs of the back (nf-md-arrow_left) and reload (nf-md-reload)
 /// buttons, for their icon alone and with their name.
@@ -241,6 +247,8 @@ struct View {
     /// How old the figures are, once old enough to say.
     age: Option<String>,
     measuring: bool,
+    /// What has a new version, when the `Update` entry says so.
+    new_versions: Option<String>,
 }
 
 /// What an event asks for.
@@ -287,6 +295,12 @@ struct State<'a> {
     reloads: mpsc::Receiver<Result<String, String>>,
     /// When the bar checks its place next.
     check_at: Option<Instant>,
+    /// The last check for new versions, read again once written again.
+    versions_file: Option<PathBuf>,
+    versions_changed: Option<SystemTime>,
+    versions: Option<Checked>,
+    /// When the bar may check for new versions, once they are due.
+    check_versions_from: Instant,
 }
 
 pub(super) fn show(me: &str, menu: Menu, error: Option<String>) -> io::Result<()> {
@@ -351,6 +365,7 @@ impl<'a> State<'a> {
                 stats: None,
                 age: None,
                 measuring: false,
+                new_versions: None,
             },
             message_until: Instant::now() + MESSAGE_FOR,
             menu_changed: modified(menu_file.as_deref()),
@@ -372,6 +387,10 @@ impl<'a> State<'a> {
             reloads,
             // The first check fits the height once the swap is done.
             check_at: Some(Instant::now() + FIRST_FIT_AFTER),
+            versions_file: check::last_file(),
+            versions_changed: None,
+            versions: None,
+            check_versions_from: Instant::now(),
         }
     }
 
@@ -460,6 +479,7 @@ impl<'a> State<'a> {
                     self.say(error, Color::Red);
                 }
             }
+            self.read_versions();
         }
         if let Some(flag) = &self.files_flag
             && std::fs::remove_file(flag).is_ok()
@@ -467,6 +487,31 @@ impl<'a> State<'a> {
             self.view.page = Page::Files;
             self.view.message = None;
             self.measurer = None;
+        }
+    }
+
+    /// The last check for new versions, once written again; a new check,
+    /// on a thread, once it is due.
+    fn read_versions(&mut self) {
+        if !self.view.menu.check_updates {
+            self.view.new_versions = None;
+            return;
+        }
+        let changed = modified(self.versions_file.as_deref());
+        if changed != self.versions_changed {
+            self.versions_changed = changed;
+            self.versions = check::last();
+        }
+        self.view.new_versions = self
+            .versions
+            .as_ref()
+            .filter(|c| c.found.any())
+            .map(|c| c.found.summary());
+        if Instant::now() >= self.check_versions_from
+            && self.versions.as_ref().is_none_or(Checked::is_due)
+        {
+            self.check_versions_from = Instant::now() + CHECK_AGAIN_AFTER;
+            std::thread::spawn(|| check::when_due(false));
         }
     }
 
@@ -741,6 +786,8 @@ fn draw_tools(out: &mut impl Write, view: &View, width: u16, rows: u16) -> io::R
         }
         let color = if view.hover == Some(i) {
             Color::Yellow
+        } else if is_new_version(view, entry) {
+            NEW_VERSION_COLOR
         } else {
             Color::Reset
         };
@@ -756,7 +803,11 @@ fn draw_tools(out: &mut impl Write, view: &View, width: u16, rows: u16) -> io::R
     }
     // The name of the icon under the pointer, below the icons.
     if let Some(entry) = view.hover.and_then(|i| view.menu.entries.get(i)) {
-        let name = fit(&entry.label, usize::from(width));
+        let name = match &view.new_versions {
+            Some(found) if is_new_version(view, entry) => format!("{} · {found}", entry.label),
+            _ => entry.label.clone(),
+        };
+        let name = fit(&name, usize::from(width));
         queue!(
             out,
             MoveTo(centered(0, width, &name), 1),
@@ -775,6 +826,11 @@ fn draw_tools(out: &mut impl Write, view: &View, width: u16, rows: u16) -> io::R
         }
     }
     Ok(())
+}
+
+/// Whether `entry` is the `Update` entry while a new version is out.
+fn is_new_version(view: &View, entry: &Entry) -> bool {
+    entry.action == Some(Action::Update) && view.new_versions.is_some()
 }
 
 /// The totals on one line, centered.
