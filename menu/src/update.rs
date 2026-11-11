@@ -165,8 +165,7 @@ pub fn run() -> Result<(), String> {
 /// The update, holding `lock`; what to tell once done.
 fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
     println!("Recherche des mises à jour…");
-    let found = check::check();
-    let _ = check::keep(found.clone());
+    let found = check::check_and_keep();
     let offered = offers(&found);
     if offered.is_empty() {
         return Ok("Herdr et les plugins installés depuis GitHub sont à jour.".into());

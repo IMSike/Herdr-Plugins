@@ -34,7 +34,8 @@ Option b, chosen by the maintainer:
 ## Consequences
 
 - The plugin only compares versions: no code is installed without a click, and the server's restart is still asked, with what it stops.
-- Network requests go out without the user doing anything: one to herdr.dev, one to GitHub per plugin installed from GitHub, at start then every 4 hours while a `Tools` pane is open. Offline, nothing turns green and no error is shown. Without a `Tools` pane, only the check at start runs.
+- Network requests go out without the user doing anything: one to herdr.dev, one to GitHub per plugin installed from GitHub, at start then every 4 hours while a `Tools` pane is open. Without a `Tools` pane, only the check at start runs.
+- What does not answer keeps what the last check found, and no error is shown: offline, a new version already found stays shown; when nothing answered, nothing is kept, and a `Tools` pane checks again 10 minutes later.
 - `latest.json` is not documented: should its shape change, Herdr is no longer shown (its version stays "unknown"), but the Update entry still offers it and `herdr update` works as before.
 - A plugin's commit is compared, not its release: right after a push to `main`, before its release is published, a plugin of this repository can turn green, and its update build with `cargo` or fail ([ADR 0008](0008-prebuilt-binaries.md)).
 - A commit that does not touch a plugin of a repository with several plugins still shows it: `herdr plugin update` would install it again too.

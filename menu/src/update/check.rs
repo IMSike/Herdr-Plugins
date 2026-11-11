@@ -137,42 +137,73 @@ pub fn when_due(always: bool) {
         return;
     };
     if always || last().is_none_or(|c| c.is_due()) {
-        let _ = keep(check());
+        check_and_keep();
     }
 }
 
-/// Checks Herdr and the plugins installed from GitHub, now.
-pub fn check() -> Found {
-    Found {
-        herdr: herdr_version(),
-        plugins: plugins().unwrap_or_default(),
+/// Checks Herdr and the plugins installed from GitHub, and keeps the
+/// result when something answered. What did not answer keeps what the
+/// last check found: offline, a new version known stays shown.
+pub fn check_and_keep() -> Found {
+    let last = last().map(|c| c.found);
+    let (found, answered) = merged(last, herdr_version(), plugins());
+    if answered {
+        let _ = keep(found.clone());
     }
+    found
 }
 
-/// Herdr's installed version against the latest stable one.
-fn herdr_version() -> Herdr {
+/// What a check found, `herdr` and `plugins` merged with the `last` one
+/// where they did not answer; and whether anything answered.
+fn merged(
+    last: Option<Found>,
+    (herdr, herdr_answered): (Herdr, bool),
+    plugins: Result<Vec<(Plugin, Option<bool>)>, String>,
+) -> (Found, bool) {
+    let answered = herdr_answered || plugins.iter().flatten().any(|(_, moved)| moved.is_some());
+    let herdr = match last.as_ref().map(|l| &l.herdr) {
+        Some(known @ Herdr::Newer { .. }) if !herdr_answered => known.clone(),
+        _ => herdr,
+    };
+    let was_new = |plugin: &Plugin| {
+        last.as_ref()
+            .is_some_and(|l| l.plugins.iter().any(|p| p.id == plugin.id))
+    };
+    let plugins = match plugins {
+        Ok(plugins) => plugins
+            .into_iter()
+            .filter(|(plugin, moved)| moved.unwrap_or_else(|| was_new(plugin)))
+            .map(|(plugin, _)| plugin)
+            .collect(),
+        Err(_) => last.map(|l| l.plugins).unwrap_or_default(),
+    };
+    (Found { herdr, plugins }, answered)
+}
+
+/// Herdr's installed version against the latest stable one, and whether
+/// they could be read (the preview channel, which is not compared, counts).
+fn herdr_version() -> (Herdr, bool) {
     let status = match status() {
         Ok(status) => status,
-        Err(e) => return Herdr::Unknown(e),
+        Err(e) => return (Herdr::Unknown(e), false),
     };
     let client = &status["client"];
     if client["channel"].as_str().is_some_and(|c| c != "stable") {
-        return Herdr::Unknown("canal preview".into());
+        return (Herdr::Unknown("canal preview".into()), true);
     }
     let Some(installed) = client["version"].as_str() else {
-        return Herdr::Unknown("version installée inconnue".into());
+        return (Herdr::Unknown("version installée inconnue".into()), true);
     };
-    let latest = match latest_version() {
-        Ok(latest) => latest,
-        Err(e) => return Herdr::Unknown(e),
-    };
-    if is_newer(&latest, installed) {
-        Herdr::Newer {
-            installed: installed.into(),
-            latest,
-        }
-    } else {
-        Herdr::UpToDate
+    match latest_version() {
+        Ok(latest) if is_newer(&latest, installed) => (
+            Herdr::Newer {
+                installed: installed.into(),
+                latest,
+            },
+            true,
+        ),
+        Ok(_) => (Herdr::UpToDate, true),
+        Err(e) => (Herdr::Unknown(e), false),
     }
 }
 
@@ -235,33 +266,33 @@ struct Installed {
     source: Option<Source>,
 }
 
-/// The plugins installed from GitHub whose ref has moved since.
-fn plugins() -> Result<Vec<Plugin>, String> {
+/// The plugins installed from GitHub, each with whether its branch or tag
+/// now names another commit (`None`: no answer).
+fn plugins() -> Result<Vec<(Plugin, Option<bool>)>, String> {
     let listed: Vec<Value> = herdr_api::request_field("plugin.list", json!({}), "plugins")?;
     // An entry Herdr describes otherwise (its manifest gone…) is left out.
     Ok(listed
         .into_iter()
         .filter_map(|p| serde_json::from_value::<Installed>(p).ok())
-        .filter(|p| {
-            p.source
-                .as_ref()
-                .is_some_and(|s| s.kind == "github" && has_moved(s))
-        })
-        .map(|p| Plugin {
-            name: p.name.unwrap_or_else(|| p.plugin_id.clone()),
-            id: p.plugin_id,
+        .filter_map(|p| {
+            let source = p.source.filter(|s| s.kind == "github")?;
+            let plugin = Plugin {
+                name: p.name.unwrap_or_else(|| p.plugin_id.clone()),
+                id: p.plugin_id,
+            };
+            Some((plugin, has_moved(&source)))
         })
         .collect())
 }
 
-/// Whether the ref a plugin was installed from now names another commit. A
-/// commit installed by its hash never moves; an unanswered repository is
-/// not known to have moved.
-fn has_moved(source: &Source) -> bool {
+/// Whether the branch or tag a plugin was installed from now names another
+/// commit; `None` when the repository did not answer. A plugin installed by
+/// a commit's hash never moves.
+fn has_moved(source: &Source) -> Option<bool> {
     let (Some(owner), Some(repo), Some(installed)) =
         (&source.owner, &source.repo, &source.resolved_commit)
     else {
-        return false;
+        return Some(false);
     };
     let url = format!("https://github.com/{owner}/{repo}.git");
     let names = ref_names(source.requested_ref.as_deref());
@@ -280,10 +311,8 @@ fn has_moved(source: &Source) -> bool {
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_ASKPASS", "")
         .env("GCM_INTERACTIVE", "never");
-    output_within(&mut command, ANSWER_WITHIN)
-        .ok()
-        .and_then(|text| commit_of(&text, &names))
-        .is_some_and(|latest| latest != *installed)
+    let listing = output_within(&mut command, ANSWER_WITHIN).ok()?;
+    Some(commit_of(&listing, &names).is_some_and(|latest| latest != *installed))
 }
 
 /// The full names a ref may stand for, by preference: the default branch
@@ -439,5 +468,46 @@ mod tests {
             plugins: Vec::new(),
         };
         assert!(!unknown.any());
+    }
+
+    #[test]
+    fn what_did_not_answer_keeps_what_was_found() {
+        let plugin = |id: &str| Plugin {
+            id: id.into(),
+            name: id.into(),
+        };
+        let newer = Herdr::Newer {
+            installed: "0.9.5".into(),
+            latest: "0.9.6".into(),
+        };
+        let last = Found {
+            herdr: newer.clone(),
+            plugins: vec![plugin("a"), plugin("b")],
+        };
+        let offline = || (Herdr::Unknown("pas de réponse".into()), false);
+        // Nothing answered: all is kept, and nothing is saved.
+        let (found, answered) = merged(
+            Some(last.clone()),
+            offline(),
+            Ok(vec![(plugin("a"), None), (plugin("c"), None)]),
+        );
+        assert_eq!(found.herdr, newer);
+        assert_eq!(found.plugins, [plugin("a")]);
+        assert!(!answered);
+        // What answered wins.
+        let (found, answered) = merged(
+            Some(last.clone()),
+            (Herdr::UpToDate, true),
+            Ok(vec![(plugin("a"), Some(false)), (plugin("b"), None)]),
+        );
+        assert_eq!(found.herdr, Herdr::UpToDate);
+        assert_eq!(found.plugins, [plugin("b")]);
+        assert!(answered);
+        // Herdr's server unreachable: the plugins found are kept.
+        let (found, _) = merged(Some(last.clone()), offline(), Err("".into()));
+        assert_eq!(found, last);
+        // A new version only known as unknown stays unknown.
+        let (found, _) = merged(None, offline(), Ok(Vec::new()));
+        assert_eq!(found.herdr, offline().0);
     }
 }

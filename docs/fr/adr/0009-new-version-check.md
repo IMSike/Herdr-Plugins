@@ -34,7 +34,8 @@ L'option b, choisie par le mainteneur :
 ## Conséquences
 
 - Le plugin ne fait que comparer des versions : aucun code ne s'installe sans un clic, et le redémarrage du serveur reste demandé, avec ce qu'il arrête.
-- Des requêtes réseau partent sans action de l'utilisateur : une vers herdr.dev, une vers GitHub par plugin installé depuis GitHub, au démarrage puis toutes les 4 heures tant qu'un pane `Tools` est ouvert. Hors ligne, rien ne passe au vert et rien n'est affiché en erreur. Sans pane `Tools`, seule la vérification du démarrage a lieu.
+- Des requêtes réseau partent sans action de l'utilisateur : une vers herdr.dev, une vers GitHub par plugin installé depuis GitHub, au démarrage puis toutes les 4 heures tant qu'un pane `Tools` est ouvert. Sans pane `Tools`, seule la vérification du démarrage a lieu.
+- Ce qui ne répond pas garde ce que la vérification précédente avait trouvé, et rien n'est affiché en erreur : hors ligne, une nouvelle version déjà trouvée reste affichée ; quand rien n'a répondu, rien n'est gardé, et un pane `Tools` vérifie de nouveau 10 minutes plus tard.
 - `latest.json` n'est pas documenté : s'il change de forme, Herdr n'est plus signalé (sa version reste « inconnue »), mais l'entrée Update le propose toujours et `herdr update` fonctionne comme avant.
 - Le commit d'un plugin est comparé, pas sa release : juste après un push sur `main`, avant la publication de la release, un plugin de ce dépôt peut passer au vert, et sa mise à jour compiler avec `cargo` ou échouer ([ADR 0008](0008-prebuilt-binaries.md)).
 - Un commit qui ne touche pas un plugin d'un dépôt à plusieurs plugins le signale quand même : `herdr plugin update` le réinstallerait aussi.
