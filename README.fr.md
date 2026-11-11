@@ -23,7 +23,7 @@ herdr plugin install IMSike/Herdr-Plugins/<plugin>
 
 Rien à compiler : l'installation télécharge le binaire de la release du commit (Linux x86_64 et aarch64, Windows) et le vérifie avec les `SHA256SUMS` de la release. Elle demande Git, plus `curl` sous Linux. Seul un commit sans release (tout juste poussé sur `main` et encore en publication, ou installé avec `--ref`) est compilé, avec le toolchain Rust (`cargo`, Rust 1.95 ou plus récent) et, sous Windows, les Build Tools de Visual Studio avec la charge de travail C++ ([ADR 0008](docs/fr/adr/0008-prebuilt-binaries.md)).
 
-Les mises à jour ne sont jamais automatiques : `herdr plugin update` récupère le dernier commit de `main` (chaque push sur `main` est une version) pour tous les plugins installés depuis GitHub, ou `herdr plugin update <id-du-plugin>` celui d'un seul plugin ([ADR 0002](docs/fr/adr/0002-plugin-versions.md)).
+Les mises à jour ne sont jamais automatiques : `herdr plugin update` récupère le dernier commit de `main` (chaque push sur `main` est une version) pour tous les plugins installés depuis GitHub, ou `herdr plugin update <id-du-plugin>` celui d'un seul plugin ([ADR 0002](docs/fr/adr/0002-plugin-versions.md)). L'entrée Update du menu signale quand l'un d'eux a un nouveau commit, et met à jour ceux que vous cochez ([ADR 0009](docs/fr/adr/0009-new-version-check.md)).
 
 ## Documentation
 

@@ -27,3 +27,5 @@ Every `herdr-plugin.toml` keeps `version = "0.0.0"`, never changed. The version 
 - The release a plugin comes from is found from the commit `herdr plugin list` shows: the tag on that commit, or the latest one before it.
 - A new plugin's manifest also says `0.0.0`.
 - The release also carries the plugins' binaries, which the build step finds by the commit installed, not by a version ([ADR 0008](0008-prebuilt-binaries.md)).
+
+*Revised on 2026-11-11: the menu shows when a plugin installed from GitHub has a new commit, and its Update entry runs `herdr plugin update` for the plugins ticked; still, nothing updates on its own ([ADR 0009](0009-new-version-check.md)).*
