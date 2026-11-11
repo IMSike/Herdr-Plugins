@@ -310,13 +310,19 @@ fn has_moved(source: &Source) -> Option<bool> {
     let url = format!("https://github.com/{owner}/{repo}.git");
     let names = ref_names(source.requested_ref.as_deref());
     let mut command = Command::new("git");
-    // No prompt, nor credentials window, for a repository gone private.
+    // No prompt, nor credentials window, for a repository gone private. A
+    // stalled connection ends on its own: stopping `git` at the time limit
+    // leaves running the program it starts for HTTPS (`git-remote-https`).
     command
         .args([
             "-c",
             "credential.helper=",
             "-c",
             "core.askPass=",
+            "-c",
+            "http.lowSpeedLimit=1",
+            "-c",
+            "http.lowSpeedTime=20",
             "ls-remote",
             &url,
         ])
