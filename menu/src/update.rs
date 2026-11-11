@@ -8,6 +8,7 @@
 pub mod check;
 
 use crate::herdr;
+use herdr_api::Taken;
 use herdr_api::env::INSIDE as INSIDE_HERDR;
 use serde_json::Value;
 use std::io::Write;
@@ -23,16 +24,16 @@ const WINDOW_CHECK: std::time::Duration = std::time::Duration::from_secs(1);
 #[cfg(windows)]
 const SELF_ENV: &str = "HERDR_MENU_SELF";
 
-/// The update's lock; `Ok(None)` while another update holds it, an error
-/// when it cannot be taken (the update runs without it).
-fn lock() -> Result<Option<herdr_api::Lock>, String> {
-    let file = herdr_api::state_dir()?.join(LOCK);
-    herdr_api::Lock::take(&file).map_err(|e| format!("verrou impossible : {e}"))
+/// The update's lock: the update runs without it when there is none to take.
+fn lock() -> Taken {
+    herdr_api::state_dir().map_or(Taken::Unavailable, |dir| {
+        herdr_api::Lock::try_take(&dir.join(LOCK))
+    })
 }
 
 /// Opens the window that runs the update, and returns at once.
 pub fn open_window() -> Result<(), String> {
-    if matches!(lock(), Ok(None)) {
+    if matches!(lock(), Taken::Busy) {
         return Err(ALREADY_RUNNING.into());
     }
     let me = std::env::current_exe().map_err(|e| e.to_string())?;
@@ -131,14 +132,6 @@ fn herdr_shown(args: &[&str]) -> Result<(), String> {
     }
 }
 
-/// `herdr status --json`.
-fn status() -> Result<Value, String> {
-    let output = herdr::command(&["status", "--json"])
-        .output()
-        .map_err(|e| format!("impossible de lancer « herdr status » : {e}"))?;
-    serde_json::from_slice(&output.stdout).map_err(|e| format!("état de Herdr illisible : {e}"))
-}
-
 /// Whether the server runs an older binary than the one installed.
 fn restart_needed(status: &Value) -> bool {
     ["restart_needed", "server_binary_stale"]
@@ -150,9 +143,9 @@ fn restart_needed(status: &Value) -> bool {
 /// closes with it, so it ends on a key press.
 pub fn run() -> Result<(), String> {
     let result = match lock() {
-        Ok(None) => Err(ALREADY_RUNNING.to_string()),
-        Ok(lock) => update(lock),
-        Err(_) => update(None),
+        Taken::Busy => Err(ALREADY_RUNNING.to_string()),
+        Taken::Held(lock) => update(Some(lock)),
+        Taken::Unavailable => update(None),
     };
     let message = match &result {
         Ok(message) => message.clone(),
@@ -171,7 +164,8 @@ fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
         return Ok("Herdr et les plugins installés depuis GitHub sont à jour.".into());
     }
     let labels: Vec<String> = offered.iter().map(|(_, label)| label.clone()).collect();
-    let ticked = crate::ui::pick("Mises à jour", &labels).map_err(|e| e.to_string())?;
+    let ticked =
+        crate::ui::pick("Mises à jour", &labels).map_err(|e| format!("liste impossible : {e}"))?;
     let chosen: Vec<&Offer> = offered
         .iter()
         .zip(ticked.unwrap_or_default())
@@ -201,7 +195,7 @@ fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
                 .into(),
         );
     }
-    if !restart_needed(&status()?) {
+    if !restart_needed(&check::status()?) {
         return Ok(
             "Herdr est à jour. Le client déjà ouvert garde son ancienne version : \
                    détachez-vous (prefix+q) puis relancez « herdr » pour passer à la nouvelle."
@@ -250,7 +244,7 @@ fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
 fn install(herdr: bool, plugins: &[String]) -> Result<(), String> {
     if herdr {
         // Where the server can hand its sessions over, nothing stops.
-        let handoff = status()?["server"]["capabilities"]["live_handoff"] == true;
+        let handoff = check::status()?["server"]["capabilities"]["live_handoff"] == true;
         println!("Mise à jour de Herdr…\n");
         if handoff {
             herdr_shown(&["update", "--handoff"])?;
@@ -268,7 +262,7 @@ fn install(herdr: bool, plugins: &[String]) -> Result<(), String> {
 }
 
 /// Something the window offers to update.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 enum Offer {
     Herdr,
     /// A plugin installed from GitHub, by its id.

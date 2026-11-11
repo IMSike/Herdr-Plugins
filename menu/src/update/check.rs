@@ -210,7 +210,7 @@ fn herdr_version() -> (Herdr, bool) {
 }
 
 /// `herdr status --json`.
-fn status() -> Result<Value, String> {
+pub fn status() -> Result<Value, String> {
     let mut command = herdr::command(&["status", "--json"]);
     let text = output_within(&mut command, ANSWER_WITHIN)
         .map_err(|e| format!("« herdr status » : {e}"))?;
