@@ -423,7 +423,7 @@ impl State {
                 menu.into(),
             ),
             Item::CheckUpdates => (
-                "Update en vert quand Herdr ou un plugin a une nouvelle version (vérifié toutes les 4 h).",
+                "Update en vert, dans le pane Tools et le menu en popup, quand Herdr ou un plugin a une nouvelle version : vérifié au démarrage, puis toutes les 4 h tant qu'un pane Tools est ouvert.",
                 "check_updates",
                 menu.into(),
             ),

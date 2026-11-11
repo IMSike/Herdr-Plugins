@@ -22,9 +22,10 @@
 # selon ses seuils, réglés dans sidebar.toml).
 # totals = "line"
 
-# Cherche au démarrage de Herdr, puis toutes les 4 h, si Herdr ou un plugin
-# installé depuis GitHub a une nouvelle version : l'entrée Update passe alors
-# en vert. Interroge herdr.dev et GitHub.
+# Cherche au démarrage de Herdr, puis toutes les 4 h tant qu'un pane Tools est
+# ouvert, si Herdr ou un plugin installé depuis GitHub a une nouvelle version :
+# l'entrée Update passe alors en vert (pane Tools et menu en popup). Interroge
+# herdr.dev et GitHub.
 # check_updates = true
 
 # Entrées du menu. Sans aucune entrée, le menu garde les siennes : lazygit (l),
