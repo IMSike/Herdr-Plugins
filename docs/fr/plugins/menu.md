@@ -139,7 +139,7 @@ La fenêtre attend Entrée avant de se fermer, erreur comprise. Tant qu'elle est
 **Settings** (`s`) ouvre un écran de réglages dans un popup de 70 % de la largeur du terminal et 80 % de sa hauteur :
 
 ```
- 󰒓 Réglages                                                              1/17
+ 󰒓 Réglages                                                              1/18
 
  Format des nombres ────────────────────────────────────── 4% · 853M · 2,4G ┃
  ▌ Virgule décimale                 2.4G   2,4G                             ┃
@@ -200,12 +200,12 @@ Le plugin ne fait qu'ouvrir le `config.toml` de Herdr : il ne l'écrit jamais ([
 
 ## Récupérer une session
 
-Quand les shells des panes meurent ensemble (sous Windows, une mise à jour de PowerShell du Microsoft Store ou de Windows Terminal les ferme tous), le serveur Herdr survit, mais retire ces panes, et leurs agents s'arrêtent avec eux. Herdr garde des copies de la mise en page de chaque session, ses snapshots (jusqu'à 48, une toutes les 15 minutes au plus) : la ligne **Récupérer une session…** de l'écran des réglages, section Session, en restaure un ([ADR 0010](../adr/0010-session-recovery.md)).
+Quand les shells des panes meurent ensemble (sous Windows, une mise à jour de PowerShell du Microsoft Store les ferme tous), le serveur Herdr survit, mais retire ces panes, et leurs agents s'arrêtent avec eux. Herdr garde des copies de la mise en page de chaque session, ses snapshots (jusqu'à 48, une toutes les 15 minutes au plus) : la ligne **Récupérer une session…** de l'écran des réglages, section Session, en restaure un ([ADR 0010](../adr/0010-session-recovery.md)).
 
 Elle ouvre, dans le même popup, les snapshots de la session courante, du plus récent au plus ancien :
 
-- en haut, ce que contient la session aujourd'hui (`1 espace · 2 onglets · 2 panes · 0 agent`) ;
-- pour chaque snapshot, sa date et son âge (`11/11 14:05  il y a 2 h 10`), en jaune ce qui manque aujourd'hui à la session (`+3 absents` : un agent se reconnaît à sa conversation, un shell à son dossier), et ce qu'il contient. Un snapshot illisible, ou d'une version de Herdr que le menu ne connaît pas, est marqué `✗` avec la raison, et ne peut pas être restauré ;
+- en haut, ce que contient la session aujourd'hui (`Aujourd'hui : 1 espace · 2 onglets · 2 panes · 0 agent`) ;
+- pour chaque snapshot, sa date et son âge (`11/11 14:05  il y a 2 h 10`), en jaune ce qui manque aujourd'hui à la session (`+3 absents` : un agent se reconnaît à sa conversation, ou à sa commande de reprise, un shell à son dossier), et ce qu'il contient. Un snapshot illisible, ou dont le format n'est pas la version 3 de `session.json`, est marqué `✗` avec la raison, et ne peut pas être restauré ;
 - sous la liste, le snapshot choisi en détail : ses espaces, ses onglets, et chaque pane avec son dossier, `shell` ou son agent ; ce qui manque à la session est marqué `+` en jaune. Un agent Claude Code montre le titre de sa conversation (`claude · Corrige le test (c73a3ff4)`), sinon son dernier message, lus dans les fichiers de Claude Code (`~/.claude/projects`, ou le dossier de `CLAUDE_CONFIG_DIR`) ; un autre agent, ou une conversation que ces fichiers ne donnent pas, montre le début de son identifiant.
 
 Haut et bas (ou `j`/`k`, la molette, la souris) choisissent un snapshot, Début/Fin (ou `g`/`G`) le premier ou le dernier, Page préc./Page suiv. font défiler le détail, Échap, `q` ou Ctrl+C reviennent aux réglages. Entrée ouvre une fenêtre de terminal à part, hors de Herdr, comme Update ; dans cette fenêtre :

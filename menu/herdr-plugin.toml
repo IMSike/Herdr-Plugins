@@ -2,7 +2,7 @@ id = "imsike.menu"
 name = "Menu"
 version = "0.0.0"
 min_herdr_version = "0.9.5"
-description = "A menu that opens a tool (lazygit, gh-dash…) in a large popup, updates Herdr and the plugins, sets the plugins: a Tools pane of icons above the file explorer, or a popup"
+description = "A menu that opens a tool (lazygit, gh-dash…) in a large popup, updates Herdr and the plugins, sets the plugins, recovers a session from Herdr's snapshots: a Tools pane of icons above the file explorer, or a popup"
 platforms = ["linux", "windows"]
 
 # The release binary of the commit installed, into target/release/; built

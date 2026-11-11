@@ -139,7 +139,7 @@ The window waits for Enter before closing, an error included. While it is open, 
 **Settings** (`s`) opens a settings screen in a popup of 70% of the terminal's width and 80% of its height:
 
 ```
- 󰒓 Réglages                                                              1/17
+ 󰒓 Réglages                                                              1/18
 
  Format des nombres ────────────────────────────────────── 4% · 853M · 2,4G ┃
  ▌ Virgule décimale                 2.4G   2,4G                             ┃
@@ -200,12 +200,12 @@ The plugin only opens Herdr's `config.toml`: it never writes it ([ADR 0004](../a
 
 ## Recovering a session
 
-When the panes' shells die together (on Windows, an update of PowerShell from the Microsoft Store or of Windows Terminal closes them all), Herdr's server survives, but takes those panes out, and their agents stop with them. Herdr keeps copies of each session's layout, its snapshots (up to 48, at most one every 15 minutes): the **Récupérer une session…** line of the settings screen, section Session, restores one ([ADR 0010](../adr/0010-session-recovery.md)).
+When the panes' shells die together (on Windows, an update of PowerShell from the Microsoft Store closes them all), Herdr's server survives, but takes those panes out, and their agents stop with them. Herdr keeps copies of each session's layout, its snapshots (up to 48, at most one every 15 minutes): the **Récupérer une session…** line of the settings screen, section Session, restores one ([ADR 0010](../adr/0010-session-recovery.md)).
 
 It opens, in the same popup, the current session's snapshots, the latest first:
 
-- at the top, what the session holds now (`1 espace · 2 onglets · 2 panes · 0 agent`);
-- for each snapshot, its date and age (`11/11 14:05  il y a 2 h 10`), in yellow what the session lacks now (`+3 absents`: an agent is known by its conversation, a shell by its folder), and what it holds. A snapshot that cannot be read, or of a Herdr version the menu does not know, is marked `✗` with the reason, and cannot be restored;
+- at the top, what the session holds now (`Aujourd'hui : 1 espace · 2 onglets · 2 panes · 0 agent`);
+- for each snapshot, its date and age (`11/11 14:05  il y a 2 h 10`), in yellow what the session lacks now (`+3 absents`: an agent is known by its conversation, or by its resume command, a shell by its folder), and what it holds. A snapshot that cannot be read, or whose format is not version 3 of `session.json`, is marked `✗` with the reason, and cannot be restored;
 - below the list, the selected snapshot in detail: its workspaces, its tabs, and each pane with its folder, `shell` or its agent; what the session lacks is marked `+` in yellow. A Claude Code agent shows its conversation's title (`claude · Corrige le test (c73a3ff4)`), else its last prompt, read from Claude Code's files (`~/.claude/projects`, or the folder of `CLAUDE_CONFIG_DIR`); another agent, or a conversation those files do not give, shows the start of its id.
 
 Up and down (or `j`/`k`, the wheel, the mouse) choose a snapshot, Home/End (or `g`/`G`) the first or last, Page Up/Page Down scroll the detail, Escape, `q` or Ctrl+C go back to the settings. Enter opens a terminal window of its own, outside Herdr, as Update does; in that window:
