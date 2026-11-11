@@ -16,9 +16,9 @@ pub const ID: &str = "imsike.sidebar";
 /// The sidebar's settings file, in its config folder.
 pub const SETTINGS_FILE: &str = "sidebar.toml";
 /// How long a value lasts when no run refreshes it, by default.
-pub const TTL_SECONDS: u64 = 20;
+pub(crate) const TTL_SECONDS: u64 = 20;
 /// Process names counted as shells, by default (without `.exe`, any case).
-pub const SHELLS: &[&str] = &[
+pub(crate) const SHELLS: &[&str] = &[
     "bash",
     "sh",
     "zsh",
@@ -31,13 +31,13 @@ pub const SHELLS: &[&str] = &[
 ];
 /// Default thresholds of Herdr's total CPU share, all workspaces (percent of
 /// the machine).
-pub const CPU_LEVELS: Thresholds = [10.0, 25.0, 50.0];
+pub(crate) const CPU_LEVELS: Thresholds = [10.0, 25.0, 50.0];
 /// Default thresholds of its memory (GiB).
-pub const MEMORY_LEVELS: Thresholds = [1.0, 2.0, 4.0];
+pub(crate) const MEMORY_LEVELS: Thresholds = [1.0, 2.0, 4.0];
 /// Default thresholds of the machine's CPU share (percent).
-pub const MACHINE_CPU_LEVELS: Thresholds = [50.0, 70.0, 90.0];
+pub(crate) const MACHINE_CPU_LEVELS: Thresholds = [50.0, 70.0, 90.0];
 /// Default thresholds of the machine's memory in use (percent of its memory).
-pub const MACHINE_MEMORY_LEVELS: Thresholds = [60.0, 75.0, 90.0];
+pub(crate) const MACHINE_MEMORY_LEVELS: Thresholds = [60.0, 75.0, 90.0];
 /// Nerd Font monitor glyph (nf-md-monitor), before the whole machine's figures.
 pub const MACHINE_GLYPH: char = '\u{F0379}';
 
