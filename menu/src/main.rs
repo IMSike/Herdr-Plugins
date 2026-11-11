@@ -27,6 +27,7 @@ mod settings;
 mod stats;
 mod ui;
 mod update;
+mod window;
 
 use config::{Action, Entry};
 use herdr::Context;
