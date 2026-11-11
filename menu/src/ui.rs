@@ -294,7 +294,7 @@ fn visible_rows(height: u16) -> usize {
 }
 
 /// The first entry to draw, moved just enough to show `selected`.
-fn scrolled(top: usize, selected: usize, visible: usize) -> usize {
+pub(crate) fn scrolled(top: usize, selected: usize, visible: usize) -> usize {
     if visible == 0 || selected < top {
         selected
     } else if selected >= top + visible {

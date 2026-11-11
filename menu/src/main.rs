@@ -23,6 +23,7 @@ mod colors;
 mod config;
 mod herdr;
 mod launch;
+mod recover;
 mod settings;
 mod stats;
 mod ui;
@@ -65,11 +66,12 @@ fn main() -> ExitCode {
         Some("edit-tab") => settings::files::open_tab(),
         Some("edit") => settings::files::edit_in_tab(),
         Some("update") => update::run(),
+        Some("recover") => recover::run(),
         Some("startup") => bar::startup(),
         Some("pane-created") => bar::on_pane_created(),
         Some("pane-closed") => bar::on_pane_closed(),
         _ => Err(
-            "usage : herdr-menu open|menu|run|bar|settings|edit-tab|edit|update|startup|pane-created|pane-closed"
+            "usage : herdr-menu open|menu|run|bar|settings|edit-tab|edit|update|recover|startup|pane-created|pane-closed"
                 .into(),
         ),
     };

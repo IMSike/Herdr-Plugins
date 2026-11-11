@@ -17,6 +17,8 @@ toml.workspace = true
 toml_edit.workspace = true
 sysinfo = { workspace = true, features = ["disk"] }
 unicode-width = { version = "0.2.3", default-features = false }
+# Local time, for the dates of the session snapshots.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
 herdr-api = { workspace = true, features = ["test-support"] }

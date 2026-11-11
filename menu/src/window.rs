@@ -149,7 +149,7 @@ fn count_stopping(panes: usize, agents: usize, working: usize) -> String {
 }
 
 /// `1 pane`, `2 panes`.
-fn plural(n: usize, word: &str) -> String {
+pub fn plural(n: usize, word: &str) -> String {
     if n > 1 {
         format!("{n} {word}s")
     } else {

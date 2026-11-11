@@ -4,6 +4,7 @@
 
 mod canvas;
 pub mod files;
+mod sessions;
 mod store;
 mod view;
 
@@ -51,6 +52,7 @@ enum Section {
     Sidebar,
     Colors,
     Files,
+    Session,
 }
 
 impl Section {
@@ -61,6 +63,7 @@ impl Section {
             Self::Sidebar => "Sidebar",
             Self::Colors => "Couleurs par seuil",
             Self::Files => "Configuration",
+            Self::Session => "Session",
         }
     }
 }
@@ -113,6 +116,7 @@ enum Item {
     Levels(Levels),
     OpenFiles,
     Reload,
+    Recover,
 }
 
 impl Item {
@@ -138,12 +142,14 @@ impl Item {
             Self::OpenFiles => "\u{F03EB} Ouvrir les fichiers de configuration…",
             // nf-md-reload, as the `Tools` pane's button
             Self::Reload => "\u{F0453} Recharger la configuration de Herdr",
+            // nf-md-backup_restore
+            Self::Recover => "\u{F006F} Récupérer une session…",
         }
     }
 
     /// Something done on Enter, without a value to show.
     fn is_action(self) -> bool {
-        matches!(self, Self::OpenFiles | Self::Reload)
+        matches!(self, Self::OpenFiles | Self::Reload | Self::Recover)
     }
 }
 
@@ -208,6 +214,8 @@ struct State {
     status: Option<(String, bool)>,
     /// The text being typed for the selected item (shells, thresholds).
     typing: Option<String>,
+    /// Set when the screen closes to show the session's snapshots.
+    recover: bool,
 }
 
 impl State {
@@ -220,6 +228,7 @@ impl State {
             top: 0,
             status: None,
             typing: None,
+            recover: false,
         }
     }
 
@@ -254,6 +263,9 @@ impl State {
             Row::Header(Section::Files),
             Row::Item(Item::OpenFiles),
             Row::Item(Item::Reload),
+            Row::Blank,
+            Row::Header(Section::Session),
+            Row::Item(Item::Recover),
         ]);
         rows
     }
@@ -383,7 +395,7 @@ impl State {
                 }),
                 levels_unit(which),
             ),
-            Item::OpenFiles | Item::Reload => Shown::Action,
+            Item::OpenFiles | Item::Reload | Item::Recover => Shown::Action,
         }
     }
 
@@ -459,6 +471,11 @@ impl State {
             ),
             Item::Reload => (
                 "Recharge le config.toml de Herdr et dit s'il l'a appliqué.",
+                "",
+                String::new(),
+            ),
+            Item::Recover => (
+                "Les snapshots de la session, pour en restaurer un : Herdr redémarre, sur confirmation.",
                 "",
                 String::new(),
             ),
@@ -603,6 +620,10 @@ impl State {
                 Shown::Text(_) | Shown::Levels(..) | Shown::Action => return false,
             }
         }
+        if item == Item::Recover {
+            self.recover = true;
+            return true;
+        }
         if item == Item::OpenFiles {
             match files::open(&self.files) {
                 Ok(_) => {
@@ -695,8 +716,8 @@ impl State {
                 self.typing = Some(text.join(" "));
                 return None;
             }
-            // See `change`: it closes the screen.
-            Item::OpenFiles => return None,
+            // See `change`: they close the screen.
+            Item::OpenFiles | Item::Recover => return None,
             Item::Reload => files::reload(),
         })
     }
@@ -777,7 +798,17 @@ pub fn run() -> Result<(), String> {
     };
     let mut state = State::new(files, menu, sidebar);
     state.status = menu_error.or(sidebar_error).map(|e| (e, true));
-    show(&mut state).map_err(|e| e.to_string())
+    loop {
+        show(&mut state).map_err(|e| e.to_string())?;
+        if !std::mem::take(&mut state.recover) {
+            return Ok(());
+        }
+        // Back from the snapshots, the settings again.
+        match sessions::browse().map_err(|e| e.to_string())? {
+            sessions::Outcome::Back => {}
+            sessions::Outcome::Restoring => return Ok(()),
+        }
+    }
 }
 
 /// Draws the screen; what its parts answer to a click.
@@ -952,10 +983,7 @@ mod tests {
         let mut state = state();
         state.selected = state.items().len() - 1;
         let text = rendered(&state, 70, 14);
-        assert!(
-            text.contains("Recharger la configuration de Herdr"),
-            "{text}"
-        );
+        assert!(text.contains("Récupérer une session"), "{text}");
         assert!(!text.contains("Virgule décimale"), "{text}");
         // The scrollbar's thumb, at the bottom.
         assert!(text.contains('┃'), "{text}");
@@ -979,13 +1007,14 @@ mod tests {
     fn tab_goes_from_section_to_section() {
         let state = state();
         let starts = state.section_starts();
-        assert_eq!(starts.len(), 5);
+        assert_eq!(starts.len(), 6);
         let items = state.items();
         assert_eq!(items[starts[1]], Item::Totals);
         assert_eq!(items[starts[4]], Item::OpenFiles);
         assert_eq!(state.next_section(true), starts[1]);
+        assert_eq!(items[starts[5]], Item::Recover);
         // Back from the first section: round to the last.
-        assert_eq!(state.next_section(false), starts[4]);
+        assert_eq!(state.next_section(false), starts[5]);
         let within = State {
             selected: starts[2] + 1,
             ..state
@@ -1015,6 +1044,7 @@ mod tests {
         for item in [
             Item::OpenFiles,
             Item::Reload,
+            Item::Recover,
             Item::Shells,
             Item::Levels(Levels::Cpu),
         ] {
@@ -1084,7 +1114,7 @@ mod tests {
         // `written` says so.
         for item in state.items() {
             let said = match item {
-                Item::OpenFiles | Item::Reload => continue,
+                Item::OpenFiles | Item::Reload | Item::Recover => continue,
                 Item::Shells => state.save_shells("pwsh, bash"),
                 Item::Levels(which) => state.save_levels(which, "1 2 3"),
                 _ => state.step(item, true).unwrap(),

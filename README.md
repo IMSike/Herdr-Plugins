@@ -10,7 +10,7 @@
 
 | Plugin | Contents |
 |---|---|
-| [`menu`](docs/en/plugins/menu.md) | Starts a tool (lazygit, gh-dash, VS Code…) from a `Tools` pane of icons above the file explorer, or from a popup menu; figures on the workspace folder; updates Herdr and the plugins, green when a new version is out; opens the settings |
+| [`menu`](docs/en/plugins/menu.md) | Starts a tool (lazygit, gh-dash, VS Code…) from a `Tools` pane of icons above the file explorer, or from a popup menu; figures on the workspace folder; updates Herdr and the plugins, green when a new version is out; opens the settings; recovers the agents a session lost |
 | [`sidebar`](docs/en/plugins/sidebar.md) | A workspace → agents tree in Herdr's Agents panel, with CPU, memory and shell counts; totals of Herdr's processes and of the whole machine for the menu's `Tools` pane or the tab bar |
 
 ## Installation
@@ -31,7 +31,7 @@ Updates are never automatic: `herdr plugin update` fetches the latest commit of 
 |---|---|
 | [Plugins](docs/en/README.md) | What each plugin shows or does, implications, how to turn it off |
 | [Adding a plugin](docs/en/adding-plugins.md) | Layout, crate, manifest, trying it, docs |
-| [Architecture decisions](docs/en/adr/) | Why Rust and one Cargo workspace, versions and updates, the menu above the file explorer, plugin settings, updating Herdr from the menu, threshold colors, state per session, prebuilt binaries, new versions shown |
+| [Architecture decisions](docs/en/adr/) | Why Rust and one Cargo workspace, versions and updates, the menu above the file explorer, plugin settings, updating Herdr from the menu, threshold colors, state per session, prebuilt binaries, new versions shown, recovering a session |
 
 ## Contributing
 

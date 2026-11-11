@@ -2,7 +2,7 @@
 
 **English** · [Français](../../fr/plugins/menu.md)
 
-Starts a tool (lazygit, gh-dash, VS Code…) from one click or one key, updates Herdr and the plugins installed from GitHub, and sets the plugins. In a tab that shows the file explorer of [herdr-explorer](https://github.com/gcaudan/herdr-explorer), the menu is a short `Tools` pane above it, in its column: a row of icons, the name of the one under the mouse, and the CPU and memory of Herdr and of the machine. Elsewhere it is a small popup. Tools that run in the terminal open in a large popup over the current workspace; tabs and panes stay as they are behind it, and quitting the tool closes the popup.
+Starts a tool (lazygit, gh-dash, VS Code…) from one click or one key, updates Herdr and the plugins installed from GitHub, sets the plugins, and recovers the panes and agents a session lost. In a tab that shows the file explorer of [herdr-explorer](https://github.com/gcaudan/herdr-explorer), the menu is a short `Tools` pane above it, in its column: a row of icons, the name of the one under the mouse, and the CPU and memory of Herdr and of the machine. Elsewhere it is a small popup. Tools that run in the terminal open in a large popup over the current workspace; tabs and panes stay as they are behind it, and quitting the tool closes the popup.
 
 ```
    󰊢    󰊤    󰨞    󰋊    󰄪    󰚰    󰒓
@@ -185,6 +185,7 @@ A file that is a link (deployed by stow or chezmoi, say) stays a link: the file 
 | Seuils CPU, Seuils mémoire (Herdr; machine) | the four sets of thresholds: Enter to type three increasing values separated by spaces (`10 25 50`), Enter to save, Escape to cancel | `sidebar.toml` |
 | Ouvrir les fichiers de configuration… | opens the files in an editor, see below | |
 | Recharger la configuration de Herdr | reloads Herdr's `config.toml` and says whether Herdr applied it, in part (a section it refuses or that needs a restart keeps its current settings: the first reason is shown), or refused it | |
+| Récupérer une session… | opens the session's snapshots, to restore one, see [Recovering a session](#recovering-a-session) | |
 
 The Sidebar and color lines only show when the [sidebar](sidebar.md) plugin is installed. When the sidebar ignores its `sidebar.toml` (unknown setting, thresholds out of order…), the screen says why in red and shows the defaults, the values the sidebar uses. A file is written with its comments and its other settings kept: a setting commented out in it takes its value in its place. A plugin's file that does not exist yet is first created from its template, every setting commented out at its default.
 
@@ -196,6 +197,30 @@ The Sidebar and color lines only show when the [sidebar](sidebar.md) plugin is i
 Opened from a `Tools` pane, the screen also turns that pane to two buttons: **󰑓 Recharger** (or `r`, Enter) reloads Herdr's configuration once the files are saved, **󰁍 Retour** brings the icons back. The sidebar reads its file at each run, and the `Tools` pane re-reads `menu.toml` when it changes: only Herdr's `config.toml` needs the reload.
 
 The plugin only opens Herdr's `config.toml`: it never writes it ([ADR 0004](../adr/0004-plugin-settings.md), [ADR 0005](../adr/0005-herdr-update-entry.md)).
+
+## Recovering a session
+
+When the panes' shells die together (on Windows, an update of PowerShell from the Microsoft Store or of Windows Terminal closes them all), Herdr's server survives, but takes those panes out, and their agents stop with them. Herdr keeps copies of each session's layout, its snapshots (up to 48, at most one every 15 minutes): the **Récupérer une session…** line of the settings screen, section Session, restores one ([ADR 0010](../adr/0010-session-recovery.md)).
+
+It opens, in the same popup, the current session's snapshots, the latest first:
+
+- at the top, what the session holds now (`1 espace · 2 onglets · 2 panes · 0 agent`);
+- for each snapshot, its date and age (`11/11 14:05  il y a 2 h 10`), in yellow what the session lacks now (`+3 absents`: an agent is known by its conversation, a shell by its folder), and what it holds. A snapshot that cannot be read, or of a Herdr version the menu does not know, is marked `✗` with the reason, and cannot be restored;
+- below the list, the selected snapshot in detail: its workspaces, its tabs, and each pane with its folder, `shell` or its agent; what the session lacks is marked `+` in yellow. A Claude Code agent shows its conversation's title (`claude · Corrige le test (c73a3ff4)`), else its last prompt, read from Claude Code's files (`~/.claude/projects`, or the folder of `CLAUDE_CONFIG_DIR`); another agent, or a conversation those files do not give, shows the start of its id.
+
+Up and down (or `j`/`k`, the wheel, the mouse) choose a snapshot, Home/End (or `g`/`G`) the first or last, Page Up/Page Down scroll the detail, Escape, `q` or Ctrl+C go back to the settings. Enter opens a terminal window of its own, outside Herdr, as Update does; in that window:
+
+1. It recalls the snapshot and what it holds, how many panes close and agents stop, and asks `Restaurer ? [o/N]`. Any answer but `o`, `oui`, `y` or `yes` changes nothing.
+2. Once confirmed, it copies the session's `session.json` to `session-before-restore-<date>-<time>.json`, beside it, stops the server (`herdr server stop`): **every pane closes, those that survived included**, and writes the snapshot over `session.json`.
+3. It puts the command that starts Herdr again in the clipboard (`herdr`, or `herdr --session <name>` for a named session), and shows it to copy later. Once pasted in a terminal, Herdr recreates the snapshot's panes in their folders and resumes each agent on its conversation (Herdr's `resume_agents_on_restore` setting, on by default).
+
+What is not recovered:
+
+- what changed in the 15 minutes before the panes died: Herdr may not have written a snapshot that holds it yet;
+- an agent's turn under way: it comes back after its last saved message;
+- what ran in a pane without being an agent (a dev server, a watcher): the pane comes back as a shell in its folder.
+
+To go back, server stopped, copy the `session-before-restore-*.json` file over `session.json`, in the session's folder (`herdr session list --json` gives it).
 
 ## New versions
 
@@ -238,6 +263,7 @@ The result is kept in the plugin's state folder (`updates.json`) and shared by e
 **Settings and update**
 
 - The settings screen is a popup: Herdr waits while it is open, but it only stays open while you change settings. The editors run outside it, in their window or in a tab.
+- The recovery screen reads the current session's snapshots and `session.json`, and, for the titles, parses only the title lines of Claude Code's conversations: it writes nothing. Those files are Claude Code's, not a documented format: when they change, the screen shows the ids alone. Only the window, once the restore is confirmed, writes in Herdr's session folder.
 - The update window runs outside Herdr, without the variable by which Herdr tells its panes (`HERDR_ENV`); it keeps running if the `Tools` pane closes.
 - The search for new versions asks `herdr.dev` (one request) and GitHub (one per plugin installed from GitHub), sending nothing but these requests, at Herdr's start (by the plugin's startup command) then every 4 hours (by a `Tools` pane, on a thread of its own: it never waits). Each request stops after 20 seconds. What does not answer keeps what the last check found: offline, nothing new turns green, a new version already found stays shown, and when nothing answered at all, a `Tools` pane checks again 10 minutes later.
 - A plugin's commit is compared, not its release: right after a push to its repository, before its release is published, a plugin can turn green, and its update build with `cargo` or fail ([ADR 0008](../adr/0008-prebuilt-binaries.md)).
@@ -249,4 +275,4 @@ Commands run as your user, with your environment, like any program you would sta
 
 ## Turn it off
 
-To drop a built-in entry, list in `menu.toml` the entries to keep. To turn the whole menu off, remove the key from `config.toml`, then `herdr plugin disable imsike.menu` (or `herdr plugin uninstall imsike.menu`): the `Tools` panes close with their explorer; those Herdr restores at its next start, plain shells by then, are closed by hand. `menu.toml` stays in the config folder, and the figures' files (`stats-<hash>.json`, with their lock `stats-<hash>.lock`), the update's lock (`update.lock`), the last search for new versions (`updates.json`, with its lock `updates.lock`), and the sessions' folders (`sessions`: the tabs' locks and the `bars` folder of each session) in the state folder, until you delete them.
+To drop a built-in entry, list in `menu.toml` the entries to keep. To turn the whole menu off, remove the key from `config.toml`, then `herdr plugin disable imsike.menu` (or `herdr plugin uninstall imsike.menu`): the `Tools` panes close with their explorer; those Herdr restores at its next start, plain shells by then, are closed by hand. `menu.toml` stays in the config folder, and the figures' files (`stats-<hash>.json`, with their lock `stats-<hash>.lock`), the update's lock (`update.lock`), the last search for new versions (`updates.json`, with its lock `updates.lock`), and the sessions' folders (`sessions`: the tabs' locks and the `bars` folder of each session) in the state folder, and the copies made before a restore (`session-before-restore-*.json`) in Herdr's session folders, until you delete them.

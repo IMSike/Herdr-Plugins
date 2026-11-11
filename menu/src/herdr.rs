@@ -52,6 +52,11 @@ pub struct Session {
     /// The session `herdr` runs without `--session`.
     #[serde(default)]
     pub default: bool,
+    /// Whether its server runs.
+    #[serde(default)]
+    pub running: bool,
+    /// Where its `session.json` and `session-snapshots/` are.
+    pub session_dir: PathBuf,
     pub socket_path: PathBuf,
 }
 
@@ -82,6 +87,12 @@ impl Session {
 /// The session this process belongs to: the one of its socket
 /// (`HERDR_SOCKET_PATH`), the default one without.
 pub fn current_session() -> Result<Session, String> {
+    let socket = std::env::var_os(herdr_api::env::SOCKET_PATH).map(PathBuf::from);
+    session_of(sessions()?, socket.as_deref()).ok_or_else(|| "session introuvable".into())
+}
+
+/// Every Herdr session, running or not.
+pub fn sessions() -> Result<Vec<Session>, String> {
     let output = command(&["session", "list", "--json"])
         .output()
         .map_err(|e| format!("impossible de lancer « herdr session list » : {e}"))?;
@@ -97,8 +108,7 @@ pub fn current_session() -> Result<Session, String> {
     }
     let sessions: Sessions = serde_json::from_slice(&output.stdout)
         .map_err(|e| format!("liste des sessions illisible : {e}"))?;
-    let socket = std::env::var_os(herdr_api::env::SOCKET_PATH).map(PathBuf::from);
-    session_of(sessions.sessions, socket.as_deref()).ok_or_else(|| "session introuvable".into())
+    Ok(sessions.sessions)
 }
 
 /// The session of `socket` among `sessions`; the default one without.
@@ -111,7 +121,7 @@ fn session_of(sessions: Vec<Session>, socket: Option<&std::path::Path>) -> Optio
 
 /// Whether two paths name the same file: Windows ignores case and takes
 /// either slash.
-fn same_path(a: &std::path::Path, b: &std::path::Path) -> bool {
+pub fn same_path(a: &std::path::Path, b: &std::path::Path) -> bool {
     if cfg!(windows) {
         let plain = |p: &std::path::Path| p.to_string_lossy().replace('/', "\\").to_lowercase();
         plain(a) == plain(b)

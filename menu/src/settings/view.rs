@@ -20,16 +20,16 @@ const fn rgb(r: u8, g: u8, b: u8) -> Color {
 // Gruvbox (dark), as the bars of the `Tools` pane.
 const DARK: Color = rgb(0x1d, 0x20, 0x21);
 const ON_ACCENT: Color = rgb(0x28, 0x28, 0x28);
-const BG1: Color = TRACK_COLOR;
-const BG2: Color = rgb(0x50, 0x49, 0x45);
+pub(super) const BG1: Color = TRACK_COLOR;
+pub(super) const BG2: Color = rgb(0x50, 0x49, 0x45);
 const BG3: Color = rgb(0x66, 0x5c, 0x54);
-const FG: Color = rgb(0xeb, 0xdb, 0xb2);
-const FG4: Color = rgb(0xa8, 0x99, 0x84);
-const GREY: Color = rgb(0x92, 0x83, 0x74);
-const YELLOW: Color = level_color(Level::Yellow);
-const AQUA: Color = rgb(0x8e, 0xc0, 0x7c);
+pub(super) const FG: Color = rgb(0xeb, 0xdb, 0xb2);
+pub(super) const FG4: Color = rgb(0xa8, 0x99, 0x84);
+pub(super) const GREY: Color = rgb(0x92, 0x83, 0x74);
+pub(super) const YELLOW: Color = level_color(Level::Yellow);
+pub(super) const AQUA: Color = rgb(0x8e, 0xc0, 0x7c);
 const GREEN: Color = level_color(Level::Green);
-const RED: Color = level_color(Level::Red);
+pub(super) const RED: Color = level_color(Level::Red);
 
 /// The levels between thresholds, in order.
 const LEVELS: [Level; 4] = [Level::Green, Level::Yellow, Level::Orange, Level::Red];
@@ -211,7 +211,7 @@ fn thumb(len: usize, visible: usize, top: usize) -> (usize, usize) {
 }
 
 /// `text` cut to `cells`, with `…` when it is cut.
-fn ellipsize(text: &str, cells: usize) -> String {
+pub(super) fn ellipsize(text: &str, cells: usize) -> String {
     if width(text) <= cells {
         text.to_string()
     } else if cells == 0 {

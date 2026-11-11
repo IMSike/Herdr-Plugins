@@ -2,7 +2,7 @@
 
 [English](../../en/plugins/menu.md) · **Français**
 
-Lance un outil (lazygit, gh-dash, VS Code…) d'un clic ou d'une touche, met à jour Herdr et les plugins installés depuis GitHub, et règle les plugins. Dans un onglet qui affiche l'explorateur de fichiers de [herdr-explorer](https://github.com/gcaudan/herdr-explorer), le menu est un petit pane `Tools` au-dessus de lui, dans sa colonne : une ligne d'icônes, le nom de celle sous la souris, et le CPU et la mémoire de Herdr et de la machine. Ailleurs, c'est un petit popup. Les outils en terminal s'ouvrent dans un grand popup au-dessus du workspace courant ; les onglets et les panes restent tels quels derrière, et quitter l'outil ferme le popup.
+Lance un outil (lazygit, gh-dash, VS Code…) d'un clic ou d'une touche, met à jour Herdr et les plugins installés depuis GitHub, règle les plugins, et récupère les panes et les agents qu'une session a perdus. Dans un onglet qui affiche l'explorateur de fichiers de [herdr-explorer](https://github.com/gcaudan/herdr-explorer), le menu est un petit pane `Tools` au-dessus de lui, dans sa colonne : une ligne d'icônes, le nom de celle sous la souris, et le CPU et la mémoire de Herdr et de la machine. Ailleurs, c'est un petit popup. Les outils en terminal s'ouvrent dans un grand popup au-dessus du workspace courant ; les onglets et les panes restent tels quels derrière, et quitter l'outil ferme le popup.
 
 ```
    󰊢    󰊤    󰨞    󰋊    󰄪    󰚰    󰒓
@@ -185,6 +185,7 @@ Un fichier qui est un lien (déployé par stow ou chezmoi, par exemple) reste un
 | Seuils CPU, Seuils mémoire (Herdr ; machine) | les quatre jeux de seuils : Entrée pour taper trois valeurs croissantes séparées par des espaces (`10 25 50`), Entrée pour enregistrer, Échap pour annuler | `sidebar.toml` |
 | Ouvrir les fichiers de configuration… | ouvre les fichiers dans un éditeur, voir plus bas | |
 | Recharger la configuration de Herdr | recharge le `config.toml` de Herdr et dit si Herdr l'a appliqué, en partie (une section qu'il refuse ou qui demande un redémarrage garde ses réglages actuels : la première raison est affichée), ou refusé | |
+| Récupérer une session… | ouvre les snapshots de la session, pour en restaurer un, voir [Récupérer une session](#récupérer-une-session) | |
 
 Les lignes Sidebar et Couleurs n'apparaissent que si le plugin [sidebar](sidebar.md) est installé. Quand la sidebar ignore son `sidebar.toml` (réglage inconnu, seuils pas en ordre…), l'écran dit pourquoi en rouge et affiche les valeurs par défaut, celles que la sidebar utilise. Un fichier est écrit en gardant ses commentaires et ses autres réglages : un réglage en commentaire y prend sa valeur à sa place. Le fichier d'un plugin qui n'existe pas encore est d'abord créé depuis son modèle, tous les réglages en commentaire à leur valeur par défaut.
 
@@ -196,6 +197,30 @@ Les lignes Sidebar et Couleurs n'apparaissent que si le plugin [sidebar](sidebar
 Ouvert depuis un pane `Tools`, l'écran fait aussi passer ce pane à deux boutons : **󰑓 Recharger** (ou `r`, Entrée) recharge la configuration de Herdr une fois les fichiers enregistrés, **󰁍 Retour** ramène les icônes. La sidebar lit son fichier à chaque passage, et le pane `Tools` relit `menu.toml` quand il change : seul le `config.toml` de Herdr demande le rechargement.
 
 Le plugin ne fait qu'ouvrir le `config.toml` de Herdr : il ne l'écrit jamais ([ADR 0004](../adr/0004-plugin-settings.md), [ADR 0005](../adr/0005-herdr-update-entry.md)).
+
+## Récupérer une session
+
+Quand les shells des panes meurent ensemble (sous Windows, une mise à jour de PowerShell du Microsoft Store ou de Windows Terminal les ferme tous), le serveur Herdr survit, mais retire ces panes, et leurs agents s'arrêtent avec eux. Herdr garde des copies de la mise en page de chaque session, ses snapshots (jusqu'à 48, une toutes les 15 minutes au plus) : la ligne **Récupérer une session…** de l'écran des réglages, section Session, en restaure un ([ADR 0010](../adr/0010-session-recovery.md)).
+
+Elle ouvre, dans le même popup, les snapshots de la session courante, du plus récent au plus ancien :
+
+- en haut, ce que contient la session aujourd'hui (`1 espace · 2 onglets · 2 panes · 0 agent`) ;
+- pour chaque snapshot, sa date et son âge (`11/11 14:05  il y a 2 h 10`), en jaune ce qui manque aujourd'hui à la session (`+3 absents` : un agent se reconnaît à sa conversation, un shell à son dossier), et ce qu'il contient. Un snapshot illisible, ou d'une version de Herdr que le menu ne connaît pas, est marqué `✗` avec la raison, et ne peut pas être restauré ;
+- sous la liste, le snapshot choisi en détail : ses espaces, ses onglets, et chaque pane avec son dossier, `shell` ou son agent ; ce qui manque à la session est marqué `+` en jaune. Un agent Claude Code montre le titre de sa conversation (`claude · Corrige le test (c73a3ff4)`), sinon son dernier message, lus dans les fichiers de Claude Code (`~/.claude/projects`, ou le dossier de `CLAUDE_CONFIG_DIR`) ; un autre agent, ou une conversation que ces fichiers ne donnent pas, montre le début de son identifiant.
+
+Haut et bas (ou `j`/`k`, la molette, la souris) choisissent un snapshot, Début/Fin (ou `g`/`G`) le premier ou le dernier, Page préc./Page suiv. font défiler le détail, Échap, `q` ou Ctrl+C reviennent aux réglages. Entrée ouvre une fenêtre de terminal à part, hors de Herdr, comme Update ; dans cette fenêtre :
+
+1. Elle rappelle le snapshot et ce qu'il contient, combien de panes se ferment et d'agents s'arrêtent, et demande `Restaurer ? [o/N]`. Toute autre réponse que `o`, `oui`, `y` ou `yes` ne change rien.
+2. Une fois confirmé, elle copie le `session.json` de la session dans `session-before-restore-<date>-<heure>.json`, à côté de lui, arrête le serveur (`herdr server stop`) : **tous les panes se ferment, y compris ceux qui avaient survécu**, et écrit le snapshot à la place de `session.json`.
+3. Elle met la commande qui relance Herdr dans le presse-papiers (`herdr`, ou `herdr --session <nom>` pour une session nommée), et l'affiche pour la recopier plus tard. Une fois collée dans un terminal, Herdr recrée les panes du snapshot dans leurs dossiers et relance chaque agent sur sa conversation (le réglage `resume_agents_on_restore` de Herdr, actif par défaut).
+
+Ce qui n'est pas récupéré :
+
+- ce qui a changé dans les 15 minutes avant la mort des panes : Herdr n'a peut-être pas encore écrit de snapshot qui le contienne ;
+- le tour en cours d'un agent : il revient après son dernier message enregistré ;
+- ce qui tournait dans un pane sans être un agent (un serveur de développement, un watcher) : le pane revient comme un shell dans son dossier.
+
+Pour revenir en arrière, serveur arrêté, copiez le fichier `session-before-restore-*.json` à la place de `session.json`, dans le dossier de la session (`herdr session list --json` le donne).
 
 ## Nouvelles versions
 
@@ -238,6 +263,7 @@ Le résultat est gardé dans le dossier d'état du plugin (`updates.json`) et pa
 **Réglages et mise à jour**
 
 - L'écran des réglages est un popup : Herdr attend tant qu'il est ouvert, mais il ne reste ouvert que le temps de changer des réglages. Les éditeurs tournent en dehors, dans leur fenêtre ou dans un onglet.
+- L'écran de récupération lit les snapshots et le `session.json` de la session courante, et, pour les titres, ne parse que les lignes de titre des conversations de Claude Code : il n'écrit rien. Ces fichiers sont ceux de Claude Code, pas un format documenté : s'ils changent, l'écran n'affiche plus que les identifiants. Seule la fenêtre, une fois la restauration confirmée, écrit dans le dossier de la session de Herdr.
 - La fenêtre de mise à jour tourne hors de Herdr, sans la variable par laquelle Herdr signale ses panes (`HERDR_ENV`) ; elle continue si le pane `Tools` se ferme.
 - La recherche des nouvelles versions interroge `herdr.dev` (une requête) et GitHub (une par plugin installé depuis GitHub), sans rien envoyer d'autre que ces requêtes, au démarrage de Herdr (par la commande de démarrage du plugin) puis toutes les 4 heures (par un pane `Tools`, sur un fil à part : il n'attend jamais). Chaque requête s'arrête au bout de 20 secondes. Ce qui ne répond pas garde ce que la vérification précédente avait trouvé : hors ligne, rien de nouveau ne passe au vert, une nouvelle version déjà trouvée reste affichée, et quand rien n'a répondu, un pane `Tools` vérifie de nouveau 10 minutes plus tard.
 - Le commit d'un plugin est comparé, pas sa release : juste après un push sur son dépôt, avant la publication de sa release, un plugin peut passer au vert, et sa mise à jour compiler avec `cargo` ou échouer ([ADR 0008](../adr/0008-prebuilt-binaries.md)).
@@ -249,4 +275,4 @@ Les commandes tournent sous votre compte, avec votre environnement, comme tout p
 
 ## Désactiver
 
-Pour retirer une entrée intégrée, listez dans `menu.toml` les entrées à garder. Pour désactiver tout le menu, retirez la touche de `config.toml`, puis `herdr plugin disable imsike.menu` (ou `herdr plugin uninstall imsike.menu`) : les panes `Tools` se ferment avec leur explorateur ; ceux que Herdr restaure à son démarrage suivant, devenus de simples shells, se ferment à la main. `menu.toml` reste dans le dossier de configuration, et les fichiers des chiffres (`stats-<hash>.json`, avec leur verrou `stats-<hash>.lock`), le verrou de la mise à jour (`update.lock`), la dernière recherche des nouvelles versions (`updates.json`, avec son verrou `updates.lock`), et les dossiers des sessions (`sessions` : les verrous des onglets et le dossier `bars` de chaque session) dans le dossier d'état, jusqu'à ce que vous les supprimiez.
+Pour retirer une entrée intégrée, listez dans `menu.toml` les entrées à garder. Pour désactiver tout le menu, retirez la touche de `config.toml`, puis `herdr plugin disable imsike.menu` (ou `herdr plugin uninstall imsike.menu`) : les panes `Tools` se ferment avec leur explorateur ; ceux que Herdr restaure à son démarrage suivant, devenus de simples shells, se ferment à la main. `menu.toml` reste dans le dossier de configuration, et les fichiers des chiffres (`stats-<hash>.json`, avec leur verrou `stats-<hash>.lock`), le verrou de la mise à jour (`update.lock`), la dernière recherche des nouvelles versions (`updates.json`, avec son verrou `updates.lock`), et les dossiers des sessions (`sessions` : les verrous des onglets et le dossier `bars` de chaque session) dans le dossier d'état, et les copies faites avant une restauration (`session-before-restore-*.json`) dans les dossiers des sessions de Herdr, jusqu'à ce que vous les supprimiez.
