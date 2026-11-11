@@ -65,7 +65,7 @@ fn read_title(path: &Path) -> Option<String> {
     let mut reader = std::io::BufReader::new(file);
     // From the middle of a line, the first one is cut: passed over.
     if start > 0 {
-        reader.read_until(b'\n', &mut Vec::new()).ok()?;
+        reader.skip_until(b'\n').ok()?;
     }
     let (title, prompt) = match scan(&mut reader) {
         (None, _) if start > 0 => {
@@ -164,5 +164,17 @@ mod tests {
         let path = dir.join("start.jsonl");
         std::fs::write(&path, [title("Début"), filler, prompt.into()].concat()).unwrap();
         assert_eq!(read_title(&path).as_deref(), Some("Début"));
+        // The end read starts on a line, which is passed over like a cut
+        // one: the title it holds is found by reading the whole file.
+        let path = dir.join("boundary.jsonl");
+        let line = title("Seul");
+        // One line of `TAIL - line.len()` bytes after it.
+        let (open, close) = ("{\"type\":\"user\",\"message\":\"", "\"}\n");
+        let fill = "x".repeat(TAIL as usize - line.len() - open.len() - close.len());
+        let start = "{\"type\":\"user\"}\n";
+        std::fs::write(&path, [start, &line, open, &fill, close].concat()).unwrap();
+        let len = std::fs::metadata(&path).unwrap().len();
+        assert_eq!(len - TAIL, start.len() as u64);
+        assert_eq!(read_title(&path).as_deref(), Some("Seul"));
     }
 }
