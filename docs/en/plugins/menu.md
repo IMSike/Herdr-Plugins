@@ -202,7 +202,7 @@ The plugin only opens Herdr's `config.toml`: it never writes it ([ADR 0004](../a
 When Herdr or a plugin installed from GitHub has a new version, the Update icon of the `Tools` pane turns green, and its name on hover says which (`Update · Herdr 0.9.6 · Explorer`); in the popup menu, the Update line is green, followed by the same list. The check runs at Herdr's start, then every 4 hours while a `Tools` pane is open ([ADR 0009](../adr/0009-new-version-check.md)):
 
 - **Herdr**: its installed version (`herdr status --json`) is compared with the one of `https://herdr.dev/latest.json`, the file Herdr's own check asks (with `curl`). On the preview channel nothing is compared: Herdr announces its new versions there itself.
-- **Plugins**: for each plugin installed from GitHub, the installed commit (which Herdr gives) is compared with the one the install's ref now names on GitHub (`git ls-remote`, the default branch without `--ref`), as `herdr plugin update` would. A plugin installed at a given commit never changes.
+- **Plugins**: for each plugin installed from GitHub, the installed commit (which Herdr gives) is compared with the one the install's ref now names on GitHub (`git ls-remote`: the default branch without `--ref`, otherwise the branch, or the tag, of that exact name). A plugin installed at a given commit never changes.
 
 The result is kept in the plugin's state folder (`updates.json`) and shared by every `Tools` pane; one check runs at a time (`updates.lock`). To check and show nothing, `check_updates = false` (the **Signaler les mises à jour** line of the settings): the Update entry itself still looks for what has a new version when you click it.
 

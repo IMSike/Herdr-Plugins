@@ -2,9 +2,9 @@
 //! the `Update` entry offers, and what turns its icon green. Herdr's latest
 //! stable version is read from the file its own check reads
 //! (`herdr.dev/latest.json`); a plugin's latest commit from its repository
-//! (`git ls-remote`), as `herdr plugin update` fetches it. The result is kept
-//! in the plugin's state folder for every `Tools` pane, and checked again
-//! at Herdr's start and every `CHECK_EVERY`.
+//! (`git ls-remote`), on the branch or tag it was installed from. The
+//! result is kept in the plugin's state folder for every `Tools` pane, and
+//! checked again at Herdr's start and every `CHECK_EVERY`.
 
 use crate::herdr;
 use serde::{Deserialize, Serialize};
@@ -260,31 +260,48 @@ fn has_moved(source: &Source) -> bool {
         return false;
     };
     let url = format!("https://github.com/{}/{}.git", source.owner, source.repo);
-    let wanted = source.requested_ref.as_deref().unwrap_or("HEAD");
+    let names = ref_names(source.requested_ref.as_deref());
     let mut command = Command::new("git");
     // No prompt, nor credentials window, for a repository gone private.
     command
-        .args(["-c", "credential.helper=", "ls-remote", &url, wanted])
+        .args(["-c", "credential.helper=", "ls-remote", &url])
+        .args(&names)
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GCM_INTERACTIVE", "never");
     output_within(&mut command, ANSWER_WITHIN)
         .ok()
-        .and_then(|text| head_of(&text))
+        .and_then(|text| commit_of(&text, &names))
         .is_some_and(|latest| latest != *installed)
 }
 
-/// The commit `git ls-remote` gives for a ref: a tag's own commit (its
-/// `^{}` line) rather than the tag object.
-fn head_of(listing: &str) -> Option<String> {
+/// The full names a ref may stand for, by preference: the default branch
+/// (`HEAD`); a branch, then a tag's commit, then the tag; a full name as
+/// it is.
+fn ref_names(wanted: Option<&str>) -> Vec<String> {
+    match wanted {
+        None => vec!["HEAD".into()],
+        Some(full) if full.starts_with("refs/") => vec![format!("{full}^{{}}"), full.into()],
+        Some(name) => vec![
+            format!("refs/heads/{name}"),
+            format!("refs/tags/{name}^{{}}"),
+            format!("refs/tags/{name}"),
+        ],
+    }
+}
+
+/// The commit of the first of `names` that `git ls-remote` listed: only
+/// a name in full, never one that merely ends like it.
+fn commit_of(listing: &str, names: &[String]) -> Option<String> {
     let lines: Vec<(&str, &str)> = listing
         .lines()
         .filter_map(|line| line.split_once('\t'))
         .collect();
-    lines
-        .iter()
-        .find(|(_, name)| name.ends_with("^{}"))
-        .or(lines.first())
-        .map(|(commit, _)| commit.to_string())
+    names.iter().find_map(|name| {
+        lines
+            .iter()
+            .find(|(_, listed)| listed == name)
+            .map(|(commit, _)| commit.to_string())
+    })
 }
 
 /// What `command` writes, once it ended well within `limit`; it is stopped
@@ -343,13 +360,30 @@ mod tests {
     }
 
     #[test]
-    fn a_tag_s_commit_is_its_peeled_line() {
-        assert_eq!(head_of("abc\tHEAD\n").as_deref(), Some("abc"));
+    fn a_ref_is_found_by_its_full_name_only() {
+        let listing = "a\trefs/heads/x/main\nb\trefs/tags/main\nc\trefs/tags/main^{}\n";
+        // A branch first, then a tag's commit rather than the tag object.
         assert_eq!(
-            head_of("tag1\trefs/tags/v1\ncommit1\trefs/tags/v1^{}\n").as_deref(),
-            Some("commit1")
+            commit_of(listing, &ref_names(Some("main"))).as_deref(),
+            Some("c")
         );
-        assert_eq!(head_of(""), None);
+        let branch = format!("{listing}d\trefs/heads/main\n");
+        assert_eq!(
+            commit_of(&branch, &ref_names(Some("main"))).as_deref(),
+            Some("d")
+        );
+        assert_eq!(
+            commit_of("e\tHEAD\n", &ref_names(None)).as_deref(),
+            Some("e")
+        );
+        assert_eq!(
+            commit_of("a\trefs/heads/x/dev\n", &ref_names(Some("dev"))),
+            None
+        );
+        assert_eq!(
+            ref_names(Some("refs/tags/v1")),
+            ["refs/tags/v1^{}", "refs/tags/v1"]
+        );
     }
 
     #[test]
