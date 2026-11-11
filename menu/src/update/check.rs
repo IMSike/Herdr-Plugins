@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 /// How often the versions are checked again.
@@ -298,19 +299,23 @@ fn output_within(command: &mut Command, limit: Duration) -> Result<String, Strin
         .spawn()
         .map_err(|e| e.to_string())?;
     let mut stdout = child.stdout.take().ok_or("sortie illisible")?;
-    // Read meanwhile: a full pipe would hold the program up.
-    let reader = std::thread::spawn(move || {
+    // Read meanwhile: a full pipe would hold the program up. A program it
+    // started may keep the pipe open once it ended: the reading is not
+    // waited for past `limit`.
+    let (send, read) = mpsc::channel();
+    std::thread::spawn(move || {
         let mut text = String::new();
-        stdout.read_to_string(&mut text).map(|_| text)
+        let _ = send.send(stdout.read_to_string(&mut text).map(|_| text));
     });
     let deadline = Instant::now() + limit;
     loop {
         match child.try_wait().map_err(|e| e.to_string())? {
             Some(status) if status.success() => {
-                return reader
-                    .join()
-                    .map_err(|_| "sortie illisible".to_string())?
-                    .map_err(|e| e.to_string());
+                let left = deadline.saturating_duration_since(Instant::now());
+                return match read.recv_timeout(left) {
+                    Ok(text) => text.map_err(|e| e.to_string()),
+                    Err(_) => Err("sortie illisible".into()),
+                };
             }
             Some(status) => return Err(format!("échec ({status})")),
             None if Instant::now() >= deadline => {
