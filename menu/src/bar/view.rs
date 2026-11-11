@@ -495,14 +495,16 @@ impl<'a> State<'a> {
     fn read_versions(&mut self) {
         if !self.view.menu.check_updates {
             self.view.new_versions = None;
+            // Read again once turned back on.
+            self.versions_changed = None;
             return;
         }
         let changed = modified(self.versions_file.as_deref());
         if changed != self.versions_changed {
             self.versions_changed = changed;
             self.versions = check::last();
+            self.view.new_versions = self.versions.as_ref().and_then(|c| c.found.news());
         }
-        self.view.new_versions = self.versions.as_ref().and_then(|c| c.found.news());
         if Instant::now() >= self.check_versions_from
             && self.versions.as_ref().is_none_or(Checked::is_due)
         {
