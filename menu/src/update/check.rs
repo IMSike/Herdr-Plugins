@@ -267,11 +267,12 @@ struct Installed {
 }
 
 /// The plugins installed from GitHub, each with whether its branch or tag
-/// now names another commit (`None`: no answer).
+/// now names another commit (`None`: no answer). The repositories are
+/// asked all at once.
 fn plugins() -> Result<Vec<(Plugin, Option<bool>)>, String> {
     let listed: Vec<Value> = herdr_api::request_field("plugin.list", json!({}), "plugins")?;
     // An entry Herdr describes otherwise (its manifest gone…) is left out.
-    Ok(listed
+    let from_github: Vec<(Plugin, Source)> = listed
         .into_iter()
         .filter_map(|p| serde_json::from_value::<Installed>(p).ok())
         .filter_map(|p| {
@@ -280,9 +281,20 @@ fn plugins() -> Result<Vec<(Plugin, Option<bool>)>, String> {
                 name: p.name.unwrap_or_else(|| p.plugin_id.clone()),
                 id: p.plugin_id,
             };
-            Some((plugin, has_moved(&source)))
+            Some((plugin, source))
         })
-        .collect())
+        .collect();
+    Ok(std::thread::scope(|scope| {
+        let asked: Vec<_> = from_github
+            .iter()
+            .map(|(_, source)| scope.spawn(|| has_moved(source)))
+            .collect();
+        from_github
+            .iter()
+            .zip(asked)
+            .map(|((plugin, _), moved)| (plugin.clone(), moved.join().ok().flatten()))
+            .collect()
+    }))
 }
 
 /// Whether the branch or tag a plugin was installed from now names another
