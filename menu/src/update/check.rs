@@ -199,18 +199,21 @@ fn latest_version() -> Result<String, String> {
         .ok_or_else(|| format!("{LATEST_URL} : pas de version"))
 }
 
-/// Whether `latest` comes after `installed`: `0.10.0` after `0.9.5`. A
-/// version that cannot be read is not newer.
+/// Whether `latest` comes after `installed`: `0.10.0` after `0.9.5`, a
+/// missing number counting as 0. A version that cannot be read is not newer.
 fn is_newer(latest: &str, installed: &str) -> bool {
     let numbers = |version: &str| -> Option<Vec<u64>> {
-        let core = version.trim_start_matches('v');
+        let core = version.trim().trim_start_matches('v');
         let core = core.split(['-', '+']).next()?;
         core.split('.').map(|n| n.parse().ok()).collect()
     };
-    match (numbers(latest), numbers(installed)) {
-        (Some(latest), Some(installed)) => latest > installed,
-        _ => false,
-    }
+    let (Some(mut latest), Some(mut installed)) = (numbers(latest), numbers(installed)) else {
+        return false;
+    };
+    let len = latest.len().max(installed.len());
+    latest.resize(len, 0);
+    installed.resize(len, 0);
+    latest > installed
 }
 
 /// What `plugin.list` tells of a plugin's source.
@@ -364,6 +367,9 @@ mod tests {
         assert!(!is_newer("0.9.5", "0.9.5"));
         assert!(!is_newer("0.9.4", "0.9.5"));
         assert!(!is_newer("0.9.5", "0.9.5-preview.1"));
+        assert!(is_newer(" 0.9.6\n", "0.9.5"));
+        assert!(!is_newer("0.10.0", "0.10"));
+        assert!(is_newer("0.10.1", "0.10"));
         assert!(!is_newer("nouvelle", "0.9.5"));
     }
 
