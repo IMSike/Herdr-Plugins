@@ -264,9 +264,17 @@ fn has_moved(source: &Source) -> bool {
     let mut command = Command::new("git");
     // No prompt, nor credentials window, for a repository gone private.
     command
-        .args(["-c", "credential.helper=", "ls-remote", &url])
+        .args([
+            "-c",
+            "credential.helper=",
+            "-c",
+            "core.askPass=",
+            "ls-remote",
+            &url,
+        ])
         .args(&names)
         .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_ASKPASS", "")
         .env("GCM_INTERACTIVE", "never");
     output_within(&mut command, ANSWER_WITHIN)
         .ok()
