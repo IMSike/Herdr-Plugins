@@ -49,9 +49,9 @@ const READ_EVERY: Duration = Duration::from_secs(2);
 const TOTALS_FOR_AT_MOST: Duration = Duration::from_secs(30);
 /// How long an entry, once started, does not start again.
 const LAUNCH_AGAIN_AFTER: Duration = Duration::from_secs(1);
-/// How long a bar waits before it checks for new versions again, when its
-/// check kept nothing (another one was under way, the state folder could
-/// not be written).
+/// How long a bar waits before it checks for new versions again, when the
+/// last check is still due: nothing answered, or its result could not be
+/// written.
 const CHECK_AGAIN_AFTER: Duration = Duration::from_secs(600);
 
 /// The glyphs of the back (nf-md-arrow_left) and reload (nf-md-reload)
@@ -501,9 +501,14 @@ impl<'a> State<'a> {
         }
         let changed = modified(self.versions_file.as_deref());
         if changed != self.versions_changed {
-            self.versions_changed = changed;
-            self.versions = check::last();
-            self.view.new_versions = self.versions.as_ref().and_then(|c| c.found.news());
+            let read = check::last();
+            // A file there but unreadable for now (held by another program)
+            // is read again on the next turn.
+            if read.is_some() || changed.is_none() {
+                self.versions_changed = changed;
+                self.versions = read;
+                self.view.new_versions = self.versions.as_ref().and_then(|c| c.found.news());
+            }
         }
         if Instant::now() >= self.check_versions_from
             && self.versions.as_ref().is_none_or(Checked::is_due)
