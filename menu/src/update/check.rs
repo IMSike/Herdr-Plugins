@@ -19,8 +19,10 @@ use std::time::{Duration, Instant};
 pub const CHECK_EVERY: Duration = Duration::from_secs(4 * 3600);
 /// The file of the last check, in the plugin's state folder.
 const FILE: &str = "updates.json";
-/// Held by the check that runs: one at a time, for every pane.
+/// Held by the check that runs: one at a time, for every pane and window.
 const LOCK: &str = "updates.lock";
+/// How long the update window waits for a check under way to end.
+const LOCK_WAIT: Duration = Duration::from_secs(60);
 /// Herdr's latest stable version, as its own check reads it.
 const LATEST_URL: &str = "https://herdr.dev/latest.json";
 /// How long a download or a repository may take to answer.
@@ -70,15 +72,6 @@ impl Found {
             .collect::<Vec<_>>()
             .join(" · ")
     }
-
-    /// Without what was updated: Herdr when `herdr`, and `plugins` (ids).
-    pub fn without(mut self, herdr: bool, plugins: &[String]) -> Self {
-        if herdr {
-            self.herdr = Herdr::UpToDate;
-        }
-        self.plugins.retain(|p| !plugins.contains(&p.id));
-        self
-    }
 }
 
 /// A check, and when it ran.
@@ -103,34 +96,25 @@ impl Checked {
     }
 }
 
+/// Seconds since the Unix epoch.
 fn now() -> u64 {
     herdr_api::unix_millis() / 1000
 }
 
-fn file() -> Result<PathBuf, String> {
-    Ok(herdr_api::state_dir()?.join(FILE))
+/// The file of the last check, whose changes a pane watches.
+pub fn last_file() -> Option<PathBuf> {
+    Some(herdr_api::state_dir().ok()?.join(FILE))
 }
 
 /// The last check; `None` before the first one.
 pub fn last() -> Option<Checked> {
-    herdr_api::read_json(&file().ok()?)
-}
-
-/// The file of the last check, whose changes a pane watches.
-pub fn last_file() -> Option<PathBuf> {
-    file().ok()
-}
-
-/// Keeps `found` as the last check, made now.
-pub fn keep(found: Found) -> Result<(), String> {
-    let checked = Checked { at: now(), found };
-    herdr_api::write_json(&file()?, &checked).map_err(|e| e.to_string())
+    herdr_api::read_json(&last_file()?)
 }
 
 /// Checks when the last check is `CHECK_EVERY` old, or `always`, unless
 /// another process checks meanwhile: it keeps its result.
 pub fn when_due(always: bool) {
-    let Ok(lock) = file().map(|f| f.with_file_name(LOCK)) else {
+    let Some(lock) = last_file().map(|f| f.with_file_name(LOCK)) else {
         return;
     };
     let Ok(Some(_lock)) = herdr_api::Lock::take(&lock) else {
@@ -141,14 +125,36 @@ pub fn when_due(always: bool) {
     }
 }
 
+/// Checks now, once the check under way, if any, has ended (or after
+/// `LOCK_WAIT`): the update window's, whose result no older check may
+/// overwrite.
+pub fn now_and_keep() -> Found {
+    let lock = last_file().map(|f| f.with_file_name(LOCK));
+    let deadline = Instant::now() + LOCK_WAIT;
+    let _lock = loop {
+        match lock.as_deref().map(herdr_api::Lock::take) {
+            Some(Ok(None)) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(200));
+            }
+            Some(Ok(Some(lock))) => break Some(lock),
+            _ => break None,
+        }
+    };
+    check_and_keep()
+}
+
 /// Checks Herdr and the plugins installed from GitHub, and keeps the
 /// result when something answered. What did not answer keeps what the
 /// last check found: offline, a new version known stays shown.
-pub fn check_and_keep() -> Found {
+fn check_and_keep() -> Found {
     let last = last().map(|c| c.found);
     let (found, answered) = merged(last, herdr_version(), plugins());
-    if answered {
-        let _ = keep(found.clone());
+    if answered && let Some(file) = last_file() {
+        let checked = Checked {
+            at: now(),
+            found: found.clone(),
+        };
+        let _ = herdr_api::write_json(&file, &checked);
     }
     found
 }
@@ -458,7 +464,7 @@ mod tests {
     }
 
     #[test]
-    fn says_what_has_a_new_version_and_forgets_what_was_updated() {
+    fn says_what_has_a_new_version() {
         let found = Found {
             herdr: Herdr::Newer {
                 installed: "0.9.5".into(),
@@ -471,10 +477,6 @@ mod tests {
         };
         assert!(found.any());
         assert_eq!(found.summary(), "Herdr 0.9.6 · Explorer");
-        let rest = found.clone().without(true, &[]);
-        assert_eq!(rest.summary(), "Explorer");
-        let none = found.without(true, &["gcaudan.explorer".into()]);
-        assert!(!none.any());
         let unknown = Found {
             herdr: Herdr::Unknown("canal preview".into()),
             plugins: Vec::new(),

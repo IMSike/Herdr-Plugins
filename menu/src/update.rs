@@ -165,7 +165,7 @@ pub fn run() -> Result<(), String> {
 /// The update, holding `lock`; what to tell once done.
 fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
     println!("Recherche des mises à jour…");
-    let found = check::check_and_keep();
+    let found = check::now_and_keep();
     let offered = offers(&found);
     if offered.is_empty() {
         return Ok("Herdr et les plugins installés depuis GitHub sont à jour.".into());
@@ -189,24 +189,11 @@ fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
             Offer::Herdr => None,
         })
         .collect();
-    // Herdr first: a plugin's new version may need Herdr's.
-    if herdr {
-        // Where the server can hand its sessions over, nothing stops.
-        let handoff = status()?["server"]["capabilities"]["live_handoff"] == true;
-        println!("Mise à jour de Herdr…\n");
-        if handoff {
-            herdr_shown(&["update", "--handoff"])?;
-        } else {
-            herdr_shown(&["update"])?;
-        }
-    }
-    if !plugins.is_empty() {
-        println!("\nMise à jour des plugins…\n");
-        let mut args = vec!["plugin", "update"];
-        args.extend(plugins.iter().map(String::as_str));
-        herdr_shown(&args)?;
-    }
-    let _ = check::keep(found.without(herdr, &plugins));
+    let installed = install(herdr, &plugins);
+    // What is still new once done, even when a step failed midway.
+    println!("\nVérification des versions…");
+    check::now_and_keep();
+    installed?;
     if !herdr {
         return Ok(
             "Plugins à jour : leurs panes et commandes prennent la nouvelle \
@@ -256,6 +243,28 @@ fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
         "Relancez Herdr avec « herdr »."
     }
     .into())
+}
+
+/// Updates Herdr when `herdr`, then `plugins`: Herdr first, since a
+/// plugin's new version may need Herdr's.
+fn install(herdr: bool, plugins: &[String]) -> Result<(), String> {
+    if herdr {
+        // Where the server can hand its sessions over, nothing stops.
+        let handoff = status()?["server"]["capabilities"]["live_handoff"] == true;
+        println!("Mise à jour de Herdr…\n");
+        if handoff {
+            herdr_shown(&["update", "--handoff"])?;
+        } else {
+            herdr_shown(&["update"])?;
+        }
+    }
+    if !plugins.is_empty() {
+        println!("\nMise à jour des plugins…\n");
+        let mut args = vec!["plugin", "update"];
+        args.extend(plugins.iter().map(String::as_str));
+        herdr_shown(&args)?;
+    }
+    Ok(())
 }
 
 /// Something the window offers to update.
