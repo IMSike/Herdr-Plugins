@@ -45,6 +45,81 @@ pub fn command(args: &[&str]) -> Command {
     command
 }
 
+/// A Herdr session, as `herdr session list --json` gives it.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Session {
+    pub name: String,
+    /// The session `herdr` runs without `--session`.
+    #[serde(default)]
+    pub default: bool,
+    pub socket_path: PathBuf,
+}
+
+impl Session {
+    /// The command that starts it again: `herdr`, or `herdr --session <name>`.
+    pub fn start_command(&self) -> String {
+        if self.default {
+            return "herdr".into();
+        }
+        let name = if self.name.contains(char::is_whitespace) {
+            format!("\"{}\"", self.name)
+        } else {
+            self.name.clone()
+        };
+        format!("herdr --session {name}")
+    }
+
+    /// The arguments of `start_command`, after `herdr`.
+    pub fn start_args(&self) -> Vec<&str> {
+        if self.default {
+            Vec::new()
+        } else {
+            vec!["--session", &self.name]
+        }
+    }
+}
+
+/// The session this process belongs to: the one of its socket
+/// (`HERDR_SOCKET_PATH`), the default one without.
+pub fn current_session() -> Result<Session, String> {
+    let output = command(&["session", "list", "--json"])
+        .output()
+        .map_err(|e| format!("impossible de lancer « herdr session list » : {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "« herdr session list » a échoué ({})",
+            output.status
+        ));
+    }
+    #[derive(Deserialize)]
+    struct Sessions {
+        sessions: Vec<Session>,
+    }
+    let sessions: Sessions = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("liste des sessions illisible : {e}"))?;
+    let socket = std::env::var_os(herdr_api::env::SOCKET_PATH).map(PathBuf::from);
+    session_of(sessions.sessions, socket.as_deref()).ok_or_else(|| "session introuvable".into())
+}
+
+/// The session of `socket` among `sessions`; the default one without.
+fn session_of(sessions: Vec<Session>, socket: Option<&std::path::Path>) -> Option<Session> {
+    sessions.into_iter().find(|s| match socket {
+        Some(socket) => same_path(&s.socket_path, socket),
+        None => s.default,
+    })
+}
+
+/// Whether two paths name the same file: Windows ignores case and takes
+/// either slash.
+fn same_path(a: &std::path::Path, b: &std::path::Path) -> bool {
+    if cfg!(windows) {
+        let plain = |p: &std::path::Path| p.to_string_lossy().replace('/', "\\").to_lowercase();
+        plain(a) == plain(b)
+    } else {
+        a == b
+    }
+}
+
 /// The part of `HERDR_PLUGIN_CONTEXT_JSON` the menu uses.
 #[derive(Debug, Default, Deserialize)]
 pub struct Context {
@@ -215,6 +290,28 @@ mod tests {
             current_release(std::path::Path::new("/home/u/shims/bin/herdr")),
             None
         );
+    }
+
+    #[test]
+    fn finds_the_session_of_its_socket() {
+        let sessions: Vec<Session> = serde_json::from_str(
+            r#"[{"default":true,"name":"default","running":true,"session_dir":"/c/herdr","socket_path":"/c/herdr/herdr.sock"},
+                {"default":false,"name":"work","running":true,"session_dir":"/c/herdr/sessions/work","socket_path":"/c/herdr/sessions/work/herdr.sock"}]"#,
+        )
+        .unwrap();
+        let of = |socket: Option<&str>| {
+            session_of(sessions.clone(), socket.map(std::path::Path::new)).map(|s| s.name)
+        };
+        assert_eq!(
+            of(Some("/c/herdr/sessions/work/herdr.sock")).unwrap(),
+            "work"
+        );
+        assert_eq!(of(None).unwrap(), "default");
+        assert_eq!(of(Some("/elsewhere/herdr.sock")), None);
+        assert_eq!(sessions[0].start_command(), "herdr");
+        assert!(sessions[0].start_args().is_empty());
+        assert_eq!(sessions[1].start_command(), "herdr --session work");
+        assert_eq!(sessions[1].start_args(), ["--session", "work"]);
     }
 
     #[test]

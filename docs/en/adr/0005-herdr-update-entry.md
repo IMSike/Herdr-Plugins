@@ -22,7 +22,7 @@ Option b, as the menu's built-in entry **Update** (`update`), run in a terminal 
 1. `herdr update`, with `--handoff` when the server offers it;
 2. `herdr status --json`: when neither `restart_needed` nor `server_binary_stale` is set, the window says Herdr is up to date;
 3. otherwise it gives the number of panes that close and of agents that stop (and how many are at work), and asks `[o/N]`; anything but yes cancels;
-4. once confirmed, it runs `herdr server stop`, then offers to start Herdr again in that window; otherwise it puts `herdr` in the clipboard (clip, wl-copy, xclip or xsel).
+4. once confirmed, it runs `herdr server stop`, then offers to start Herdr again in that window; otherwise it puts `herdr` in the clipboard, `herdr --session <name>` for a named session (clip, wl-copy, xclip or xsel).
 
 *Revised on 2026-11-01: the entry first ran in the menu's popup, where `herdr update` refused to run.*
 

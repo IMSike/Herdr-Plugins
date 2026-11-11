@@ -220,6 +220,8 @@ fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
                 .into(),
         );
     }
+    // Started again as it was: a named session, by its name.
+    let session = herdr::current_session().ok();
     herdr_shown(&["server", "stop"])?;
     if crate::ui::ask(
         "\nServeur arrêté. Relancer Herdr dans cette fenêtre ? [o/N] ",
@@ -228,15 +230,28 @@ fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
         // Herdr runs in this window for as long as it is used: the update
         // is over.
         drop(lock);
-        herdr_shown(&[])?;
+        herdr_shown(
+            &session
+                .as_ref()
+                .map(herdr::Session::start_args)
+                .unwrap_or_default(),
+        )?;
         return Ok("Herdr s'est fermé.".into());
     }
-    Ok(if copy_to_clipboard("herdr") {
-        "« herdr » est copié dans le presse-papiers : le coller dans un terminal relance Herdr."
+    let start = session.map_or_else(|| "herdr".into(), |s| s.start_command());
+    Ok(start_from_clipboard(&start))
+}
+
+/// Puts `start`, the command that starts Herdr again, in the clipboard;
+/// what to tell, the command shown either way.
+fn start_from_clipboard(start: &str) -> String {
+    if copy_to_clipboard(start) {
+        format!(
+            "« {start} » est copié dans le presse-papiers : le coller dans un terminal relance Herdr."
+        )
     } else {
-        "Relancez Herdr avec « herdr »."
+        format!("Relancez Herdr avec « {start} ».")
     }
-    .into())
 }
 
 /// Updates Herdr when `herdr`, then `plugins`: Herdr first, since a
