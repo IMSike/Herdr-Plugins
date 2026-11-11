@@ -62,16 +62,13 @@ pub struct Session {
 
 impl Session {
     /// The command that starts it again: `herdr`, or `herdr --session <name>`.
+    /// Herdr allows only ASCII letters, digits, `.`, `_` and `-` in a
+    /// session's name: none a shell reads as its own.
     pub fn start_command(&self) -> String {
-        if self.default {
-            return "herdr".into();
-        }
-        let name = if self.name.contains(char::is_whitespace) {
-            format!("\"{}\"", self.name)
-        } else {
-            self.name.clone()
-        };
-        format!("herdr --session {name}")
+        std::iter::once("herdr")
+            .chain(self.start_args())
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     /// The arguments of `start_command`, after `herdr`.
@@ -80,6 +77,17 @@ impl Session {
             Vec::new()
         } else {
             vec!["--session", &self.name]
+        }
+    }
+
+    /// The arguments, after `herdr`, that stop its server, as Herdr's
+    /// documentation gives them: `server stop` for the default session,
+    /// `session stop <name>` for a named one.
+    pub fn stop_args(&self) -> Vec<&str> {
+        if self.default {
+            vec!["server", "stop"]
+        } else {
+            vec!["session", "stop", &self.name]
         }
     }
 }
@@ -322,6 +330,8 @@ mod tests {
         assert!(sessions[0].start_args().is_empty());
         assert_eq!(sessions[1].start_command(), "herdr --session work");
         assert_eq!(sessions[1].start_args(), ["--session", "work"]);
+        assert_eq!(sessions[0].stop_args(), ["server", "stop"]);
+        assert_eq!(sessions[1].stop_args(), ["session", "stop", "work"]);
     }
 
     #[test]

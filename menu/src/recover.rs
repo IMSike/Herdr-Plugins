@@ -46,10 +46,7 @@ pub fn snapshots(session: &Session) -> Vec<Snapshot> {
     };
     let mut snapshots: Vec<Snapshot> = entries
         .flatten()
-        .filter(|e| {
-            let name = e.file_name().to_string_lossy().into_owned();
-            name.starts_with("session-") && name.ends_with(".json")
-        })
+        .filter(|e| is_snapshot_name(&e.file_name()))
         .filter_map(|e| {
             let saved = e.metadata().ok()?.modified().ok()?;
             let layout = std::fs::read(e.path())
@@ -66,11 +63,17 @@ pub fn snapshots(session: &Session) -> Vec<Snapshot> {
     snapshots
 }
 
+/// `session-<time>-<pid>-<n>.json`, as Herdr names its snapshots.
+fn is_snapshot_name(name: &std::ffi::OsStr) -> bool {
+    let name = name.to_string_lossy();
+    name.starts_with("session-") && name.ends_with(".json")
+}
+
 /// The session's layout now, as Herdr last saved it.
 pub fn current(session: &Session) -> Result<Layout, String> {
     match std::fs::read(session.session_dir.join(SESSION_FILE)) {
         Ok(bytes) => layout::parse(&bytes),
-        // No pane left: Herdr removes the file.
+        // No file: no layout saved.
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Layout::default()),
         Err(e) => Err(format!("illisible : {e}")),
     }
@@ -132,13 +135,18 @@ pub fn run() -> Result<(), String> {
 
 /// The restoring; what to tell once done.
 fn recover() -> Result<String, String> {
+    // Stopping the server would close this program's own pane first.
+    if std::env::var_os(herdr_api::env::INSIDE).is_some() {
+        return Err("à lancer hors de Herdr : la ligne « Récupérer une session… » des réglages ouvre sa fenêtre".into());
+    }
     let snapshot = PathBuf::from(herdr_api::var(SNAPSHOT_ENV)?);
     let session = herdr::current_session()?;
     let dir = &session.session_dir;
-    // Only a snapshot of this session, which the screen listed.
+    // Only a snapshot of this session, as the screen listed them.
     if !snapshot
         .parent()
         .is_some_and(|parent| herdr::same_path(parent, &dir.join(SNAPSHOTS_DIR)))
+        || !snapshot.file_name().is_some_and(is_snapshot_name)
     {
         return Err(format!(
             "{} n'est pas un snapshot de la session « {} »",
@@ -173,8 +181,13 @@ fn recover() -> Result<String, String> {
     if !crate::ui::ask("Restaurer ? [o/N] ", false) {
         return Ok("Rien n'a été restauré.".into());
     }
+    // Asked again: the server may have stopped while the question waited.
+    if running(&session.name)? {
+        herdr_shown(&session.stop_args())?;
+        wait_until_stopped(&session)?;
+    }
     let session_file = dir.join(SESSION_FILE);
-    // The session as it is, to go back to.
+    // The session as its server left it, to go back to.
     let kept = if session_file.exists() {
         let kept = dir.join(format!(
             "session-before-restore-{}.json",
@@ -186,10 +199,6 @@ fn recover() -> Result<String, String> {
     } else {
         None
     };
-    if session.running {
-        herdr_shown(&["server", "stop"])?;
-        wait_until_stopped(&session.name)?;
-    }
     herdr_api::write_atomic(&session_file, &bytes)
         .map_err(|e| format!("écriture de {} impossible : {e}", session_file.display()))?;
     let mut message = String::from("Session restaurée.");
@@ -205,20 +214,28 @@ fn recover() -> Result<String, String> {
     Ok(message)
 }
 
-/// Waits until Herdr says the session `name` no longer runs: its last save
-/// of `session.json` is done.
-fn wait_until_stopped(name: &str) -> Result<(), String> {
+/// Whether Herdr says the session `name` runs.
+fn running(name: &str) -> Result<bool, String> {
+    Ok(herdr::sessions()?
+        .into_iter()
+        .any(|s| s.name == name && s.running))
+}
+
+/// Waits until Herdr says `session` no longer runs: its last save of
+/// `session.json` is done.
+fn wait_until_stopped(session: &Session) -> Result<(), String> {
     let since = Instant::now();
-    loop {
-        match herdr::sessions()?.into_iter().find(|s| s.name == name) {
-            Some(session) if session.running => {}
-            _ => return Ok(()),
-        }
+    while running(&session.name)? {
         if since.elapsed() >= STOP_WITHIN {
-            return Err("le serveur ne s'est pas arrêté : rien n'a été restauré".into());
+            return Err(format!(
+                "le serveur ne s'est pas arrêté : rien n'a été restauré. \
+                 S'il s'arrête plus tard, relancez Herdr avec « {} ».",
+                session.start_command()
+            ));
         }
         std::thread::sleep(Duration::from_millis(200));
     }
+    Ok(())
 }
 
 #[cfg(test)]

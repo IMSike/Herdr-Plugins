@@ -72,10 +72,11 @@ fn terminal_window(
 /// `&` or `^` outside quotes as its own: the path, which may hold any of
 /// them, comes in a variable, whose value `cmd` does not read again, and in
 /// quotes. The empty title: `start` takes a first quoted word for one.
-/// `subcommand` is one of this program's, a plain word.
+/// `subcommand` is one of this program's, a plain word. `/d`: without the
+/// commands the registry may have `cmd` run first (`AutoRun`).
 #[cfg(windows)]
 fn window_line(subcommand: &str) -> String {
-    format!("/c start \"\" \"%{SELF_ENV}%\" {subcommand}")
+    format!("/d /c start \"\" \"%{SELF_ENV}%\" {subcommand}")
 }
 
 /// The first terminal emulator found, running `me <subcommand>`.

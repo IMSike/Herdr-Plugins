@@ -22,7 +22,7 @@ L'option b, en entrée intégrée **Update** du menu (`update`), lancée dans un
 1. `herdr update`, avec `--handoff` quand le serveur le propose ;
 2. `herdr status --json` : quand ni `restart_needed` ni `server_binary_stale` n'est vrai, la fenêtre dit que Herdr est à jour ;
 3. sinon elle donne le nombre de panes qui se ferment et d'agents qui s'arrêtent (et combien sont au travail), et demande `[o/N]` ; toute autre réponse que oui annule ;
-4. une fois confirmé, elle lance `herdr server stop`, puis propose de relancer Herdr dans cette fenêtre ; sinon elle met `herdr` dans le presse-papiers, `herdr --session <nom>` pour une session nommée (clip, wl-copy, xclip ou xsel).
+4. une fois confirmé, elle arrête le serveur (`herdr server stop`, `herdr session stop <nom>` pour une session nommée, comme la documentation de Herdr les donne), puis propose de relancer Herdr dans cette fenêtre ; sinon elle met `herdr` dans le presse-papiers, `herdr --session <nom>` pour une session nommée (clip, wl-copy, xclip ou xsel).
 
 *Révisé le 2026-11-01 : l'entrée tournait d'abord dans le popup du menu, où `herdr update` refusait de se lancer.*
 

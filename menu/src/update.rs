@@ -116,7 +116,11 @@ fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
     }
     // Started again as it was: a named session, by its name.
     let session = herdr::current_session().ok();
-    herdr_shown(&["server", "stop"])?;
+    herdr_shown(
+        &session
+            .as_ref()
+            .map_or_else(|| vec!["server", "stop"], herdr::Session::stop_args),
+    )?;
     if crate::ui::ask(
         "\nServeur arrêté. Relancer Herdr dans cette fenêtre ? [o/N] ",
         false,
