@@ -26,6 +26,32 @@ title = "Open the menu"
 contexts = ["workspace"]
 command = ["target/release/herdr-menu", "open"]
 
+# A tool started at once, without the menu: the menu's entry of that name, or
+# the built-in one (docs/en/adr/0011-tool-actions.md).
+[[actions]]
+id = "lazygit"
+title = "Open lazygit"
+contexts = ["workspace"]
+command = ["target/release/herdr-menu", "tool"]
+
+[[actions]]
+id = "gh-dash"
+title = "Open gh-dash"
+contexts = ["workspace"]
+command = ["target/release/herdr-menu", "tool"]
+
+[[actions]]
+id = "vscode"
+title = "Open VS Code"
+contexts = ["workspace"]
+command = ["target/release/herdr-menu", "tool"]
+
+[[actions]]
+id = "btop"
+title = "Open btop"
+contexts = ["workspace"]
+command = ["target/release/herdr-menu", "tool"]
+
 [[panes]]
 id = "menu"
 title = "Menu"

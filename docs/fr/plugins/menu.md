@@ -26,6 +26,18 @@ command = "imsike.menu.open"
 description = "menu des outils"
 ```
 
+lazygit, gh-dash, VS Code et btop ont aussi chacun leur propre action, `imsike.menu.lazygit`, `imsike.menu.gh-dash`, `imsike.menu.vscode` et `imsike.menu.btop`, qui lance l'outil directement, sans le menu, comme le ferait le menu en popup : dans le même popup, dans le même dossier (voir [`cwd`](#entrées)), avec le même message d'erreur. L'action lance l'entrée de `menu.toml` qui porte le même libellé (`lazygit`, `gh-dash`, `VS Code`, `btop`, sans tenir compte de la casse), l'entrée intégrée quand `menu.toml` n'en a pas ; renommer l'entrée ramène donc l'action à l'entrée intégrée. Aucune touche ne leur est liée par défaut :
+
+```toml
+[[keys.command]]
+key = "prefix+l"
+type = "plugin_action"
+command = "imsike.menu.lazygit"
+description = "lazygit"
+```
+
+Herdr lie lui-même certaines touches (`prefix+l` déplace le focus sur le pane de droite, `prefix+c` crée un onglet, `prefix+b` masque la sidebar…) : donnez une autre touche à son action, ou `""` pour la libérer, dans la section `[keys]` (`herdr --default-config` les liste).
+
 Les icônes sont des glyphes [Nerd Font](https://www.nerdfonts.com) : sans Nerd Font dans le terminal, elles s'affichent comme des blancs ou des carrés.
 
 ## Utilisation

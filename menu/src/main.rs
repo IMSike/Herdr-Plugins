@@ -14,6 +14,9 @@
 //!    is gone, however the popup was closed.
 //! 4. `run` (popup) runs the entry's command in that folder.
 //!
+//! A tool action (`lazygit`, `gh-dash`, `vscode`, `btop`) starts its entry
+//! at once, without the menu (`tool`).
+//!
 //! The built-in entries: `Update` opens a terminal window outside Herdr
 //! (`update`), `Settings` the `settings` popup, which opens the files in an
 //! editor (`edit-tab`, `edit` for a terminal one), `Disk` a view of the bar.
@@ -43,6 +46,8 @@ const CHOICE_ENV: &str = "HERDR_MENU_CHOICE";
 /// The entry (as JSON) and the start folder handed to the `run` popup.
 const ENTRY_ENV: &str = "HERDR_MENU_ENTRY";
 const CWD_ENV: &str = "HERDR_MENU_CWD";
+/// The id of the action Herdr runs.
+const ACTION_ID_ENV: &str = "HERDR_PLUGIN_ACTION_ID";
 /// How long the action waits for the menu to start.
 const START_TIMEOUT: Duration = Duration::from_secs(10);
 /// How often the action checks that the menu is still running.
@@ -58,6 +63,7 @@ fn main() -> ExitCode {
         Some("open") => open(),
         Some("menu") => menu(),
         Some("run") => run(),
+        Some("tool") => tool(),
         Some("bar") => {
             let (menu, error) = menu_config();
             bar::run(menu, error)
@@ -71,7 +77,7 @@ fn main() -> ExitCode {
         Some("pane-created") => bar::on_pane_created(),
         Some("pane-closed") => bar::on_pane_closed(),
         _ => Err(
-            "usage : herdr-menu open|menu|run|bar|settings|edit-tab|edit|update|recover|startup|pane-created|pane-closed"
+            "usage : herdr-menu open|menu|run|tool|bar|settings|edit-tab|edit|update|recover|startup|pane-created|pane-closed"
                 .into(),
         ),
     };
@@ -151,6 +157,22 @@ fn open() -> Result<(), String> {
         return Ok(());
     };
     start(&choice.entry, choice.cwd.as_deref(), None)
+}
+
+/// A tool action: starts its entry as the popup menu would, in the folder
+/// the entry asks for, without the menu.
+fn tool() -> Result<(), String> {
+    let id = herdr_api::var(ACTION_ID_ENV)?;
+    let (menu, error) = menu_config();
+    if let Some(error) = error {
+        eprintln!("herdr-menu : {error}");
+    }
+    let entry =
+        config::tool_entry(&id, &menu.entries).ok_or_else(|| format!("action inconnue : {id}"))?;
+    let cwd = Context::from_env()
+        .cwd(entry.cwd)
+        .map(|p| p.to_string_lossy().into_owned());
+    start(&entry, cwd.as_deref(), None)
 }
 
 /// Starts an entry chosen in the menu or the bar (`bar`: its pane id): a

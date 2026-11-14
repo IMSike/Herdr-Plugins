@@ -168,6 +168,29 @@ pub fn defaults() -> Vec<Entry> {
     ]
 }
 
+/// The plugin's tool actions (`[[actions]]` in `herdr-plugin.toml`) and the
+/// label of the entry each one starts.
+const TOOL_ACTIONS: [(&str, &str); 4] = [
+    ("lazygit", "lazygit"),
+    ("gh-dash", "gh-dash"),
+    ("vscode", "VS Code"),
+    ("btop", "btop"),
+];
+
+/// The entry a tool action starts: the menu's entry of the same label
+/// (letter case aside), else the built-in one. `id` may be qualified
+/// (`imsike.menu.lazygit`): an action id holds no dot.
+pub fn tool_entry(id: &str, entries: &[Entry]) -> Option<Entry> {
+    let id = id.rsplit('.').next().unwrap_or(id);
+    let (_, label) = TOOL_ACTIONS.iter().find(|(action, _)| *action == id)?;
+    let named = |e: &Entry| e.action.is_none() && e.label.eq_ignore_ascii_case(label);
+    entries
+        .iter()
+        .find(|e| named(e))
+        .cloned()
+        .or_else(|| defaults().into_iter().find(|e| named(e)))
+}
+
 /// btop's program on this system (see `btop_among`).
 fn btop() -> &'static str {
     btop_among(cfg!(windows), |name| {
@@ -240,6 +263,42 @@ pub fn load(config_dir: Option<&Path>) -> (Menu, Option<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tool_actions_start_the_built_in_entries() {
+        for (id, label) in TOOL_ACTIONS {
+            let entry = tool_entry(id, &[]).expect(id);
+            assert_eq!(entry.label, label);
+            assert!(entry.action.is_none());
+        }
+        assert_eq!(
+            tool_entry("imsike.menu.lazygit", &[]).map(|e| e.command),
+            Some(vec!["lazygit".to_string()])
+        );
+        assert_eq!(tool_entry("open", &[]), None);
+    }
+
+    #[test]
+    fn tool_action_prefers_the_menu_entry_of_its_name() {
+        let menu = parse(
+            r#"
+            [[entries]]
+            key = "x"
+            label = "Lazygit"
+            command = ["lazygit", "--debug"]
+            cwd = "pane"
+            "#,
+        )
+        .unwrap();
+        let entry = tool_entry("lazygit", &menu.entries).unwrap();
+        assert_eq!(entry.command, ["lazygit", "--debug"]);
+        assert_eq!(entry.cwd, StartIn::Pane);
+        // Not in the menu: the built-in entry.
+        assert_eq!(
+            tool_entry("btop", &menu.entries).map(|e| e.label),
+            Some("btop".to_string())
+        );
+    }
 
     #[test]
     fn parses_entries_with_default_cwd() {

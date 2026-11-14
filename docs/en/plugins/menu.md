@@ -26,6 +26,18 @@ command = "imsike.menu.open"
 description = "tools menu"
 ```
 
+lazygit, gh-dash, VS Code and btop also each have an action of their own, `imsike.menu.lazygit`, `imsike.menu.gh-dash`, `imsike.menu.vscode` and `imsike.menu.btop`, which starts the tool at once, without the menu, as the popup menu would: in the same popup, in the same folder (see [`cwd`](#entries)), with the same error message. The action starts the entry of `menu.toml` with the same label (`lazygit`, `gh-dash`, `VS Code`, `btop`, letter case aside), the built-in one when `menu.toml` has none; renaming the entry therefore makes the action go back to the built-in one. No key is bound to them by default:
+
+```toml
+[[keys.command]]
+key = "prefix+l"
+type = "plugin_action"
+command = "imsike.menu.lazygit"
+description = "lazygit"
+```
+
+Herdr binds some keys itself (`prefix+l` moves the focus to the right pane, `prefix+c` creates a tab, `prefix+b` hides the sidebar…): give its action another key, or `""` to free it, in the `[keys]` section (`herdr --default-config` lists them).
+
 The icons are [Nerd Font](https://www.nerdfonts.com) glyphs: without a Nerd Font in the terminal, they show as blanks or boxes.
 
 ## Use
