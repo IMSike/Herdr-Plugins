@@ -24,12 +24,13 @@
 
 # Cherche au démarrage de Herdr, puis toutes les 4 h tant qu'un pane Tools est
 # ouvert, si Herdr ou un plugin installé depuis GitHub a une nouvelle version :
-# l'entrée Update passe alors en vert (pane Tools et menu en popup). Interroge
+# l'entrée Settings et sa ligne « Mettre à jour… » passent alors en vert. Interroge
 # herdr.dev et GitHub.
 # check_updates = true
 
 # Entrées du menu. Sans aucune entrée, le menu garde les siennes : lazygit (l),
-# gh-dash (g), VS Code (c), Disk (d), btop (b), Update (u) et Settings (s).
+# gh-dash (g), VS Code (c), Disk (d), btop (b) et Settings (s) ; la mise à jour
+# est dans les réglages.
 # Dès qu'une entrée est écrite ici, elle remplace toute la liste.
 #
 # [[entries]]

@@ -68,8 +68,7 @@ Sans configuration, le menu propose :
 | `c` | VS Code | `code .` : le dossier du workspace dans VS Code |
 | `d` | Disk | action intégrée `disk` : les chiffres du dossier du workspace, voir [plus bas](#entrées-intégrées) |
 | `b` | btop | `btop` (sous Windows, `btop4win` quand seul lui est dans le `PATH`) : le moniteur système [btop](https://github.com/aristocratos/btop) (CPU, mémoire, disques, réseau, processus) |
-| `u` | Update | action intégrée `update` : met à jour Herdr et les plugins installés depuis GitHub, en vert quand l'un d'eux a une nouvelle version, voir [plus bas](#entrées-intégrées) |
-| `s` | Settings | action intégrée `settings` : l'écran des réglages, voir [plus bas](#entrées-intégrées) |
+| `s` | Settings | action intégrée `settings` : l'écran des réglages, qui met aussi à jour Herdr et les plugins installés depuis GitHub, en vert quand l'un d'eux a une nouvelle version, voir [plus bas](#entrées-intégrées) |
 
 Le plugin n'installe aucun de ces outils. Un outil absent ouvre tout de même son popup, qui affiche `« btop » introuvable dans le PATH : installez-le, ou changez sa commande dans menu.toml` et attend Entrée. btop s'installe avec le gestionnaire de paquets du système (`apt install btop`, `brew install btop`…) ; sous Windows, c'est [btop4win](https://github.com/aristocratos/btop4win) (`winget install aristocratos.btop4win`, ou `scoop install btop`). Scoop l'installe sous le nom `btop` ; winget aussi quand il peut créer ce lien (mode développeur ou administrateur), et sinon met son dossier dans le `PATH`, où il s'appelle `btop4win`. L'entrée lance `btop`, ou `btop4win` quand seul lui est dans le `PATH` ; Herdr voit un `PATH` modifié par une installation une fois redémarré.
 
@@ -123,7 +122,7 @@ En tête de `menu.toml`, avant les entrées ; l'écran des réglages les change 
 | `memory_unit` | `"M"` | `853M`, `2,4G` (`"M"`) ; `853Mo`, `2,4Go` (`"Mo"`) ; `853MB`, `2,4GB` (`"MB"`) ; `K`, `M` ou `G` selon la taille |
 | `memory_space` | `false` | `2,4Go` (`false`) ou `2,4 Go` avec une espace fine insécable avant l'unité (`true`) |
 | `totals` | `"line"` | les totaux du pane `Tools` : `"line"` (une ligne) ou `"bars"` (quatre lignes avec barres), voir [Utilisation](#utilisation) |
-| `check_updates` | `true` | l'entrée Update en vert quand Herdr ou un plugin installé depuis GitHub a une nouvelle version, voir [Nouvelles versions](#nouvelles-versions) |
+| `check_updates` | `true` | l'entrée Settings et la ligne **Mettre à jour…** des réglages en vert quand Herdr ou un plugin installé depuis GitHub a une nouvelle version, voir [Nouvelles versions](#nouvelles-versions) |
 
 Le réglage `layout` des versions précédentes, qui proposait deux lignes d'icônes, a disparu : un fichier qui le contient encore reste valide, le réglage est ignoré.
 
@@ -136,7 +135,7 @@ Le réglage `layout` des versions précédentes, qui proposait deux lignes d'ic�
 
 Le dossier n'est mesuré que pendant que cette page est affichée : revenir arrête la mesure. Un dossier illisible (supprimé, refusé) ou qui ne répond pas à temps (un partage réseau disparu) est signalé en rouge, et aucun chiffre n'est gardé pour lui ; de même pour un explorateur dont Herdr ne donne pas le dossier. Dans les deux cas, `r` réessaie.
 
-**Update** (`u`) ouvre une fenêtre de terminal à part, hors de Herdr : Herdr refuse de se mettre à jour depuis l'un de ses panes. Sous Windows, c'est une nouvelle fenêtre de console (ouverte par `cmd /d /c start`) ; ailleurs, le premier terminal trouvé parmi `x-terminal-emulator`, `gnome-terminal`, `konsole`, `xfce4-terminal`, `kitty`, `alacritty`, `wezterm`, `foot` et `xterm`. Dans cette fenêtre :
+**Mettre à jour…**, une ligne de l'écran des réglages (section **Mises à jour**), met à jour Herdr et les plugins installés depuis GitHub ; c'était l'entrée Update du menu, que `action = "update"` dans `menu.toml` donne toujours. Elle ferme les réglages et ouvre une fenêtre de terminal à part, hors de Herdr : Herdr refuse de se mettre à jour depuis l'un de ses panes. Sous Windows, c'est une nouvelle fenêtre de console (ouverte par `cmd /d /c start`) ; ailleurs, le premier terminal trouvé parmi `x-terminal-emulator`, `gnome-terminal`, `konsole`, `xfce4-terminal`, `kitty`, `alacritty`, `wezterm`, `foot` et `xterm`. Dans cette fenêtre :
 
 1. Elle cherche ce qui a une nouvelle version (voir [Nouvelles versions](#nouvelles-versions)) : Herdr, et chaque plugin installé depuis GitHub. Herdr y figure aussi quand sa nouvelle version n'a pas pu être connue (canal preview, pas de réponse), puisque `herdr update` la trouve seul. Quand rien n'a de nouvelle version, elle le dit et s'arrête.
 2. Elle affiche la liste, tout coché : Espace ou un clic décoche (ou recoche) une ligne, haut et bas (ou `j`/`k`) se déplacent, Entrée met à jour ce qui reste coché, Échap, `q` ou Ctrl+C annulent. Une liste plus haute que la fenêtre défile.
@@ -146,12 +145,12 @@ Le dossier n'est mesuré que pendant que cette page est affichée : revenir arr�
 6. Si oui, elle dit combien de panes se ferment et combien d'agents s'arrêtent (`5 panes, dont 2 agents (1 au travail)`) et demande `Redémarrer maintenant ? [o/N]`. Toute autre réponse que `o`, `oui`, `y` ou `yes` annule : la nouvelle version tournera au prochain démarrage du serveur.
 7. Une fois confirmé, elle arrête le serveur (`herdr server stop`, `herdr session stop <nom>` pour une session nommée) : **tous les panes se ferment et tous les agents s'arrêtent**, comme quand on quitte Herdr. Puis elle propose de relancer Herdr dans cette fenêtre (`[o/N]`), dans la même session ; sinon elle met la commande qui le relance dans le presse-papiers, `herdr`, ou `herdr --session <nom>` pour une session nommée (avec `clip`, `wl-copy`, `xclip` ou `xsel`, le premier qui fonctionne), à coller dans un terminal.
 
-La fenêtre attend Entrée avant de se fermer, erreur comprise. Tant qu'elle est ouverte, un nouveau clic sur Update dit qu'une mise à jour est en cours au lieu d'en ouvrir une deuxième. Sans affichage graphique (en SSH), ou quand le terminal se ferme aussitôt, le pane `Tools` le dit en rouge : lancez `herdr update` (et `herdr plugin update`) hors de Herdr. Un plugin lié depuis un dossier (`herdr plugin link`) n'est jamais proposé : Herdr ne le met pas à jour.
+La fenêtre attend Entrée avant de se fermer, erreur comprise. Tant qu'elle est ouverte, relancer la mise à jour dit qu'une mise à jour est en cours au lieu d'en ouvrir une deuxième. Sans affichage graphique (en SSH), ou quand le terminal se ferme aussitôt, l'écran des réglages le dit en rouge (le pane `Tools`, pour une entrée `update`) : lancez `herdr update` (et `herdr plugin update`) hors de Herdr. Un plugin lié depuis un dossier (`herdr plugin link`) n'est jamais proposé : Herdr ne le met pas à jour.
 
 **Settings** (`s`) ouvre un écran de réglages dans un popup de 70 % de la largeur du terminal et 80 % de sa hauteur :
 
 ```
- 󰒓 Réglages                                                              1/18
+ 󰒓 Réglages                                                              1/19
 
  Format des nombres ────────────────────────────────────── 4% · 853M · 2,4G ┃
  ▌ Virgule décimale                 2.4G   2,4G                             ┃
@@ -162,15 +161,14 @@ La fenêtre attend Entrée avant de se fermer, erreur comprise. Tant qu'elle est
                                                                             ┃
  Pane Tools ─────────────────────────────────────────────────────────────── ┃
    Totaux CPU / mémoire             une ligne   barres                      ┃
-   Signaler les mises à jour        non   oui                               ┃
                                                                             ┃
- Sidebar ────────────────────────────────────────────────────────────────── ┃
+ Mises à jour ───────────────────────────────────────────────────────────── │
+   Signaler les mises à jour        non   oui                               │
+   󰚰 Mettre à jour…                                                         │
+                                                                            │
+ Sidebar ────────────────────────────────────────────────────────────────── │
    Durée de vie des valeurs        ‹ 20 s ›                                 │
    Shells                           bash, sh, zsh, fish, dash, nu, pwsh, …  │
-   Totaux dans la barre d'onglets   non   oui                               │
-                                                                            │
- Couleurs par seuil ─────────────────────────────────────────────────────── │
-   Couleurs                         non   oui                               │
  ──────────────────────────────────────────────────────────────────────────
    Une virgule ou un point avant les décimales.
    ✓ enregistré dans menu.toml
@@ -190,6 +188,7 @@ Un fichier qui est un lien (déployé par stow ou chezmoi, par exemple) reste un
 | Virgule décimale, Espace avant %, CPU avec une décimale, Unités de la mémoire, Espace avant l'unité | `decimal_comma`, `percent_space`, `cpu_decimal`, `memory_unit`, `memory_space` | `menu.toml` et `sidebar.toml` |
 | Totaux CPU / mémoire | `totals` | `menu.toml` |
 | Signaler les mises à jour | `check_updates` | `menu.toml` |
+| Mettre à jour… | met à jour Herdr et les plugins installés depuis GitHub, en vert suivi de ce qui a une nouvelle version, voir [Entrées intégrées](#entrées-intégrées) | |
 | Durée de vie des valeurs | `ttl_seconds`, par pas de 5 secondes, de 5 à 600 | `sidebar.toml` |
 | Shells | `shells` : Entrée pour les taper, séparés par des virgules, Entrée pour enregistrer, Échap pour annuler | `sidebar.toml` |
 | Totaux dans la barre d'onglets | `tab_bar` | `sidebar.toml` |
@@ -220,7 +219,7 @@ Elle ouvre, dans le même popup, les snapshots de la session courante, du plus r
 - pour chaque snapshot, sa date et son âge (`11/11 14:05  il y a 2 h 10`), en jaune ce qui manque aujourd'hui à la session (`+3 absents` : un agent se reconnaît à sa conversation, ou à sa commande de reprise, un shell à son dossier), et ce qu'il contient. Un snapshot illisible, ou dont le format n'est pas la version 3 de `session.json`, est marqué `✗` avec la raison, et ne peut pas être restauré ;
 - sous la liste, le snapshot choisi en détail : ses espaces, ses onglets, et chaque pane avec son dossier, `shell` ou son agent ; ce qui manque à la session est marqué `+` en jaune. Un agent Claude Code montre le titre de sa conversation (`claude · Corrige le test (c73a3ff4)`), sinon son dernier message, lus dans les fichiers de Claude Code (`~/.claude/projects`, ou le dossier de `CLAUDE_CONFIG_DIR`) ; un autre agent, ou une conversation que ces fichiers ne donnent pas, montre le début de son identifiant.
 
-Haut et bas (ou `j`/`k`, la molette, la souris) choisissent un snapshot, Début/Fin (ou `g`/`G`) le premier ou le dernier, Page préc./Page suiv. font défiler le détail, Échap, `q` ou Ctrl+C reviennent aux réglages. Entrée ouvre une fenêtre de terminal à part, hors de Herdr, comme Update ; dans cette fenêtre :
+Haut et bas (ou `j`/`k`, la molette, la souris) choisissent un snapshot, Début/Fin (ou `g`/`G`) le premier ou le dernier, Page préc./Page suiv. font défiler le détail, Échap, `q` ou Ctrl+C reviennent aux réglages. Entrée ouvre une fenêtre de terminal à part, hors de Herdr, comme la mise à jour ; dans cette fenêtre :
 
 1. Elle rappelle le snapshot et ce qu'il contient, combien de panes se ferment et d'agents s'arrêtent, et demande `Restaurer ? [o/N]`. Toute autre réponse que `o`, `oui`, `y` ou `yes` ne change rien.
 2. Une fois confirmé, elle arrête le serveur (`herdr server stop`, `herdr session stop <nom>` pour une session nommée) : **tous les panes se ferment, y compris ceux qui avaient survécu**. Une fois que Herdr le dit arrêté, elle copie le `session.json` que le serveur a laissé dans `session-before-restore-<date>-<heure>.json`, à côté de lui, et écrit le snapshot à sa place. Si le serveur ne s'est pas arrêté au bout de 10 secondes, rien n'est restauré, et la fenêtre le dit.
@@ -236,12 +235,12 @@ Pour revenir en arrière, serveur arrêté, copiez le fichier `session-before-re
 
 ## Nouvelles versions
 
-Quand Herdr ou un plugin installé depuis GitHub a une nouvelle version, l'icône Update du pane `Tools` passe en vert, et son nom au survol dit laquelle (`Update · Herdr 0.9.6 · Explorer`) ; dans le menu en popup, la ligne Update est verte, suivie de la même liste. La vérification a lieu au démarrage de Herdr, puis toutes les 4 heures tant qu'un pane `Tools` est ouvert ([ADR 0009](../adr/0009-new-version-check.md)) :
+Quand Herdr ou un plugin installé depuis GitHub a une nouvelle version, l'icône Settings du pane `Tools` passe en vert, et son nom au survol dit laquelle (`Settings · Herdr 0.9.6 · Explorer`) ; dans le menu en popup, la ligne Settings est verte, suivie de la même liste ; dans l'écran des réglages, la ligne **Mettre à jour…** est verte, suivie de la même liste. Une entrée `update` de `menu.toml` passe aussi en vert. La vérification a lieu au démarrage de Herdr, puis toutes les 4 heures tant qu'un pane `Tools` est ouvert ([ADR 0009](../adr/0009-new-version-check.md)) :
 
 - **Herdr** : sa version installée (`herdr status --json`) est comparée à la dernière version stable, que donne `https://herdr.dev/latest.json` (avec `curl`). Sur le canal preview, rien n'est comparé : ce fichier donne la version stable.
 - **Plugins** : pour chaque plugin installé depuis GitHub, le commit installé (que donne Herdr) est comparé à celui que la référence d'installation désigne maintenant sur GitHub (`git ls-remote` en HTTPS seulement, même quand votre configuration de Git envoie GitHub vers SSH : la branche par défaut sans `--ref`, sinon la branche, ou le tag, de ce nom exact). Un plugin installé sur un commit précis ne change jamais.
 
-Le résultat est gardé dans le dossier d'état du plugin (`updates.json`) et partagé par tous les panes `Tools` et le menu en popup ; une seule vérification tourne à la fois (`updates.lock`). Pour ne plus rien vérifier ni afficher, `check_updates = false` (ligne **Signaler les mises à jour** des réglages) : l'entrée Update cherche toujours, elle, ce qui a une nouvelle version quand vous cliquez dessus. L'annonce des nouvelles versions par Herdr lui-même (`update.version_check` dans son `config.toml`) est indépendante : chacune se désactive sans l'autre.
+Le résultat est gardé dans le dossier d'état du plugin (`updates.json`) et partagé par tous les panes `Tools` et le menu en popup ; une seule vérification tourne à la fois (`updates.lock`). Pour ne plus rien vérifier ni afficher, `check_updates = false` (ligne **Signaler les mises à jour** des réglages) : la mise à jour cherche toujours, elle, ce qui a une nouvelle version quand vous la lancez. L'annonce des nouvelles versions par Herdr lui-même (`update.version_check` dans son `config.toml`) est indépendante : chacune se désactive sans l'autre.
 
 ## Fonctionnement, implications
 

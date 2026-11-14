@@ -25,7 +25,8 @@ pub enum StartIn {
 #[serde(rename_all = "kebab-case")]
 pub enum Action {
     /// Updates Herdr and the plugins installed from GitHub, in a terminal
-    /// window of its own, outside Herdr.
+    /// window of its own, outside Herdr. Not among the built-in entries:
+    /// the settings screen offers it; still allowed in `menu.toml`.
     Update,
     /// Opens the settings screen.
     Settings,
@@ -74,6 +75,12 @@ fn yes() -> bool {
 impl Entry {
     pub fn icon(&self) -> String {
         self.icon.clone().unwrap_or_else(|| self.key.to_string())
+    }
+
+    /// Whether the entry turns green when Herdr or a plugin has a new
+    /// version: the settings, which hold the update, or an `update` entry.
+    pub fn shows_news(&self) -> bool {
+        matches!(self.action, Some(Action::Update | Action::Settings))
     }
 }
 
@@ -161,8 +168,6 @@ pub fn defaults() -> Vec<Entry> {
         action('d', "Disk", Action::Disk, "\u{F02CA}"),
         // nf-md-chart_line
         entry('b', "btop", &[btop()], "\u{F012A}", true),
-        // nf-md-update
-        action('u', "Update", Action::Update, "\u{F06B0}"),
         // nf-md-cog
         action('s', "Settings", Action::Settings, "\u{F0493}"),
     ]
@@ -263,6 +268,18 @@ pub fn load(config_dir: Option<&Path>) -> (Menu, Option<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_settings_entry_shows_new_versions() {
+        let entries = defaults();
+        assert!(entries.iter().all(|e| e.action != Some(Action::Update)));
+        let shown: Vec<&str> = entries
+            .iter()
+            .filter(|e| e.shows_news())
+            .map(|e| e.label.as_str())
+            .collect();
+        assert_eq!(shown, ["Settings"]);
+    }
 
     #[test]
     fn tool_actions_start_the_built_in_entries() {

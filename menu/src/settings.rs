@@ -49,6 +49,7 @@ enum Row {
 enum Section {
     Numbers,
     Tools,
+    Updates,
     Sidebar,
     Colors,
     Files,
@@ -60,6 +61,7 @@ impl Section {
         match self {
             Self::Numbers => "Format des nombres",
             Self::Tools => "Pane Tools",
+            Self::Updates => "Mises à jour",
             Self::Sidebar => "Sidebar",
             Self::Colors => "Couleurs par seuil",
             Self::Files => "Configuration",
@@ -109,6 +111,7 @@ enum Item {
     MemorySpace,
     Totals,
     CheckUpdates,
+    Update,
     Ttl,
     Shells,
     TabBar,
@@ -130,6 +133,8 @@ impl Item {
             Self::MemorySpace => "Espace avant l'unité",
             Self::Totals => "Totaux CPU / mémoire",
             Self::CheckUpdates => "Signaler les mises à jour",
+            // nf-md-update, the icon the `Update` entry had
+            Self::Update => "\u{F06B0} Mettre à jour…",
             Self::Ttl => "Durée de vie des valeurs",
             Self::Shells => "Shells",
             Self::TabBar => "Totaux dans la barre d'onglets",
@@ -149,7 +154,10 @@ impl Item {
 
     /// Something done on Enter, without a value to show.
     fn is_action(self) -> bool {
-        matches!(self, Self::OpenFiles | Self::Reload | Self::Recover)
+        matches!(
+            self,
+            Self::Update | Self::OpenFiles | Self::Reload | Self::Recover
+        )
     }
 }
 
@@ -216,6 +224,9 @@ struct State {
     typing: Option<String>,
     /// Set when the screen closes to show the session's snapshots.
     recover: bool,
+    /// What has a new version (`Herdr 0.9.6 · Explorer`), from the last
+    /// check, when `check_updates` is on.
+    news: Option<String>,
 }
 
 impl State {
@@ -229,6 +240,7 @@ impl State {
             status: None,
             typing: None,
             recover: false,
+            news: None,
         }
     }
 
@@ -243,7 +255,10 @@ impl State {
             Row::Blank,
             Row::Header(Section::Tools),
             Row::Item(Item::Totals),
+            Row::Blank,
+            Row::Header(Section::Updates),
             Row::Item(Item::CheckUpdates),
+            Row::Item(Item::Update),
         ];
         if self.sidebar.is_some() {
             rows.extend([
@@ -395,7 +410,7 @@ impl State {
                 }),
                 levels_unit(which),
             ),
-            Item::OpenFiles | Item::Reload | Item::Recover => Shown::Action,
+            Item::Update | Item::OpenFiles | Item::Reload | Item::Recover => Shown::Action,
         }
     }
 
@@ -435,9 +450,14 @@ impl State {
                 menu.into(),
             ),
             Item::CheckUpdates => (
-                "Update en vert, dans le pane Tools et le menu en popup, quand Herdr ou un plugin a une nouvelle version : vérifié au démarrage, puis toutes les 4 h tant qu'un pane Tools est ouvert.",
+                "Settings et « Mettre à jour » en vert quand Herdr ou un plugin a une nouvelle version : vérifié au démarrage, puis toutes les 4 h tant qu'un pane Tools est ouvert.",
                 "check_updates",
                 menu.into(),
+            ),
+            Item::Update => (
+                "Met à jour Herdr et les plugins installés depuis GitHub, dans une fenêtre à part, et ferme cet écran.",
+                "",
+                String::new(),
             ),
             Item::Ttl => (
                 "Combien de temps une valeur dure sans mesure nouvelle (5 à 600 s).",
@@ -624,6 +644,13 @@ impl State {
             self.recover = true;
             return true;
         }
+        if item == Item::Update {
+            match crate::update::open_window() {
+                Ok(()) => return true,
+                Err(e) => self.report(Err(e)),
+            }
+            return false;
+        }
         if item == Item::OpenFiles {
             match files::open(&self.files) {
                 Ok(_) => {
@@ -717,7 +744,7 @@ impl State {
                 return None;
             }
             // See `change`: they close the screen.
-            Item::OpenFiles | Item::Recover => return None,
+            Item::Update | Item::OpenFiles | Item::Recover => return None,
             Item::Reload => files::reload(),
         })
     }
@@ -796,7 +823,13 @@ pub fn run() -> Result<(), String> {
         },
         None => (None, None),
     };
+    let news = menu
+        .check_updates
+        .then(crate::update::check::last)
+        .flatten()
+        .and_then(|c| c.found.news());
     let mut state = State::new(files, menu, sidebar);
+    state.news = news;
     state.status = menu_error.or(sidebar_error).map(|e| (e, true));
     loop {
         show(&mut state).map_err(|e| e.to_string())?;
@@ -1004,17 +1037,32 @@ mod tests {
     }
 
     #[test]
+    fn the_update_says_what_has_a_new_version() {
+        let mut state = state();
+        let text = rendered(&state, 92, 40);
+        assert!(text.contains("Mises à jour") && text.contains("Mettre à jour…"));
+        assert!(!text.contains("Herdr 0.9.6"));
+        state.news = Some("Herdr 0.9.6 · Explorer".into());
+        let text = rendered(&state, 92, 40);
+        assert!(
+            text.contains("Mettre à jour… · Herdr 0.9.6 · Explorer"),
+            "{text}"
+        );
+    }
+
+    #[test]
     fn tab_goes_from_section_to_section() {
         let state = state();
         let starts = state.section_starts();
-        assert_eq!(starts.len(), 6);
+        assert_eq!(starts.len(), 7);
         let items = state.items();
         assert_eq!(items[starts[1]], Item::Totals);
-        assert_eq!(items[starts[4]], Item::OpenFiles);
+        assert_eq!(items[starts[2]], Item::CheckUpdates);
+        assert_eq!(items[starts[5]], Item::OpenFiles);
         assert_eq!(state.next_section(true), starts[1]);
-        assert_eq!(items[starts[5]], Item::Recover);
+        assert_eq!(items[starts[6]], Item::Recover);
         // Back from the first section: round to the last.
-        assert_eq!(state.next_section(false), starts[5]);
+        assert_eq!(state.next_section(false), starts[6]);
         let within = State {
             selected: starts[2] + 1,
             ..state
@@ -1114,7 +1162,7 @@ mod tests {
         // `written` says so.
         for item in state.items() {
             let said = match item {
-                Item::OpenFiles | Item::Reload | Item::Recover => continue,
+                Item::Update | Item::OpenFiles | Item::Reload | Item::Recover => continue,
                 Item::Shells => state.save_shells("pwsh, bash"),
                 Item::Levels(which) => state.save_levels(which, "1 2 3"),
                 _ => state.step(item, true).unwrap(),

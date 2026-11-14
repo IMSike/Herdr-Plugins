@@ -28,6 +28,8 @@ L'option b, en entrée intégrée **Update** du menu (`update`), lancée dans un
 
 *Révisé le 2026-11-11 : la fenêtre liste d'abord ce qui a une nouvelle version, Herdr et les plugins installés depuis GitHub, chaque ligne décochable, et ne lance `herdr update` que si Herdr reste coché ([ADR 0009](0009-new-version-check.md)).*
 
+*Révisé le 2026-11-14 : la mise à jour est une ligne de l'écran des réglages, plus une entrée du menu ([ADR 0009](0009-new-version-check.md)).*
+
 ## Conséquences
 
 - Aucun agent ne s'arrête sans une confirmation qui le dit.

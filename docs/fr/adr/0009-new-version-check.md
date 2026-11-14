@@ -31,6 +31,8 @@ L'option b, choisie par le mainteneur :
 2. **Affichage** : l'icône Update du pane `Tools` en vert, son nom au survol suivi de ce qui a une nouvelle version ; la ligne Update du menu en popup de même. Le menu en popup ne vérifie rien lui-même.
 3. **Mise à jour** : la fenêtre de l'entrée Update vérifie de nouveau, puis liste ce qui a une nouvelle version, tout coché, chaque ligne décochable. Herdr y figure aussi quand sa nouvelle version n'est pas connue (canal preview, pas de réponse), comme avant. Elle lance `herdr update` d'abord (la nouvelle version d'un plugin peut demander celle de Herdr), puis `herdr plugin update <id>…` pour les plugins cochés, sans `--yes` : Herdr garde sa propre confirmation. Elle vérifie ensuite de nouveau, même quand une étape a échoué. La suite de l'ADR 0005 (redémarrage confirmé) ne change pas, et n'a lieu que si Herdr a été mis à jour.
 
+*Révisé le 2026-11-14 : la mise à jour a quitté les entrées du menu pour l'écran des réglages (sa ligne **Mettre à jour…**, section **Mises à jour**) ; l'icône et la ligne Settings passent en vert à sa place, et la ligne des réglages est verte, suivie de ce qui a une nouvelle version. Une entrée `update` de `menu.toml` marche toujours et passe en vert.*
+
 ## Conséquences
 
 - Le plugin ne fait que comparer des versions : aucun code ne s'installe sans un clic, et le redémarrage du serveur reste demandé, avec ce qu'il arrête.

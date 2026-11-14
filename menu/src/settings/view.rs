@@ -439,7 +439,18 @@ impl RowDraw<'_> {
             let key_room = room.saturating_sub(width(KEY) + 2);
             let shows_key = self.selected && key_room >= 12;
             let label_room = if shows_key { key_room } else { room };
-            let label = ellipsize(item.label(), label_room);
+            // The update in green, followed by what has a new version.
+            let (label, label_style) = match state.news.as_deref() {
+                Some(news) if item == Item::Update => (
+                    format!("{} · {news}", item.label()),
+                    Style {
+                        fg: Some(GREEN),
+                        ..label_style
+                    },
+                ),
+                _ => (item.label().to_string(), label_style),
+            };
+            let label = ellipsize(&label, label_room);
             canvas.text_to(cols.left + 2, y, &label, label_style, cols.right);
             if shows_key {
                 let x = limit - width(KEY) as u16;

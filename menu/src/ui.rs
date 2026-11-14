@@ -4,7 +4,7 @@
 //! click), a list of boxes to tick (`pick`), and the plain prompts of a
 //! terminal (`ask`, `pause`).
 
-use crate::config::{Action, Entry};
+use crate::config::Entry;
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
@@ -327,7 +327,7 @@ fn draw(
 ) -> io::Result<Frame> {
     let (mut out, width, height) = framed(title, " touche, ↑↓ Entrée, clic · Échap")?;
     for (i, entry) in entries.iter().enumerate().skip(top).take(visible) {
-        let news = news.filter(|_| entry.action == Some(Action::Update));
+        let news = news.filter(|_| entry.shows_news());
         let line = match news {
             Some(news) => format!("  {}  {} · {news}", entry.key, entry.label),
             None => format!("  {}  {}", entry.key, entry.label),

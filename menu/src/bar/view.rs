@@ -831,11 +831,9 @@ fn draw_tools(out: &mut impl Write, view: &View, width: u16, rows: u16) -> io::R
     Ok(())
 }
 
-/// What has a new version, when `entry` is the `Update` entry.
+/// What has a new version, when `entry` shows it (see `Entry::shows_news`).
 fn news_for<'a>(view: &'a View, entry: &Entry) -> Option<&'a str> {
-    view.new_versions
-        .as_deref()
-        .filter(|_| entry.action == Some(Action::Update))
+    view.new_versions.as_deref().filter(|_| entry.shows_news())
 }
 
 /// The totals on one line, centered.
