@@ -1,8 +1,8 @@
 //! Whether Herdr or a plugin installed from GitHub has a new version: what
-//! the update offers, and what turns the `Settings` entry green. Herdr's latest
-//! stable version is read from `herdr.dev/latest.json`; a plugin's latest
-//! commit from its repository (`git ls-remote`), on the branch or tag it
-//! was installed from. The result is kept in the plugin's state folder for
+//! the update offers, and what turns the `Settings` entry green. Herdr's
+//! latest stable version is read from `herdr.dev/latest.json`; a plugin's
+//! latest commit from its repository (`git ls-remote`), on the branch or tag
+//! it was installed from. The result is kept in the plugin's state folder for
 //! every pane, and checked again at Herdr's start, then every `CHECK_EVERY`
 //! while a `Tools` pane is open.
 
