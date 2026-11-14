@@ -33,7 +33,7 @@ Work in progress, to-do lists and verification reports live in `.maintainer/` (i
 
 ## Conventions
 
-- Language: identifiers and code comments in English; user-facing text (what a plugin draws, its messages) in French for now, except the names of the menu's built-in entries (Disk, Update, Settings), which their keys come from; documentation in both languages. Talk to the maintainer in French.
+- Language: identifiers and code comments in English; user-facing text (what a plugin draws, its messages) in French for now, except the names of the menu's built-in entries (Disk, Settings), which their keys come from; documentation in both languages. Talk to the maintainer in French.
 - Rust: see [CONTRIBUTING.md](CONTRIBUTING.md#code-conventions).
 - Encoding: UTF-8 without BOM, LF.
 
