@@ -17,7 +17,7 @@ Options étudiées :
 
 ## Décision
 
-Option c. Les quatre actions partagent une commande, `herdr-menu tool`, qui lit l'identifiant de l'action. Elle lance l'entrée de `menu.toml` qui porte le libellé intégré de l'outil (`lazygit`, `gh-dash`, `VS Code`, `btop`, sans tenir compte de la casse), l'entrée intégrée s'il n'y en a pas, comme le menu en popup lance une entrée choisie : le popup `run`, ou seul pour un programme qui a sa propre fenêtre, dans le dossier que demande son `cwd`. Le plugin ne lie aucune touche : le manifeste ne le permet pas, et les touches appartiennent au `config.toml` de l'utilisateur.
+Option c. Les quatre actions partagent une commande, `herdr-menu tool`, qui lit l'identifiant de l'action. Elle lance l'entrée de `menu.toml` qui porte le libellé intégré de l'outil (`lazygit`, `gh-dash`, `VS Code`, `btop`, sans tenir compte de la casse), l'entrée intégrée s'il n'y en a pas, comme le menu en popup lance une entrée choisie : le popup `run`, ou seul pour un programme qui a sa propre fenêtre, dans le dossier que demande son `cwd`. Le plugin ne lie aucune touche : le guide des plugins de Herdr ne donne au manifeste aucune section pour les touches, qui se lient dans le `config.toml` de l'utilisateur.
 
 ## Conséquences
 

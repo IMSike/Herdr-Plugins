@@ -17,7 +17,7 @@ Options studied:
 
 ## Decision
 
-Option c. The four actions share one command, `herdr-menu tool`, which reads the action's id. It starts the entry of `menu.toml` with the tool's built-in label (`lazygit`, `gh-dash`, `VS Code`, `btop`, letter case aside), the built-in entry when there is none, the way the popup menu starts a chosen entry: the `run` popup, or on its own for a program with a window of its own, in the folder its `cwd` asks for. No key is bound by the plugin: the manifest cannot bind one, and the keys belong to the user's `config.toml`.
+Option c. The four actions share one command, `herdr-menu tool`, which reads the action's id. It starts the entry of `menu.toml` with the tool's built-in label (`lazygit`, `gh-dash`, `VS Code`, `btop`, letter case aside), the built-in entry when there is none, the way the popup menu starts a chosen entry: the `run` popup, or on its own for a program with a window of its own, in the folder its `cwd` asks for. No key is bound by the plugin: Herdr's plugin guide gives the manifest no section for keys, which are bound in the user's `config.toml`.
 
 ## Consequences
 

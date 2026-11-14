@@ -1,5 +1,5 @@
 //! Whether Herdr or a plugin installed from GitHub has a new version: what
-//! the `Update` entry offers, and what turns its icon green. Herdr's latest
+//! the update offers, and what turns the `Settings` entry green. Herdr's latest
 //! stable version is read from `herdr.dev/latest.json`; a plugin's latest
 //! commit from its repository (`git ls-remote`), on the branch or tag it
 //! was installed from. The result is kept in the plugin's state folder for
@@ -107,6 +107,15 @@ fn lock_file() -> Option<PathBuf> {
 /// The last check; `None` before the first one.
 pub fn last() -> Option<Checked> {
     herdr_api::read_json(&last_file()?)
+}
+
+/// What has a new version by the last check, when the menu shows it
+/// (`check_updates`).
+pub fn news(check_updates: bool) -> Option<String> {
+    if !check_updates {
+        return None;
+    }
+    last()?.found.news()
 }
 
 /// Checks when the last check is `CHECK_EVERY` old, or `always`, unless

@@ -182,11 +182,10 @@ const TOOL_ACTIONS: [(&str, &str); 4] = [
     ("btop", "btop"),
 ];
 
-/// The entry a tool action starts: the menu's entry of the same label
-/// (letter case aside), else the built-in one. `id` may be qualified
-/// (`imsike.menu.lazygit`): an action id holds no dot.
+/// The entry the tool action `id` (`HERDR_PLUGIN_ACTION_ID`: the manifest's
+/// id, unqualified) starts: the menu's entry of the same label (letter case
+/// aside), else the built-in one.
 pub fn tool_entry(id: &str, entries: &[Entry]) -> Option<Entry> {
-    let id = id.rsplit('.').next().unwrap_or(id);
     let (_, label) = TOOL_ACTIONS.iter().find(|(action, _)| *action == id)?;
     let named = |e: &Entry| e.action.is_none() && e.label.eq_ignore_ascii_case(label);
     entries
@@ -288,10 +287,6 @@ mod tests {
             assert_eq!(entry.label, label);
             assert!(entry.action.is_none());
         }
-        assert_eq!(
-            tool_entry("imsike.menu.lazygit", &[]).map(|e| e.command),
-            Some(vec!["lazygit".to_string()])
-        );
         assert_eq!(tool_entry("open", &[]), None);
     }
 

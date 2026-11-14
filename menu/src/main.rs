@@ -17,9 +17,10 @@
 //! A tool action (`lazygit`, `gh-dash`, `vscode`, `btop`) starts its entry
 //! at once, without the menu (`tool`).
 //!
-//! The built-in entries: `Update` opens a terminal window outside Herdr
-//! (`update`), `Settings` the `settings` popup, which opens the files in an
-//! editor (`edit-tab`, `edit` for a terminal one), `Disk` a view of the bar.
+//! The built-in entries: `Settings` opens the `settings` popup, which opens
+//! the files in an editor (`edit-tab`, `edit` for a terminal one) and the
+//! update's terminal window outside Herdr (`update`), as an `update` entry
+//! of `menu.toml` does; `Disk` a view of the bar.
 
 mod bar;
 mod colors;
@@ -290,11 +291,7 @@ fn menu() -> Result<(), String> {
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| "Outils".into());
     // The last check of the versions: the menu does not check itself.
-    let news = menu
-        .check_updates
-        .then(update::check::last)
-        .flatten()
-        .and_then(|c| c.found.news());
+    let news = update::check::news(menu.check_updates);
     let chosen = ui::choose(&title, &entries, error.as_deref(), news.as_deref());
     // Always answer the waiting action, even when the menu failed.
     let choice = chosen.as_ref().ok().copied().flatten().map(|i| Choice {

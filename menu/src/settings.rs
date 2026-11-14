@@ -645,11 +645,13 @@ impl State {
             return true;
         }
         if item == Item::Update {
-            match crate::update::open_window() {
-                Ok(()) => return true,
-                Err(e) => self.report(Err(e)),
-            }
-            return false;
+            return match crate::update::open_window() {
+                Ok(()) => true,
+                Err(e) => {
+                    self.report(Err(e));
+                    false
+                }
+            };
         }
         if item == Item::OpenFiles {
             match files::open(&self.files) {
@@ -823,11 +825,7 @@ pub fn run() -> Result<(), String> {
         },
         None => (None, None),
     };
-    let news = menu
-        .check_updates
-        .then(crate::update::check::last)
-        .flatten()
-        .and_then(|c| c.found.news());
+    let news = crate::update::check::news(menu.check_updates);
     let mut state = State::new(files, menu, sidebar);
     state.news = news;
     state.status = menu_error.or(sidebar_error).map(|e| (e, true));
