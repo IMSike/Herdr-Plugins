@@ -1,9 +1,10 @@
 //! What the plugins of this repository share: requests to the Herdr API
 //! socket, the environment Herdr gives them, their files (atomic writes,
-//! locks, settings), the number format, and the sidebar's settings and
-//! totals that the menu reads too.
+//! locks, settings), the programs they start, the number format, and the
+//! sidebar's settings and totals that the menu reads too.
 
 mod format;
+pub mod process;
 pub mod sidebar;
 mod socket;
 #[cfg(any(test, feature = "test-support"))]

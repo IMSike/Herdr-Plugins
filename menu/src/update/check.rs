@@ -478,7 +478,7 @@ fn commit_of(listing: &str, names: &[String]) -> Option<String> {
 /// past that. No window opens for it on Windows: the check also runs from
 /// Herdr's start, without a console.
 fn output_within(command: &mut Command, limit: Duration) -> Result<String, String> {
-    crate::launch::no_window(command);
+    herdr_api::process::no_window(command);
     let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

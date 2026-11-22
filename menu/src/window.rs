@@ -65,7 +65,7 @@ fn terminal_window(
     use std::os::windows::process::CommandExt;
     let mut command = Command::new("cmd");
     command.env(SELF_ENV, me).raw_arg(window_line(subcommand));
-    crate::launch::no_window(&mut command);
+    herdr_api::process::no_window(&mut command);
     Ok(command)
 }
 

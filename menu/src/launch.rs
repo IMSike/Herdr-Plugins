@@ -115,11 +115,7 @@ pub fn spawn_detached(argv: &[String], cwd: Option<&Path>) -> Result<(), String>
 /// that pane: it would otherwise act on it, or take itself for one of the
 /// plugin's commands.
 pub fn leave_the_pane(command: &mut Command) {
-    for (name, _) in std::env::vars_os() {
-        if is_the_panes(&name.to_string_lossy()) {
-            command.env_remove(&name);
-        }
-    }
+    herdr_api::process::leave_out(command, is_the_panes);
 }
 
 fn is_the_panes(name: &str) -> bool {
@@ -155,17 +151,6 @@ pub fn detach_command(mut command: Command) -> Result<(), String> {
     // Reaped in the background, so that it leaves no zombie while the pane runs.
     std::thread::spawn(move || child.wait());
     Ok(())
-}
-
-/// Opens no console window for `command` on Windows; nothing elsewhere.
-pub fn no_window(command: &mut Command) {
-    #[cfg(windows)]
-    {
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        std::os::windows::process::CommandExt::creation_flags(command, CREATE_NO_WINDOW);
-    }
-    #[cfg(not(windows))]
-    let _ = command;
 }
 
 #[cfg(test)]
