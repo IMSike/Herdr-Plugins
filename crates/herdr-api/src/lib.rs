@@ -138,6 +138,24 @@ fn absent(name: &str) -> String {
     format!("{name} absent")
 }
 
+/// The state folder of the plugin `id`, beside this plugin's: Herdr gives
+/// each plugin a folder named after its id, in the same place.
+pub(crate) fn state_dir_of(id: &str) -> Result<PathBuf, String> {
+    beside(&state_dir()?, id)
+}
+
+/// The config folder of the plugin `id`, beside this plugin's, as its
+/// state folder.
+pub(crate) fn config_dir_of(id: &str) -> Result<PathBuf, String> {
+    beside(&config_dir()?, id)
+}
+
+/// The folder of the plugin `id` beside `mine`, a folder of this plugin's.
+fn beside(mine: &Path, id: &str) -> Result<PathBuf, String> {
+    let parent = mine.parent().ok_or("dossier du plugin sans parent")?;
+    Ok(parent.join(id))
+}
+
 /// Milliseconds since the Unix epoch.
 pub fn unix_millis() -> u64 {
     SystemTime::now()
@@ -284,6 +302,16 @@ pub enum Taken {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn another_plugin_s_folder_is_beside_this_one_s() {
+        let mine = Path::new("plugins").join("imsike.menu");
+        assert_eq!(
+            beside(&mine, "imsike.links"),
+            Ok(Path::new("plugins").join("imsike.links"))
+        );
+        assert!(beside(Path::new(""), "imsike.links").is_err());
+    }
 
     #[test]
     fn a_session_is_named_after_its_socket_folder() {

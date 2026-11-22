@@ -9,7 +9,7 @@ mod totals;
 pub use settings::{Levels, Settings, TEMPLATE};
 pub use totals::{Gauge, Level, Part, Thresholds, Totals, TotalsThresholds, check_thresholds};
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// The sidebar plugin's id.
 pub const ID: &str = "imsike.sidebar";
@@ -41,10 +41,10 @@ pub(crate) const MACHINE_MEMORY_LEVELS: Thresholds = [60.0, 75.0, 90.0];
 /// Nerd Font monitor glyph (nf-md-monitor), before the whole machine's figures.
 pub const MACHINE_GLYPH: char = '\u{F0379}';
 
-/// The sidebar's state folder, beside this plugin's: Herdr gives each
-/// plugin a folder named after its id, in the same place.
+/// The sidebar's state folder, beside this plugin's (see
+/// `crate::state_dir_of`).
 pub fn state_dir() -> Result<PathBuf, String> {
-    beside(&crate::state_dir()?)
+    crate::state_dir_of(ID)
 }
 
 /// The folder of the running Herdr session in the sidebar's state folder,
@@ -55,11 +55,5 @@ pub fn session_dir() -> Result<PathBuf, String> {
 
 /// The sidebar's config folder, beside this plugin's, as its state folder.
 pub fn config_dir() -> Result<PathBuf, String> {
-    beside(&crate::config_dir()?)
-}
-
-/// The sidebar's folder beside `mine`, a folder of this plugin's.
-fn beside(mine: &Path) -> Result<PathBuf, String> {
-    let parent = mine.parent().ok_or("dossier du plugin sans parent")?;
-    Ok(parent.join(ID))
+    crate::config_dir_of(ID)
 }
