@@ -29,8 +29,8 @@ Ajoutez le dossier à `members` dans le `Cargo.toml` racine. Le code utile à pl
 
 `herdr-plugin.toml` :
 
-- `id = "imsike.<nom>"`, un `name`, `version = "0.0.0"` jamais modifié ([ADR 0002](adr/0002-plugin-versions.md)), `min_herdr_version`, une `description` et `platforms = ["linux", "windows"]`.
-- Deux étapes de build, une par système, qui placent le binaire de la release du commit dans le dossier du plugin, ou le compilent avec `cargo` à défaut de release ([ADR 0008](adr/0008-prebuilt-binaries.md)) :
+- `id = "imsike.<nom>"`, un `name`, `version = "0.0.0"` jamais modifié ([ADR 0002](adr/0002-plugin-versions.md)), `min_herdr_version`, une `description` et `platforms = ["linux", "windows"]`, les systèmes où le plugin tourne. Un plugin peut n'en viser qu'un (`platforms = ["windows"]`, comme `links`) : il n'a alors que l'étape de build de ce système, et son binaire n'est publié que pour ce système.
+- Une étape de build par système visé, qui place le binaire de la release du commit dans le dossier du plugin, ou le compile avec `cargo` à défaut de release ([ADR 0008](adr/0008-prebuilt-binaries.md)) :
 
   ```toml
   [[build]]
@@ -42,7 +42,7 @@ Ajoutez le dossier à `members` dans le `Cargo.toml` racine. Le code utile à pl
   command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "../scripts/fetch-bin.ps1", "herdr-<nom>"]
   ```
 
-  Les workflows compilent et publient le binaire de chaque dossier qui contient un `herdr-plugin.toml` : rien à y ajouter.
+  Les workflows compilent et publient le binaire de chaque dossier qui contient un `herdr-plugin.toml`, pour chaque système que liste son `platforms` (`scripts/plugins-for.sh`), pour tous sans lui : rien à y ajouter. Un `platforms` que le script ne sait pas lire (pas une liste de chaînes, ou une chaîne avec un échappement) fait échouer le workflow, qui le dit.
 
 - Les commandes (`[[actions]]`, `[[panes]]`, `[[events]]`, `[[startup]]`) lancent `target/release/herdr-<nom>` avec une sous-commande. Les titres sont en anglais.
 

@@ -13,6 +13,7 @@ git config core.hooksPath .githooks                 # checks commit messages loc
 cargo fmt --all --check                             # formatting
 cargo clippy --locked --all-targets -- -D warnings  # lints
 cargo test --locked                                 # the tests of every crate
+sh scripts/plugins-for.test.sh                      # the plugins the workflows build for each system
 ```
 
 The [Plugins](.github/workflows/validate.yml) workflow runs the same checks on Linux and Windows for each push to `main` or `dev` and each pull request, and checks that the workspace compiles with Rust 1.95, the oldest version it declares (`rust-version`): raise both together.

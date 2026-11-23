@@ -29,8 +29,8 @@ Add the folder to `members` in the root `Cargo.toml`. Code that several plugins 
 
 `herdr-plugin.toml`:
 
-- `id = "imsike.<name>"`, a `name`, `version = "0.0.0"` never changed ([ADR 0002](adr/0002-plugin-versions.md)), `min_herdr_version`, a `description` and `platforms = ["linux", "windows"]`.
-- Two build steps, one per system, which put the binary of the commit's release into the plugin's own folder, or build it with `cargo` without a release ([ADR 0008](adr/0008-prebuilt-binaries.md)):
+- `id = "imsike.<name>"`, a `name`, `version = "0.0.0"` never changed ([ADR 0002](adr/0002-plugin-versions.md)), `min_herdr_version`, a `description` and `platforms = ["linux", "windows"]`, the systems the plugin runs on. A plugin may target one system only (`platforms = ["windows"]`, as `links`): it then has that system's build step alone, and its binary is released for that system alone.
+- A build step per system listed, each putting the binary of the commit's release into the plugin's own folder, or building it with `cargo` without a release ([ADR 0008](adr/0008-prebuilt-binaries.md)):
 
   ```toml
   [[build]]
@@ -42,7 +42,7 @@ Add the folder to `members` in the root `Cargo.toml`. Code that several plugins 
   command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "../scripts/fetch-bin.ps1", "herdr-<name>"]
   ```
 
-  The workflows build and release the binary of every folder holding a `herdr-plugin.toml`: nothing to add there.
+  The workflows build and release the binary of every folder holding a `herdr-plugin.toml`, for each system its `platforms` lists (`scripts/plugins-for.sh`), every system without it: nothing to add there. A `platforms` the script cannot read (not a list of strings, or a string with an escape) fails the workflow, saying so.
 
 - Commands (`[[actions]]`, `[[panes]]`, `[[events]]`, `[[startup]]`) run `target/release/herdr-<name>` with a subcommand. Titles are in English.
 

@@ -39,6 +39,12 @@ jobs:
       - name: Tests
         run: cargo test --locked
 
+      # The list of the plugins the Binaries and Version workflows build and
+      # release for each system.
+      - name: Plugin list script
+        shell: bash
+        run: sh scripts/plugins-for.test.sh
+
   # The oldest Rust the workspace declares (rust-version), which a user's
   # machine may have when Herdr builds a plugin on install; on both systems,
   # since some code is built only on Windows.

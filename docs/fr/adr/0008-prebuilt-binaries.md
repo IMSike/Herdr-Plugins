@@ -20,7 +20,7 @@ Options étudiées :
 
 ## Décision
 
-- À chaque push sur `main`, le workflow [Version](../../../.github/workflows/release.yml) joint à sa release le binaire de chaque plugin pour Linux x86_64 et aarch64 (musl, statique) et Windows x86_64 (que Windows sur ARM64 exécute en émulation), nommé `herdr-<plugin>-<cible>[.exe]`, et leurs `SHA256SUMS`. Il reprend ceux que le workflow [Plugins](../../../.github/workflows/validate.yml) a compilés sur `dev` pour le même commit (un merge en fast-forward amène ce commit sur `main`), ou les compile ([Binaries](../../../.github/workflows/binaries.yml)). La release est créée en brouillon, ce qui ne crée aucun tag, et publiée une fois complète : le tag apparaît avec tous les binaires.
+- À chaque push sur `main`, le workflow [Version](../../../.github/workflows/release.yml) joint à sa release le binaire de chaque plugin pour Linux x86_64 et aarch64 (musl, statique) et Windows x86_64 (que Windows sur ARM64 exécute en émulation), pour ceux de ces systèmes que liste le `platforms` de son manifeste, nommé `herdr-<plugin>-<cible>[.exe]`, et leurs `SHA256SUMS`. Il reprend ceux que le workflow [Plugins](../../../.github/workflows/validate.yml) a compilés sur `dev` pour le même commit (un merge en fast-forward amène ce commit sur `main`), ou les compile ([Binaries](../../../.github/workflows/binaries.yml)). La release est créée en brouillon, ce qui ne crée aucun tag, et publiée une fois complète : le tag apparaît avec tous les binaires.
 - L'étape de build de chaque plugin lance `scripts/fetch-bin.sh` (Linux) ou `scripts/fetch-bin.ps1` (Windows). La copie doit être inchangée (`git status`) ; le tag posé sur `HEAD` est cherché sur `origin` (`git ls-remote`) ; le binaire est téléchargé depuis cette release, vérifié avec ses `SHA256SUMS` et placé dans `target/release/`, d'où les commandes du manifeste le lancent déjà.
 - Si cela échoue (pas de release pour ce commit, une copie modifiée, un autre système, pas de réseau), l'étape compile avec `cargo` s'il est là, et sinon échoue en disant pourquoi.
 
@@ -32,4 +32,6 @@ Options étudiées :
 - Installer ou mettre à jour juste après un push sur `main`, avant la publication de sa release (quelques secondes avec les binaires de `dev`, quelques minutes quand le workflow les compile), compile avec `cargo` ou échoue ; `herdr plugin update` une fois la release là.
 - Le développement ne change pas : un plugin lié ne lance aucune étape de build et se compile avec `cargo`.
 - Chaque push sur `dev` compile aussi les binaires (trois jobs de plus). Les artefacts sont gardés 90 jours par défaut : un commit plus ancien fusionné dans `main` voit ses binaires recompilés.
-- Un nouveau plugin reprend les deux mêmes étapes de build ; les workflows le trouvent par son dossier (`<dossier>/herdr-plugin.toml`, binaire `herdr-<dossier>`).
+- Un nouveau plugin reprend les mêmes étapes de build, une pour chaque système que liste son `platforms`, ou pour chaque système s'il n'en liste aucun ; les workflows le trouvent par son dossier (`<dossier>/herdr-plugin.toml`, binaire `herdr-<dossier>`).
+
+*Révisé le 2026-11-23 : un plugin n'est compilé et publié que pour les systèmes que liste le `platforms` de premier niveau de son manifeste, pour tous s'il n'en a pas (`scripts/plugins-for.sh`) ; un système qu'aucun plugin ne liste ne compile rien.*

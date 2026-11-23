@@ -72,10 +72,13 @@ jobs:
     if: needs.version.outputs.next != ''
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       actions: read
     outputs:
       run: ${{ steps.find.outputs.run }}
     steps:
+      - uses: actions/checkout@v7
+
       - name: Find the run of dev
         id: find
         env:
@@ -83,12 +86,19 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          # An artifact per target of a system some plugin lists: the two
+          # Linux ones, the Windows one (see binaries.yml).
+          linux=$(sh scripts/plugins-for.sh linux)
+          windows=$(sh scripts/plugins-for.sh windows)
+          want=0
+          [ -z "$linux" ] || want=$((want + 2))
+          [ -z "$windows" ] || want=$((want + 1))
           run=$(gh run list --workflow validate.yml --commit "$GITHUB_SHA" --branch dev --event push \
             --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
           if [ -n "$run" ]; then
             kept=$(gh api "repos/$GH_REPO/actions/runs/$run/artifacts" \
               --jq '[.artifacts[] | select(.expired | not) | select(.name | startswith("binaries-"))] | length')
-            [ "$kept" -eq 3 ] || run=
+            [ "$kept" -eq "$want" ] || run=
           fi
           echo "Run of dev with the binaries: ${run:-none, built here}"
           echo "run=$run" >> "$GITHUB_OUTPUT"
@@ -131,13 +141,19 @@ jobs:
           set -euo pipefail
           fail() { echo "::error::$1"; exit 1; }
           want=0
-          for manifest in */herdr-plugin.toml; do
-            bin="herdr-${manifest%/herdr-plugin.toml}"
-            for asset in "$bin-x86_64-unknown-linux-musl" "$bin-aarch64-unknown-linux-musl" \
-              "$bin-x86_64-pc-windows-msvc.exe"; do
+          # Each plugin for the systems its manifest's platforms lists.
+          linux=$(sh scripts/plugins-for.sh linux)
+          windows=$(sh scripts/plugins-for.sh windows)
+          for plugin in $linux; do
+            for asset in "herdr-$plugin-x86_64-unknown-linux-musl" "herdr-$plugin-aarch64-unknown-linux-musl"; do
               [ -s "assets/$asset" ] || fail "$asset is missing"
               want=$((want + 1))
             done
+          done
+          for plugin in $windows; do
+            asset="herdr-$plugin-x86_64-pc-windows-msvc.exe"
+            [ -s "assets/$asset" ] || fail "$asset is missing"
+            want=$((want + 1))
           done
           [ "$(ls assets | wc -l)" -eq "$want" ] || fail "assets other than the binaries: $(ls assets | tr '\n' ' ')"
           (cd assets && sha256sum herdr-* > SHA256SUMS && cat SHA256SUMS)

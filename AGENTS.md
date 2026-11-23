@@ -45,6 +45,7 @@ Before proposing a change (the [Plugins](.github/workflows/validate.yml) workflo
 cargo fmt --all --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
+sh scripts/plugins-for.test.sh
 ```
 
 ## Git

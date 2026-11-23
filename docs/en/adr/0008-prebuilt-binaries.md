@@ -20,7 +20,7 @@ Options studied:
 
 ## Decision
 
-- On each push to `main`, the [Version](../../../.github/workflows/release.yml) workflow attaches to its release every plugin's binary for x86_64 and aarch64 Linux (musl, static) and x86_64 Windows (which Windows on ARM64 runs in emulation), named `herdr-<plugin>-<target>[.exe]`, and their `SHA256SUMS`. It takes those the [Plugins](../../../.github/workflows/validate.yml) workflow built on `dev` for the same commit (a fast-forward merge brings that commit to `main`), or builds them ([Binaries](../../../.github/workflows/binaries.yml)). The release is created as a draft, which makes no tag, and published once complete: the tag appears with every binary.
+- On each push to `main`, the [Version](../../../.github/workflows/release.yml) workflow attaches to its release every plugin's binary for x86_64 and aarch64 Linux (musl, static) and x86_64 Windows (which Windows on ARM64 runs in emulation), for each of those systems its manifest's `platforms` lists, named `herdr-<plugin>-<target>[.exe]`, and their `SHA256SUMS`. It takes those the [Plugins](../../../.github/workflows/validate.yml) workflow built on `dev` for the same commit (a fast-forward merge brings that commit to `main`), or builds them ([Binaries](../../../.github/workflows/binaries.yml)). The release is created as a draft, which makes no tag, and published once complete: the tag appears with every binary.
 - Each plugin's build step runs `scripts/fetch-bin.sh` (Linux) or `scripts/fetch-bin.ps1` (Windows). The checkout must be unchanged (`git status`); the tag on `HEAD` is looked up on `origin` (`git ls-remote`); the binary is downloaded from that release, checked against its `SHA256SUMS`, and put in `target/release/`, where the manifest's commands already run it.
 - When that fails (no release for the commit, a changed checkout, another system, no network), the step builds with `cargo` if it is there, and otherwise fails saying why.
 
@@ -32,4 +32,6 @@ Options studied:
 - Installing or updating in the moment after a push to `main`, before its release is published (seconds with the binaries of `dev`, a few minutes when the workflow builds them), builds with `cargo`, or fails; `herdr plugin update` once the release is there.
 - Development is unchanged: a linked plugin runs no build step, and is built with `cargo`.
 - Each push to `dev` also builds the binaries (three more jobs). Artifacts are kept 90 days by default: an older commit merged into `main` has its binaries built again.
-- A new plugin takes the same two build steps; the workflows find it by its folder (`<folder>/herdr-plugin.toml`, binary `herdr-<folder>`).
+- A new plugin takes the same build steps, one for each system its `platforms` lists, or for every system when it lists none; the workflows find it by its folder (`<folder>/herdr-plugin.toml`, binary `herdr-<folder>`).
+
+*Revised on 2026-11-23: a plugin is built and released only for the systems its manifest's top-level `platforms` lists, every system when it has none (`scripts/plugins-for.sh`); a system no plugin lists builds nothing.*

@@ -1,9 +1,11 @@
 name: Binaries
 
 # Builds the release binary of every plugin for each system the plugins'
-# [[build]] step downloads (scripts/fetch-bin.*), and keeps them as artifacts
-# named binaries-<target>: herdr-<plugin>-<target>[.exe]. Called by the Plugins
-# workflow on dev, and by the Version workflow when the commit has none.
+# [[build]] step downloads (scripts/fetch-bin.*), a plugin only for the systems
+# its manifest's platforms lists (scripts/plugins-for.sh), and keeps them as
+# artifacts named binaries-<target>: herdr-<plugin>-<target>[.exe], none for a
+# system no plugin lists. Called by the Plugins workflow on dev, and by the
+# Version workflow when the commit has none.
 # See docs/en/adr/0008-prebuilt-binaries.md.
 
 on:
@@ -18,41 +20,66 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest }
-          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm }
-          - { target: x86_64-pc-windows-msvc, os: windows-latest, ext: .exe }
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest, platform: linux }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm, platform: linux }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest, platform: windows, ext: .exe }
     runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
     env:
       TARGET: ${{ matrix.target }}
+      PLATFORM: ${{ matrix.platform }}
       EXT: ${{ matrix.ext }}
     steps:
       - uses: actions/checkout@v7
 
+      # A plugin is a folder with a herdr-plugin.toml; its crate and its binary
+      # are herdr-<folder>. A system no plugin lists builds nothing and keeps
+      # no artifact: the Version workflow expects none for it.
+      - name: Plugins of this system
+        run: |
+          set -euo pipefail
+          plugins=$(sh scripts/plugins-for.sh "$PLATFORM" | tr '\n' ' ')
+          if [ -z "$plugins" ]; then
+            echo "No plugin lists $PLATFORM: nothing to build for $TARGET."
+          else
+            echo "Plugins for $PLATFORM: $plugins"
+          fi
+          echo "PLUGINS=$plugins" >> "$GITHUB_ENV"
+
       - name: Rust target
+        if: env.PLUGINS != ''
         run: rustup target add "$TARGET"
 
       - uses: Swatinem/rust-cache@v2
+        if: env.PLUGINS != ''
         with:
           key: ${{ matrix.target }}
 
       - name: Build
-        run: cargo build --release --locked --target "$TARGET"
+        if: env.PLUGINS != ''
+        run: |
+          set -euo pipefail
+          packages=()
+          for plugin in $PLUGINS; do
+            packages+=(--package "herdr-$plugin")
+          done
+          cargo build --release --locked --target "$TARGET" "${packages[@]}"
 
-      # A plugin is a folder with a herdr-plugin.toml; its binary is herdr-<folder>.
       - name: Name the binaries after their target
+        if: env.PLUGINS != ''
         run: |
           set -euo pipefail
           mkdir dist
-          for manifest in */herdr-plugin.toml; do
-            bin="herdr-${manifest%/herdr-plugin.toml}"
+          for plugin in $PLUGINS; do
+            bin="herdr-$plugin"
             cp "target/$TARGET/release/$bin$EXT" "dist/$bin-$TARGET$EXT"
           done
           ls -l dist
 
       - uses: actions/upload-artifact@v7
+        if: env.PLUGINS != ''
         with:
           name: binaries-${{ matrix.target }}
           path: dist/
