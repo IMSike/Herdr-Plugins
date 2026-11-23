@@ -13,12 +13,16 @@ publish = false
 # Versions shared by the crates; each one picks its own features.
 [workspace.dependencies]
 herdr-api = { path = "crates/herdr-api" }
+# The terminal of the popups and panes the plugins draw.
+crossterm = { version = "0.29", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sysinfo = { version = "0.40.1", default-features = false }
 # Settings files: read with toml, written by the menu with toml_edit, which keeps their comments.
 toml = { version = "1", default-features = false, features = ["parse", "serde", "std"] }
 toml_edit = { version = "0.25", default-features = false, features = ["parse", "display"] }
+# The width of a text in terminal cells.
+unicode-width = { version = "0.2.3", default-features = false }
 
 [profile.release]
 lto = "thin"
