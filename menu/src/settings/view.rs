@@ -251,7 +251,9 @@ fn hints(item: Item, shown: &Shown, typing: bool) -> Vec<(&'static str, &'static
         Shown::Choice { .. } => hints.extend([("←→", "choisir"), ("Espace", "suivant")]),
         Shown::Number(_) => hints.push(("←→", "−/+ 5 s")),
         Shown::Text(_) | Shown::Levels(..) => hints.push(("Entrée", "modifier")),
+        Shown::Prompt(_) => hints.push(("Entrée", "taper")),
         Shown::Action if item == Item::Reload => hints.push(("Entrée", "recharger")),
+        Shown::Action if item == Item::ResetTypes => hints.push(("Entrée", "rétablir")),
         Shown::Action => hints.push(("Entrée", "ouvrir")),
     }
     hints.extend([("Tab", "section"), ("Échap", "fermer")]);
@@ -377,13 +379,19 @@ pub fn render(state: &State, width: u16, height: u16) -> Drawn {
     Drawn { canvas, hits, top }
 }
 
-/// A section's title, a rule after it, and its note at the end.
+/// A section's title (Danger's in red), a rule after it, and its note at
+/// the end.
 fn header(canvas: &mut Canvas, cols: &Columns, y: u16, section: Section, state: &State) {
+    let color = if section == Section::Danger {
+        RED
+    } else {
+        AQUA
+    };
     let end = canvas.text_to(
         cols.left,
         y,
         section.title(),
-        Style::fg(AQUA).bold(),
+        Style::fg(color).bold(),
         cols.right,
     );
     let mut right = cols.right;
@@ -505,6 +513,10 @@ impl RowDraw<'_> {
             Shown::Number(text) => self.stepper(canvas, hits, &text, base, dim, limit),
             Shown::Text(text) if text.is_empty() => {
                 canvas.text_to(cols.value + 1, y, "aucun", dim.italic(), limit);
+            }
+            Shown::Prompt(hint) => {
+                let hint = ellipsize(hint, room - 1);
+                canvas.text_to(cols.value + 1, y, &hint, dim.italic(), limit);
             }
             Shown::Text(text) => {
                 canvas.text_to(cols.value + 1, y, &ellipsize(&text, room - 1), base, limit);

@@ -1,9 +1,10 @@
-//! The links plugin's id and its settings, `links.toml` in its config
-//! folder, which it reads at each click. A missing file or setting keeps its
-//! default, and a wrong type of `open_types` is left out; a file that cannot
-//! be used at all, or found, is set aside: a click then goes by
-//! `Settings::set_aside`, which only selects. Neither the defaults nor that
-//! ever launch a program.
+//! What the links plugin shares with the other plugins: its id and its
+//! settings, `links.toml` in its config folder, which the links plugin reads
+//! at each click and the menu's settings screen shows and changes. A missing
+//! file or setting keeps its default, and a wrong type of `open_types` is
+//! left out; a file that cannot be used at all, or found, is set aside: a
+//! click then goes by `Settings::set_aside`, which only selects. Neither the
+//! defaults nor that ever launch a program.
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -56,7 +57,7 @@ pub enum FileAction {
 }
 
 impl FileAction {
-    /// Every value.
+    /// Every value, in the order the settings screen shows them.
     pub const ALL: [Self; 3] = [Self::Preview, Self::Select, Self::Application];
 }
 
@@ -237,10 +238,12 @@ fn is_invisible(c: char) -> bool {
 }
 
 /// A type as `open_types` holds it, from what the user wrote: without its
-/// leading dot and the spaces around, lowercase. Any extension is taken
-/// (`.$$$`, `.!ut`, `(x)`); refused, with the reason: an empty one, one
-/// holding a dot (only the last extension counts: `gz` for `.tar.gz`), or a
-/// character a link's name may not hold.
+/// leading dot and the spaces around, lowercase. Any extension without a
+/// space is taken (`.$$$`, `.!ut`, `(x)`); refused, with the reason: an
+/// empty one, one holding a dot (only the last extension counts: `gz` for
+/// `.tar.gz`), a character a link's name may not hold, or a space (any
+/// white space), which a file name may hold but the settings screen splits
+/// a list of types at.
 pub fn open_type(written: &str) -> Result<String, String> {
     let text = written.trim();
     let text = text.strip_prefix('.').unwrap_or(text);
@@ -265,6 +268,9 @@ pub fn open_type(written: &str) -> Result<String, String> {
             c.escape_debug()
         ));
     }
+    if text.contains(char::is_whitespace) {
+        return Err(format!("« {text} » : un type ne contient pas d'espace"));
+    }
     Ok(text.to_lowercase())
 }
 
@@ -281,6 +287,12 @@ pub fn file_type(name: &str) -> Option<String> {
 /// `sans type` (see `file_type`).
 pub fn type_label(name: &str) -> String {
     file_type(name).map_or_else(|| "sans type".into(), |t| format!("type .{t}"))
+}
+
+/// The links plugin's config folder, beside this plugin's (see
+/// `crate::config_dir_of`).
+pub fn config_dir() -> Result<PathBuf, String> {
+    crate::config_dir_of(ID)
 }
 
 #[cfg(test)]
@@ -391,6 +403,14 @@ mod tests {
             "{tar}"
         );
         assert!(open_type("..gz").is_err());
+        // A space would split the type in two in the settings screen.
+        assert_eq!(
+            open_type("foo exe"),
+            Err("« foo exe » : un type ne contient pas d'espace".into())
+        );
+        for spaced in ["a\u{00A0}b", "a\u{3000}b", " .a b "] {
+            assert!(open_type(spaced).is_err(), "{spaced}");
+        }
         let md = open_type("md.").unwrap_err();
         assert!(
             md.contains("ne finit pas par un point") && md.ends_with("« md »"),
@@ -453,7 +473,10 @@ mod tests {
             // stands for the tags' neighbour.
             let c = char::from_u32(n).unwrap();
             assert!(!is_refused_in_name(c), "U+{n:04X}");
-            assert!(open_type(&format!("a{c}")).is_ok(), "U+{n:04X}");
+            // A space is a type's own refusal, not a name's.
+            if !c.is_whitespace() {
+                assert!(open_type(&format!("a{c}")).is_ok(), "U+{n:04X}");
+            }
         }
         // Named ones: the soft hyphen, the combining grapheme joiner, the
         // Arabic letter mark, the zero-width space, the left-to-right mark,
@@ -485,7 +508,9 @@ mod tests {
         // emoji show as themselves.
         for c in ['\u{00A0}', '\u{2010}', '\u{FFFD}', '\u{1F600}'] {
             assert!(!is_refused_in_name(c), "U+{:04X}", c as u32);
-            assert!(open_type(&format!("a{c}")).is_ok(), "U+{:04X}", c as u32);
+            if !c.is_whitespace() {
+                assert!(open_type(&format!("a{c}")).is_ok(), "U+{:04X}", c as u32);
+            }
         }
     }
 

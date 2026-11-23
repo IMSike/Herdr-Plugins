@@ -29,14 +29,14 @@ The plugin never opens anything by itself: only your click runs it, once.
 
 ## Settings
 
-`links.toml`, in the plugin's config folder (`herdr plugin config-dir imsike.links`), read at each click. A missing file or setting keeps its default. A wrong type in `open_types` is left out and logged, the others kept. A file that cannot be used at all (a syntax error, an unknown setting, a wrong value of another setting) is set aside: each click says so in a Herdr notification and only selects files, so it never opens more than you chose. So is a file the plugin cannot find, when Herdr gives it no config folder (`HERDR_PLUGIN_CONFIG_DIR` missing): you may have written one. The template, every setting commented out at its default: [`links/templates/links.toml`](../../../links/templates/links.toml).
+`links.toml`, in the plugin's config folder (`herdr plugin config-dir imsike.links`), read at each click. The [menu](menu.md)'s Settings screen sets them, in its **Liens** and **Danger** sections. A missing file or setting keeps its default. A wrong type in `open_types` is left out and logged, the others kept. A file that cannot be used at all (a syntax error, an unknown setting, a wrong value of another setting) is set aside: each click says so in a Herdr notification and only selects files, so it never opens more than you chose. So is a file the plugin cannot find, when Herdr gives it no config folder (`HERDR_PLUGIN_CONFIG_DIR` missing): you may have written one. The template, every setting commented out at its default: [`links/templates/links.toml`](../../../links/templates/links.toml).
 
 | Setting | Default | What it does |
 |---|---|---|
 | `file` | `"preview"` | What a click on a file does: `"preview"`, `"select"` or `"application"` (see above). |
 | `open_types` | see below | The types (without the dot, any case) the default application may open. |
 | `run_programs` | `false` | **Danger.** A file of a type outside `open_types` opens with its program too: a program, a script or an installer runs. |
-| `confirm_programs` | `true` | With `run_programs`: a popup shows the file's real path and its type, and opens it only on Enter (Esc or any other key cancels at once, even in its first 1.1 s). |
+| `confirm_programs` | `true` | With `run_programs`: a popup shows the file's real path and its type, and opens it only on Enter (Esc or any other key cancels at once, even in its first 1.1 s). The menu's Settings screen turns it on again each time it turns `run_programs` on. |
 
 ### Open types
 
@@ -56,7 +56,7 @@ Excel, when it opens a `csv` or a `tsv`, evaluates the formulas the file holds (
 
 Left out on purpose: programs and scripts (`exe`, `bat`, `cmd`, `ps1`, `js`, `vbs`, `py`, `sh`…; Python and Git for Windows make `.py` and `.sh` run when opened), shortcuts and installers (`lnk`, `url`, `msi`, `reg`…), documents with macros (`docm`, `xlsm`…, the old `doc`, `xls`, `ppt`, and OpenDocument `odt`, `ods`, `odp`, with their LibreOffice Basic macros), `rtf`, and what a browser opens with its scripts (`html`, `svg`, `xml`), and `epub`, whose content documents EPUB 3 lets hold scripts. A file without a type (`Makefile`) is selected; a name that starts with a dot has one: `.env` has the type `env`.
 
-Any extension may be added (`$$$`, `!ut`, `(x)`…), with or without its dot, in any case. Only the last extension counts: write `gz`, not `tar.gz` (which is left out, saying so). A type holding a character no name of a link may hold (`\ / : * ? " < > | , ; %`, a control character, an invisible, private-use or blank braille character, a Unicode noncharacter, as above) is left out too; so is one ending with a dot (`md.`: write `md`). Add a type only if you know its program runs nothing; a type that runs code added to the list is opened without the Danger settings.
+Any extension may be added (`$$$`, `!ut`, `(x)`…), with or without its dot, in any case. Only the last extension counts: write `gz`, not `tar.gz` (which is left out, saying so). A type holding a space, or a character no name of a link may hold (`\ / : * ? " < > | , ; %`, a control character, an invisible, private-use or blank braille character, a Unicode noncharacter, as above), is left out too; so is one ending with a dot (`md.`: write `md`). Add a type only if you know its program runs nothing; a type that runs code added to the list is opened without the Danger settings.
 
 ### Danger
 

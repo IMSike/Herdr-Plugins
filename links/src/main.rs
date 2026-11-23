@@ -222,7 +222,7 @@ mod tests {
     }
 
     /// The manifest routes dx's links to the `open` action, and its id is
-    /// the one dx looks for.
+    /// the one the menu and dx look for.
     #[test]
     fn the_manifest_handles_dx_s_links() {
         let manifest: toml::Table = include_str!("../herdr-plugin.toml").parse().unwrap();

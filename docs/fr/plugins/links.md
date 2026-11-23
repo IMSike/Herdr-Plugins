@@ -29,14 +29,14 @@ Le plugin n'ouvre jamais rien de lui-même : seul votre clic le lance, une fois.
 
 ## Réglages
 
-`links.toml`, dans le dossier de configuration du plugin (`herdr plugin config-dir imsike.links`), relu à chaque clic. Un fichier ou un réglage absent garde sa valeur par défaut. Un type faux dans `open_types` est laissé de côté et journalisé, les autres gardés. Un fichier inutilisable (une erreur de syntaxe, un réglage inconnu, une valeur fausse d'un autre réglage) est mis de côté : chaque clic le dit dans une notification Herdr et ne fait que sélectionner les fichiers, sans jamais ouvrir plus que ce que vous avez choisi. De même pour un fichier que le plugin ne peut pas trouver, quand Herdr ne lui donne pas de dossier de configuration (`HERDR_PLUGIN_CONFIG_DIR` absent) : vous en avez peut-être écrit un. Le modèle, chaque réglage commenté à sa valeur par défaut : [`links/templates/links.toml`](../../../links/templates/links.toml).
+`links.toml`, dans le dossier de configuration du plugin (`herdr plugin config-dir imsike.links`), relu à chaque clic. L'écran des réglages du [menu](menu.md) les règle, dans ses sections **Liens** et **Danger**. Un fichier ou un réglage absent garde sa valeur par défaut. Un type faux dans `open_types` est laissé de côté et journalisé, les autres gardés. Un fichier inutilisable (une erreur de syntaxe, un réglage inconnu, une valeur fausse d'un autre réglage) est mis de côté : chaque clic le dit dans une notification Herdr et ne fait que sélectionner les fichiers, sans jamais ouvrir plus que ce que vous avez choisi. De même pour un fichier que le plugin ne peut pas trouver, quand Herdr ne lui donne pas de dossier de configuration (`HERDR_PLUGIN_CONFIG_DIR` absent) : vous en avez peut-être écrit un. Le modèle, chaque réglage commenté à sa valeur par défaut : [`links/templates/links.toml`](../../../links/templates/links.toml).
 
 | Réglage | Par défaut | Ce qu'il fait |
 |---|---|---|
 | `file` | `"preview"` | Ce que fait un clic sur un fichier : `"preview"`, `"select"` ou `"application"` (voir plus haut). |
 | `open_types` | voir plus bas | Les types (sans le point, casse indifférente) que l'application par défaut peut ouvrir. |
 | `run_programs` | `false` | **Danger.** Un fichier d'un type hors de `open_types` s'ouvre aussi avec son programme : un programme, un script ou un installeur se lance. |
-| `confirm_programs` | `true` | Avec `run_programs` : un popup montre le vrai chemin du fichier et son type, et ne l'ouvre que sur Entrée (Échap ou toute autre touche annule aussitôt, même pendant ses 1,1 premières secondes). |
+| `confirm_programs` | `true` | Avec `run_programs` : un popup montre le vrai chemin du fichier et son type, et ne l'ouvre que sur Entrée (Échap ou toute autre touche annule aussitôt, même pendant ses 1,1 premières secondes). L'écran des réglages du menu le réactive chaque fois qu'il active `run_programs`. |
 
 ### Types ouverts
 
@@ -56,7 +56,7 @@ Excel, quand il ouvre un `csv` ou un `tsv`, évalue les formules que le fichier 
 
 Laissés de côté exprès : programmes et scripts (`exe`, `bat`, `cmd`, `ps1`, `js`, `vbs`, `py`, `sh`… ; Python et Git for Windows font exécuter `.py` et `.sh` à l'ouverture), raccourcis et installeurs (`lnk`, `url`, `msi`, `reg`…), documents à macros (`docm`, `xlsm`…, les anciens `doc`, `xls`, `ppt`, et les OpenDocument `odt`, `ods`, `odp`, avec leurs macros LibreOffice Basic), `rtf`, et ce qu'un navigateur ouvre avec ses scripts (`html`, `svg`, `xml`), et `epub`, dont EPUB 3 permet aux documents de contenu de porter des scripts. Un fichier sans type (`Makefile`) est sélectionné ; un nom qui commence par un point en a un : `.env` a le type `env`.
 
-Toute extension peut être ajoutée (`$$$`, `!ut`, `(x)`…), avec ou sans son point, casse indifférente. Seule la dernière extension compte : écrire `gz`, pas `tar.gz` (laissé de côté, en le disant). Un type qui contient un caractère qu'aucun nom de lien ne peut porter (`\ / : * ? " < > | , ; %`, un caractère de contrôle, un caractère invisible, à usage privé ou braille vide, un non-caractère Unicode, comme plus haut) est laissé de côté aussi ; de même qu'un type qui finit par un point (`md.` : écrire `md`). N'ajoutez un type que si vous savez que son programme n'exécute rien ; un type qui exécute du code ajouté à la liste s'ouvre sans les réglages Danger.
+Toute extension peut être ajoutée (`$$$`, `!ut`, `(x)`…), avec ou sans son point, casse indifférente. Seule la dernière extension compte : écrire `gz`, pas `tar.gz` (laissé de côté, en le disant). Un type qui contient une espace, ou un caractère qu'aucun nom de lien ne peut porter (`\ / : * ? " < > | , ; %`, un caractère de contrôle, un caractère invisible, à usage privé ou braille vide, un non-caractère Unicode, comme plus haut), est laissé de côté aussi ; de même qu'un type qui finit par un point (`md.` : écrire `md`). N'ajoutez un type que si vous savez que son programme n'exécute rien ; un type qui exécute du code ajouté à la liste s'ouvre sans les réglages Danger.
 
 ### Danger
 

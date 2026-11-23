@@ -1,9 +1,11 @@
-//! The settings screen, in its popup: the settings of the menu and of the
-//! sidebar, each written to its file as soon as it changes; the
-//! configuration files opened in an editor; Herdr's configuration reloaded.
+//! The settings screen, in its popup: the settings of the menu, of the
+//! sidebar and of the links plugin, each written to its file as soon as it
+//! changes; the configuration files opened in an editor; Herdr's
+//! configuration reloaded.
 
 mod canvas;
 pub mod files;
+mod links;
 mod sessions;
 mod store;
 mod view;
@@ -14,6 +16,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseButton, MouseEve
 use crossterm::terminal;
 use files::Files;
 use herdr_api::NumberFormat;
+use herdr_api::links::FileAction;
 use herdr_api::sidebar::{self, Levels, Settings, Thresholds, check_thresholds};
 use std::io;
 use toml_edit::Value;
@@ -52,6 +55,8 @@ enum Section {
     Updates,
     Sidebar,
     Colors,
+    Links,
+    Danger,
     Files,
     Session,
 }
@@ -64,6 +69,8 @@ impl Section {
             Self::Updates => "Mises à jour",
             Self::Sidebar => "Sidebar",
             Self::Colors => "Couleurs par seuil",
+            Self::Links => "Liens",
+            Self::Danger => "Danger",
             Self::Files => "Configuration",
             Self::Session => "Session",
         }
@@ -84,6 +91,8 @@ enum Shown {
     Text(String),
     /// Three thresholds, typed after Enter, and their unit.
     Levels(Vec<String>, &'static str),
+    /// A value typed after Enter, from nothing: what to type, as a hint.
+    Prompt(&'static str),
     /// Something done on Enter.
     Action,
 }
@@ -117,6 +126,13 @@ enum Item {
     TabBar,
     Colors,
     Levels(Levels),
+    LinkFile,
+    OpenTypes,
+    AddType,
+    RemoveType,
+    ResetTypes,
+    RunPrograms,
+    ConfirmPrograms,
     OpenFiles,
     Reload,
     Recover,
@@ -143,6 +159,14 @@ impl Item {
             Self::Levels(Levels::Memory) => "Seuils mémoire (Herdr)",
             Self::Levels(Levels::MachineCpu) => "Seuils CPU (machine)",
             Self::Levels(Levels::MachineMemory) => "Seuils mémoire (machine)",
+            Self::LinkFile => "Clic sur un fichier",
+            Self::OpenTypes => "Types ouverts",
+            Self::AddType => "Ajouter un type…",
+            Self::RemoveType => "Retirer un type…",
+            // nf-md-restore
+            Self::ResetTypes => "\u{F099B} Rétablir les types par défaut",
+            Self::RunPrograms => "Lancer les programmes",
+            Self::ConfirmPrograms => "Confirmer avant d'ouvrir",
             // nf-md-pencil
             Self::OpenFiles => "\u{F03EB} Ouvrir les fichiers de configuration…",
             // nf-md-reload, as the `Tools` pane's button
@@ -156,7 +180,7 @@ impl Item {
     fn is_action(self) -> bool {
         matches!(
             self,
-            Self::Update | Self::OpenFiles | Self::Reload | Self::Recover
+            Self::Update | Self::ResetTypes | Self::OpenFiles | Self::Reload | Self::Recover
         )
     }
 }
@@ -215,6 +239,13 @@ struct State {
     menu: Menu,
     /// `None` when the sidebar is not installed.
     sidebar: Option<Settings>,
+    /// `None` when the links plugin is not installed.
+    links: Option<herdr_api::links::Settings>,
+    /// `links.toml` cannot be used: the links plugin sets it aside, and the
+    /// screen shows what it goes by instead. Nothing is written to it until
+    /// it can be used again: the user's own values would be lost under the
+    /// fallback ones.
+    links_set_aside: bool,
     selected: usize,
     /// The first row of the list on screen.
     top: usize,
@@ -230,11 +261,18 @@ struct State {
 }
 
 impl State {
-    fn new(files: Files, menu: Menu, sidebar: Option<Settings>) -> Self {
+    fn new(
+        files: Files,
+        menu: Menu,
+        sidebar: Option<Settings>,
+        links: Option<herdr_api::links::Settings>,
+    ) -> Self {
         Self {
             files,
             menu,
             sidebar,
+            links,
+            links_set_aside: false,
             selected: 0,
             top: 0,
             status: None,
@@ -272,6 +310,24 @@ impl State {
                 Row::Item(Item::Colors),
             ]);
             rows.extend(Levels::ALL.map(|l| Row::Item(Item::Levels(l))));
+        }
+        if let Some(links) = &self.links {
+            rows.extend([
+                Row::Blank,
+                Row::Header(Section::Links),
+                Row::Item(Item::LinkFile),
+                Row::Item(Item::OpenTypes),
+                Row::Item(Item::AddType),
+                Row::Item(Item::RemoveType),
+                Row::Item(Item::ResetTypes),
+                Row::Blank,
+                Row::Header(Section::Danger),
+                Row::Item(Item::RunPrograms),
+            ]);
+            // Only meaningful once programs may run.
+            if links.run_programs {
+                rows.push(Row::Item(Item::ConfirmPrograms));
+            }
         }
         rows.extend([
             Row::Blank,
@@ -410,7 +466,26 @@ impl State {
                 }),
                 levels_unit(which),
             ),
-            Item::Update | Item::OpenFiles | Item::Reload | Item::Recover => Shown::Action,
+            Item::LinkFile => Shown::Choice {
+                options: FileAction::ALL
+                    .map(|a| links::file_label(a).into())
+                    .to_vec(),
+                current: self.links.as_ref().map_or(0, |l| links::file_index(l.file)),
+            },
+            Item::OpenTypes => Shown::Text(
+                self.links
+                    .as_ref()
+                    .map_or_else(String::new, |l| l.open_types.join(", ")),
+            ),
+            Item::AddType => Shown::Prompt("une extension : md, .log ou $$$"),
+            Item::RemoveType => Shown::Prompt("un type de la liste, ou * pour la vider"),
+            Item::RunPrograms => yes_no(self.links.as_ref().is_some_and(|l| l.run_programs)),
+            Item::ConfirmPrograms => {
+                yes_no(self.links.as_ref().is_some_and(|l| l.confirm_programs))
+            }
+            Item::Update | Item::ResetTypes | Item::OpenFiles | Item::Reload | Item::Recover => {
+                Shown::Action
+            }
         }
     }
 
@@ -418,6 +493,7 @@ impl State {
     fn about(&self, item: Item) -> (&'static str, String) {
         let menu = config::FILE_NAME;
         let side = sidebar::SETTINGS_FILE;
+        let link = herdr_api::links::SETTINGS_FILE;
         let both = match self.sidebar {
             Some(_) => format!("{menu}, {side}"),
             None => menu.to_string(),
@@ -483,6 +559,41 @@ impl State {
                 "Trois seuils croissants, entre vert, jaune, orange et rouge.",
                 which.key(),
                 side.into(),
+            ),
+            Item::LinkFile => (
+                "Ctrl+clic sur un fichier de dx : l'aperçu de herdr-explorer (sans lui, l'application), sa sélection dans l'Explorateur, ou son application.",
+                "file",
+                link.into(),
+            ),
+            Item::OpenTypes => (
+                "Les types que l'application par défaut peut ouvrir, séparés par des virgules ou des espaces ; un fichier d'un autre type est sélectionné.",
+                "open_types",
+                link.into(),
+            ),
+            Item::AddType => (
+                "Une extension de plus que l'application peut ouvrir, avec ou sans point ; seule la dernière compte (gz, pas tar.gz).",
+                "open_types",
+                link.into(),
+            ),
+            Item::RemoveType => (
+                "Une extension à retirer ; « * » vide la liste : plus aucun fichier ne s'ouvre alors avec son application, sauf avec run_programs.",
+                "open_types",
+                link.into(),
+            ),
+            Item::ResetTypes => (
+                "Remet la liste des types ouverts par défaut.",
+                "open_types",
+                link.into(),
+            ),
+            Item::RunPrograms => (
+                "DANGER : un fichier d'un autre type s'ouvre aussi avec son programme : un programme ou un script se lance.",
+                "run_programs",
+                link.into(),
+            ),
+            Item::ConfirmPrograms => (
+                "Montre le vrai chemin d'un fichier d'un autre type et attend Entrée avant de l'ouvrir.",
+                "confirm_programs",
+                link.into(),
             ),
             Item::OpenFiles => (
                 "Ouvre les fichiers dans un éditeur, et ferme cet écran.",
@@ -637,7 +748,9 @@ impl State {
                     }
                 }
                 Shown::Number(_) => {}
-                Shown::Text(_) | Shown::Levels(..) | Shown::Action => return false,
+                Shown::Text(_) | Shown::Levels(..) | Shown::Prompt(_) | Shown::Action => {
+                    return false;
+                }
             }
         }
         if item == Item::Recover {
@@ -745,6 +858,16 @@ impl State {
                 self.typing = Some(text.join(" "));
                 return None;
             }
+            Item::LinkFile => self.step_link_file(forward)?,
+            Item::OpenTypes => return self.type_open_types(),
+            Item::AddType | Item::RemoveType => return self.type_one_type(),
+            Item::ResetTypes => self
+                .reset_types()?
+                .map(|saved| format!("types par défaut rétablis, {saved}")),
+            Item::RunPrograms => self.switch_run_programs()?,
+            Item::ConfirmPrograms => {
+                self.toggle_links("confirm_programs", |l| l.confirm_programs)?
+            }
             // See `change`: they close the screen.
             Item::Update | Item::OpenFiles | Item::Recover => return None,
             Item::Reload => files::reload(),
@@ -756,6 +879,9 @@ impl State {
         let result = match item {
             Item::Shells => self.save_shells(text),
             Item::Levels(which) => self.save_levels(which, text),
+            Item::OpenTypes => self.save_open_types(text),
+            Item::AddType => self.add_type(text),
+            Item::RemoveType => self.remove_type(text),
             _ => return,
         };
         self.report(result);
@@ -826,9 +952,16 @@ pub fn run() -> Result<(), String> {
         None => (None, None),
     };
     let news = crate::update::check::news(menu.check_updates);
-    let mut state = State::new(files, menu, sidebar);
+    let links_file = files.links.clone();
+    let mut state = State::new(files, menu, sidebar, None);
+    // Shown as the links plugin uses them too: a file it sets aside only
+    // selects.
+    let links_error = links_file.and_then(|path| state.reread_links(&path));
     state.news = news;
-    state.status = menu_error.or(sidebar_error).map(|e| (e, true));
+    state.status = menu_error
+        .or(sidebar_error)
+        .or(links_error)
+        .map(|e| (e, true));
     loop {
         show(&mut state).map_err(|e| e.to_string())?;
         if !std::mem::take(&mut state.recover) {
@@ -934,26 +1067,39 @@ fn show(state: &mut State) -> io::Result<()> {
 mod tests {
     use super::*;
 
-    /// The screen on the files of `dir`, the sidebar installed.
-    fn state_in(dir: &std::path::Path) -> State {
+    /// The screen on the files of `dir`, the sidebar and the links plugin
+    /// installed.
+    pub(super) fn state_in(dir: &std::path::Path) -> State {
         let files = Files {
             menu: Some(dir.join(config::FILE_NAME)),
             sidebar: Some(dir.join(sidebar::SETTINGS_FILE)),
+            links: Some(dir.join(herdr_api::links::SETTINGS_FILE)),
         };
-        State::new(files, Menu::default(), Some(Settings::default()))
+        State::new(
+            files,
+            Menu::default(),
+            Some(Settings::default()),
+            Some(herdr_api::links::Settings::default()),
+        )
     }
 
-    /// The screen without files, the sidebar installed.
-    fn state() -> State {
+    /// The screen without files, the sidebar and the links plugin installed.
+    pub(super) fn state() -> State {
         let files = Files {
             menu: None,
             sidebar: None,
+            links: None,
         };
-        State::new(files, Menu::default(), Some(Settings::default()))
+        State::new(
+            files,
+            Menu::default(),
+            Some(Settings::default()),
+            Some(herdr_api::links::Settings::default()),
+        )
     }
 
     /// The screen without files, as `width` × `height` cells of text.
-    fn rendered(state: &State, width: u16, height: u16) -> String {
+    pub(super) fn rendered(state: &State, width: u16, height: u16) -> String {
         view::render(state, width, height).canvas.to_text()
     }
 
@@ -961,7 +1107,7 @@ mod tests {
     fn the_screen_shows_every_setting_in_its_section() {
         let mut state = state();
         state.status = Some(("enregistré dans menu.toml".into(), false));
-        let text = rendered(&state, 92, 40);
+        let text = rendered(&state, 92, 60);
         for expected in [
             "Réglages",
             "Format des nombres",
@@ -980,7 +1126,7 @@ mod tests {
         }
         // Without the sidebar, its sections are gone.
         state.sidebar = None;
-        let text = rendered(&state, 92, 40);
+        let text = rendered(&state, 92, 60);
         assert!(!text.contains("Sidebar") && !text.contains("Seuils"));
     }
 
@@ -1052,15 +1198,17 @@ mod tests {
     fn tab_goes_from_section_to_section() {
         let state = state();
         let starts = state.section_starts();
-        assert_eq!(starts.len(), 7);
+        assert_eq!(starts.len(), 9);
         let items = state.items();
         assert_eq!(items[starts[1]], Item::Totals);
         assert_eq!(items[starts[2]], Item::CheckUpdates);
-        assert_eq!(items[starts[5]], Item::OpenFiles);
+        assert_eq!(items[starts[5]], Item::LinkFile);
+        assert_eq!(items[starts[6]], Item::RunPrograms);
+        assert_eq!(items[starts[7]], Item::OpenFiles);
         assert_eq!(state.next_section(true), starts[1]);
-        assert_eq!(items[starts[6]], Item::Recover);
+        assert_eq!(items[starts[8]], Item::Recover);
         // Back from the first section: round to the last.
-        assert_eq!(state.next_section(false), starts[6]);
+        assert_eq!(state.next_section(false), starts[8]);
         let within = State {
             selected: starts[2] + 1,
             ..state
@@ -1163,10 +1311,26 @@ mod tests {
                 Item::Update | Item::OpenFiles | Item::Reload | Item::Recover => continue,
                 Item::Shells => state.save_shells("pwsh, bash"),
                 Item::Levels(which) => state.save_levels(which, "1 2 3"),
+                Item::OpenTypes => state.save_open_types(".MD, txt, rs"),
+                Item::AddType => state.add_type(".$$$"),
+                Item::RemoveType => state.remove_type("TXT"),
+                // Tried on its own below.
+                Item::ResetTypes => continue,
                 _ => state.step(item, true).unwrap(),
             };
             assert!(said.is_ok(), "{item:?}: {said:?}");
         }
+        // Shown once programs may run.
+        assert!(state.items().contains(&Item::ConfirmPrograms));
+        let said = state.step(Item::ConfirmPrograms, true).unwrap();
+        assert!(said.is_ok(), "{said:?}");
+        let written = herdr_api::links::Settings::read(&dir.join(herdr_api::links::SETTINGS_FILE))
+            .unwrap()
+            .settings;
+        assert_eq!(written, *state.links.as_ref().unwrap());
+        assert_eq!(written.file, herdr_api::links::FileAction::Select);
+        assert_eq!(written.open_types, ["md", "rs", "$$$"]);
+        assert!(written.run_programs && !written.confirm_programs);
     }
 
     #[test]

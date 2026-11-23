@@ -216,14 +216,14 @@ pub fn all_panes() -> Result<Vec<Pane>, String> {
     panes(json!({}))
 }
 
-/// Whether the plugin `id` is installed.
-pub fn has_plugin(id: &str) -> Result<bool, String> {
+/// The ids of the plugins installed.
+pub fn plugin_ids() -> Result<Vec<String>, String> {
     #[derive(Deserialize)]
     struct Plugin {
         plugin_id: String,
     }
     let plugins: Vec<Plugin> = herdr_api::request_field("plugin.list", json!({}), "plugins")?;
-    Ok(plugins.iter().any(|p| p.plugin_id == id))
+    Ok(plugins.into_iter().map(|p| p.plugin_id).collect())
 }
 
 pub fn close(pane_id: &str) -> Result<(), String> {

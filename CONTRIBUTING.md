@@ -59,7 +59,7 @@ Commit messages and pull request titles follow the [Angular convention](https://
 | `ci` | GitHub Actions workflows |
 | `revert` | Reverts a previous commit |
 
-Scopes: the plugin's name (`links`, `menu`, `sidebar`), `herdr-api` for the shared crate alone, `repo` for the rest (documentation, workflows, a change of the shared crate with its users in the plugins). A module of the shared crate that belongs to one plugin, as `herdr_api::links`, is still the shared crate: `herdr-api` when it changes alone, the documentation of the change included, `repo` with code of the plugins. The commit that creates a plugin keeps that plugin's scope, even when it changes the shared crate too. The subject is in the imperative, lowercase, without a final period. One commit = one coherent change, about one plugin.
+Scopes: the plugin's name (`links`, `menu`, `sidebar`), `herdr-api` for the shared crate alone, `repo` for the rest (documentation, workflows, a change of the shared crate with its users in the plugins). A module of the shared crate that belongs to one plugin, as `herdr_api::links` (which the menu reads too), is still the shared crate: `herdr-api` when it changes alone, the documentation of the change included, `repo` with code of the plugins. The commit that creates a plugin keeps that plugin's scope, even when it changes the shared crate too. The subject is in the imperative, lowercase, without a final period. One commit = one coherent change, about one plugin.
 
 The `.githooks/commit-msg` hook and the [Commit messages](.github/workflows/commit-lint.yml) workflow check the type and the scope.
 

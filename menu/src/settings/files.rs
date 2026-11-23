@@ -1,9 +1,9 @@
 //! The configuration files the settings screen opens in an editor (Herdr's
-//! `config.toml`, `menu.toml`, `sidebar.toml`), how it opens them without
-//! holding Herdr, and the reload of Herdr's configuration.
+//! `config.toml`, `menu.toml`, `sidebar.toml`, `links.toml`), how it opens
+//! them without holding Herdr, and the reload of Herdr's configuration.
 
 use crate::{config, herdr, launch};
-use herdr_api::sidebar;
+use herdr_api::{links, sidebar};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -12,6 +12,8 @@ use std::process::Command;
 pub const MENU_TEMPLATE: &str = include_str!("../../templates/menu.toml");
 /// What a new `sidebar.toml` holds.
 pub const SIDEBAR_TEMPLATE: &str = sidebar::TEMPLATE;
+/// What a new `links.toml` holds.
+pub const LINKS_TEMPLATE: &str = links::TEMPLATE;
 /// The editor (as JSON) and the files (as JSON) handed to the `edit` pane.
 const EDITOR_ENV: &str = "HERDR_MENU_EDITOR";
 const FILES_ENV: &str = "HERDR_MENU_FILES";
@@ -42,13 +44,24 @@ pub struct Files {
     pub menu: Option<PathBuf>,
     /// `None` when the sidebar is not installed.
     pub sidebar: Option<PathBuf>,
+    /// `None` when the links plugin is not installed.
+    pub links: Option<PathBuf>,
 }
 
 impl Files {
     pub fn find() -> Self {
+        let installed = herdr::plugin_ids().unwrap_or_default();
+        let file_of = |id: &str, dir: fn() -> Result<PathBuf, String>, name: &str| {
+            installed
+                .iter()
+                .any(|i| i == id)
+                .then(|| dir().ok().map(|dir| dir.join(name)))
+                .flatten()
+        };
         Self {
             menu: crate::config_dir().map(|dir| dir.join(config::FILE_NAME)),
-            sidebar: sidebar_config_dir().map(|dir| dir.join(sidebar::SETTINGS_FILE)),
+            sidebar: file_of(sidebar::ID, sidebar::config_dir, sidebar::SETTINGS_FILE),
+            links: file_of(links::ID, links::config_dir, links::SETTINGS_FILE),
         }
     }
 
@@ -59,6 +72,7 @@ impl Files {
         for (file, template) in [
             (&self.menu, MENU_TEMPLATE),
             (&self.sidebar, SIDEBAR_TEMPLATE),
+            (&self.links, LINKS_TEMPLATE),
         ] {
             if let Some(file) = file {
                 create_if_missing(file, template)?;
@@ -76,14 +90,6 @@ fn herdr_output(args: &[&str]) -> Option<String> {
         .status
         .success()
         .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
-}
-
-/// The sidebar's config folder, when it is installed.
-fn sidebar_config_dir() -> Option<PathBuf> {
-    if !herdr::has_plugin(sidebar::ID).unwrap_or(false) {
-        return None;
-    }
-    sidebar::config_dir().ok()
 }
 
 /// Herdr's `config.toml`: `HERDR_CONFIG_PATH`, else the path Herdr's help
