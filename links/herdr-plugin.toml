@@ -1,0 +1,34 @@
+id = "imsike.links"
+name = "Links"
+version = "0.0.0"
+min_herdr_version = "0.9.5"
+description = "Opens the path links of the Claude Code plugin dx on a ctrl+click: herdr-explorer's preview, the File Explorer or the file's program, never a program unless allowed and confirmed"
+platforms = ["windows"]
+
+# The release binary of the commit installed, into target/release/; built
+# with cargo when that commit has no release (docs/en/adr/0008-prebuilt-binaries.md).
+[[build]]
+platforms = ["windows"]
+command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "../scripts/fetch-bin.ps1", "herdr-links"]
+
+# Runs on a ctrl+click on a dx-open: link (docs/en/adr/0012-link-dispatch.md).
+[[actions]]
+id = "open"
+title = "Open a dx path link"
+command = ["target/release/herdr-links", "open"]
+
+[[link_handlers]]
+id = "dx-open"
+title = "Open a dx path link"
+pattern = "^dx-open:"
+action = "open"
+
+# Shows the real path of a file outside the open types before it opens with
+# its program (run_programs and confirm_programs on).
+[[panes]]
+id = "confirm"
+title = "Open a file"
+placement = "popup"
+width = 80
+height = 16
+command = ["target/release/herdr-links", "confirm"]

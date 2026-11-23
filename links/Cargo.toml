@@ -1,0 +1,20 @@
+[package]
+name = "herdr-links"
+description = "Herdr plugin: opens the path links of the Claude Code plugin dx on a ctrl+click, in herdr-explorer's preview, the File Explorer or the file's program, never running a program unless allowed and confirmed"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+crossterm = { workspace = true, features = ["events", "windows"] }
+serde_json.workspace = true
+herdr-api.workspace = true
+unicode-width.workspace = true
+
+[dev-dependencies]
+herdr-api = { workspace = true, features = ["test-support"] }
+# The manifest, read by a test.
+toml.workspace = true

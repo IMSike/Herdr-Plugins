@@ -159,6 +159,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "herdr-links"
+version = "0.0.0"
+dependencies = [
+ "crossterm",
+ "herdr-api",
+ "serde_json",
+ "toml",
+ "unicode-width",
+]
+
+[[package]]
 name = "herdr-menu"
 version = "0.0.0"
 dependencies = [
