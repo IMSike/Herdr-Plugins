@@ -7,7 +7,8 @@ use herdr_api::links::{FileAction, Settings};
 /// What a click does: the preview first, or something at once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Step {
-    /// Shown in herdr-explorer's preview; when that fails, `then`.
+    /// Shown in herdr-explorer's preview; when it is missing or fails,
+    /// `then`.
     Preview {
         then: Act,
     },
@@ -30,18 +31,16 @@ pub enum Act {
 
 /// What a click on `target` does. A folder is always selected: opening it
 /// would run a program put in its place, and Explorer would show it anyway.
-pub fn plan(settings: &Settings, target: &Target, has_preview: bool) -> Step {
+pub fn plan(settings: &Settings, target: &Target) -> Step {
     if target.kind == Kind::Folder {
         return Step::Now(Act::Select);
     }
     match settings.file {
         FileAction::Select => Step::Now(Act::Select),
-        FileAction::Preview if has_preview => Step::Preview {
+        FileAction::Preview => Step::Preview {
             then: with_application(settings, target),
         },
-        FileAction::Preview | FileAction::Application => {
-            Step::Now(with_application(settings, target))
-        }
+        FileAction::Application => Step::Now(with_application(settings, target)),
     }
 }
 
@@ -89,7 +88,7 @@ mod tests {
         for action in FileAction::ALL {
             for run in [false, true] {
                 let settings = with(action, run, false);
-                assert_eq!(plan(&settings, &folder, true), Step::Now(Act::Select));
+                assert_eq!(plan(&settings, &folder), Step::Now(Act::Select));
             }
         }
     }
@@ -98,13 +97,13 @@ mod tests {
     fn by_default_a_file_is_previewed() {
         let settings = Settings::default();
         assert_eq!(
-            plan(&settings, &file("a.rs"), true),
+            plan(&settings, &file("a.rs")),
             Step::Preview { then: Act::Open }
         );
         // A program is previewed too: the preview runs nothing; should it
         // fail, the program is only selected.
         assert_eq!(
-            plan(&settings, &file("setup.exe"), true),
+            plan(&settings, &file("setup.exe")),
             Step::Preview {
                 then: Act::SelectNotAllowed
             }
@@ -112,34 +111,16 @@ mod tests {
     }
 
     #[test]
-    fn without_herdr_explorer_the_application_opens_it() {
-        let settings = Settings::default();
-        assert_eq!(plan(&settings, &file("a.md"), false), Step::Now(Act::Open));
-        assert_eq!(
-            plan(&settings, &file("setup.exe"), false),
-            Step::Now(Act::SelectNotAllowed)
-        );
-    }
-
-    #[test]
     fn select_never_opens() {
         let settings = with(FileAction::Select, true, false);
-        assert_eq!(plan(&settings, &file("a.md"), true), Step::Now(Act::Select));
-        assert_eq!(
-            plan(&settings, &file("a.exe"), true),
-            Step::Now(Act::Select)
-        );
+        assert_eq!(plan(&settings, &file("a.md")), Step::Now(Act::Select));
+        assert_eq!(plan(&settings, &file("a.exe")), Step::Now(Act::Select));
     }
 
     #[test]
     fn a_type_outside_the_list_runs_only_in_danger_and_after_a_confirmation() {
-        let app = |run, confirm, name| {
-            plan(
-                &with(FileAction::Application, run, confirm),
-                &file(name),
-                true,
-            )
-        };
+        let app =
+            |run, confirm, name| plan(&with(FileAction::Application, run, confirm), &file(name));
         assert_eq!(app(false, true, "a.txt"), Step::Now(Act::Open));
         assert_eq!(app(false, true, "a.exe"), Step::Now(Act::SelectNotAllowed));
         assert_eq!(app(false, false, "a.exe"), Step::Now(Act::SelectNotAllowed));
@@ -160,12 +141,9 @@ mod tests {
     fn the_list_is_the_user_s() {
         let mut settings = with(FileAction::Application, false, true);
         settings.open_types = vec!["html".into()];
+        assert_eq!(plan(&settings, &file("index.HTML")), Step::Now(Act::Open));
         assert_eq!(
-            plan(&settings, &file("index.HTML"), true),
-            Step::Now(Act::Open)
-        );
-        assert_eq!(
-            plan(&settings, &file("a.txt"), true),
+            plan(&settings, &file("a.txt")),
             Step::Now(Act::SelectNotAllowed)
         );
     }

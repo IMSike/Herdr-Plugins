@@ -17,7 +17,7 @@ mod plan;
 mod target;
 mod url;
 
-use herdr_api::links::{FileAction, Loaded, SETTINGS_FILE, Settings};
+use herdr_api::links::{Loaded, SETTINGS_FILE, Settings};
 use plan::{Act, Step};
 use std::process::ExitCode;
 
@@ -115,18 +115,11 @@ fn open() -> Result<(), String> {
             &set_aside_notice(&why, target.kind),
         );
     }
-    // Only a file is previewed: a folder needs no plugin list.
-    let explorer = match (settings.file, target.kind) {
-        (FileAction::Preview, target::Kind::File) => open::find_explorer(),
-        _ => None,
-    };
-    let act = match (
-        plan::plan(&settings, &target, explorer.is_some()),
-        &explorer,
-    ) {
-        (Step::Now(act), _) => act,
-        (Step::Preview { then }, Some((exe, root))) => {
-            match open::peek(exe, root, &target.path, link.lines) {
+    let act = match plan::plan(&settings, &target) {
+        Step::Now(act) => act,
+        Step::Preview { then } => match open::find_explorer() {
+            None => then,
+            Some((exe, root)) => match open::peek(&exe, &root, &target.path, link.lines) {
                 Ok(()) => return Ok(()),
                 Err(open::NotPeeked::Failed(e)) => {
                     eprintln!("herdr-links : {e}");
@@ -137,10 +130,8 @@ fn open() -> Result<(), String> {
                     open::notify(SLOW_PREVIEW, &slow_notice(target.name()));
                     return Ok(());
                 }
-            }
-        }
-        // `plan` previews only when herdr-explorer was found.
-        (Step::Preview { then }, None) => then,
+            },
+        },
     };
     // The File Explorer or the popup that did not start: said, as a
     // refusal is, and logged.
@@ -173,6 +164,7 @@ fn run(act: Act, target: &target::Target) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use herdr_api::links::FileAction;
 
     #[test]
     fn an_unusable_file_only_selects() {
