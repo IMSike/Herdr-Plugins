@@ -139,12 +139,13 @@ fn decode(segment: &str) -> Result<String, Refused> {
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'%' {
-            let hex = bytes.get(i + 1..i + 3).ok_or(Refused::BadEscape)?;
-            let hex = std::str::from_utf8(hex).map_err(|_| Refused::BadEscape)?;
-            if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
-                return Err(Refused::BadEscape);
-            }
-            out.push(u8::from_str_radix(hex, 16).map_err(|_| Refused::BadEscape)?);
+            let digit = |at: usize| {
+                bytes
+                    .get(at)
+                    .and_then(|&b| char::from(b).to_digit(16))
+                    .ok_or(Refused::BadEscape)
+            };
+            out.push((digit(i + 1)? * 16 + digit(i + 2)?) as u8);
             i += 3;
         } else {
             out.push(bytes[i]);
