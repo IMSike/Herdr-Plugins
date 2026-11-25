@@ -2,7 +2,7 @@ id = "imsike.links"
 name = "Links"
 version = "0.0.0"
 min_herdr_version = "0.9.5"
-description = "Opens the path links of the Claude Code plugin dx on a ctrl+click: herdr-explorer's preview, the File Explorer or the file's program, never a program unless allowed and confirmed"
+description = "Opens the path links of the Claude Code plugin dx on a ctrl+click: herdr-explorer's preview, the File Explorer or the file's program, never a program unless allowed (confirmed by default)"
 platforms = ["windows"]
 
 # The release binary of the commit installed, into target/release/; built

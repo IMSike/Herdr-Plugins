@@ -12,13 +12,16 @@
 # Types (sans le point, casse indifférente) que l'application par défaut peut
 # ouvrir : aucun ne lance de code par lui-même (le programme qui l'ouvre peut
 # toujours avoir des failles), sauf un pdf, dont le lecteur (Acrobat, celui
-# d'Edge) peut exécuter le JavaScript qu'il contient, dans son bac à sable. Un
-# fichier d'un autre type est sélectionné dans l'Explorateur, sauf avec
-# run_programs. Toute extension peut être ajoutée, avec ou sans son point ;
-# seule la dernière compte (gz, pas tar.gz). Un type qui contient une espace,
-# un caractère qu'aucun nom de lien ne peut porter (\ / : * ? " < > | , ; %, un
-# caractère de contrôle, invisible, à usage privé ou braille vide, un
-# non-caractère Unicode) ou qui finit par un point est laissé de côté.
+# d'Edge) peut exécuter le JavaScript qu'il contient, dans son bac à sable ; un
+# docx peut aussi nommer un modèle sur un partage réseau, que Word va chercher,
+# Excel évalue les formules d'un csv ou d'un tsv, et une application Adobe peut
+# exécuter un jsx (voir la page du plugin). Un fichier d'un autre type est
+# sélectionné dans l'Explorateur, sauf avec run_programs. Toute extension peut
+# être ajoutée, avec ou sans son point ; seule la dernière compte (gz, pas
+# tar.gz). Un type qui contient une espace, un caractère qu'aucun nom de lien
+# ne peut porter (\ / : * ? " < > | , ; %, un caractère de contrôle ou qui ne
+# s'affiche pas tel quel : la liste est dans l'ADR 0012, étape 1) ou qui finit
+# par un point est laissé de côté.
 # open_types = ["txt", "md", "markdown", "rst", "adoc", "log", "pdf", "docx", "xlsx", "pptx", "csv", "tsv", "json", "jsonc", "json5", "jsonl", "yaml", "yml", "toml", "ini", "cfg", "conf", "env", "properties", "lock", "sql", "diff", "patch", "c", "h", "cc", "cpp", "cxx", "hpp", "cs", "go", "rs", "java", "kt", "swift", "ts", "tsx", "jsx", "vue", "svelte", "css", "scss", "sass", "less", "png", "jpg", "jpeg", "gif", "bmp", "webp", "ico", "tif", "tiff", "avif", "heic", "mp3", "wav", "flac", "ogg", "m4a", "mp4", "mkv", "webm", "mov", "avi"]
 
 # ── Danger ──────────────────────────────────────────────────────────────────
@@ -31,5 +34,5 @@
 # run_programs = false
 
 # Avec run_programs : une fenêtre montre le vrai chemin du fichier et attend
-# Entrée avant de l'ouvrir (Échap annule).
+# Entrée avant de l'ouvrir (toute autre touche annule).
 # confirm_programs = true
