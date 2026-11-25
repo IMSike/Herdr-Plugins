@@ -8,7 +8,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 /// herdr-explorer's plugin id.
-pub const EXPLORER_ID: &str = "gcaudan.explorer";
+const EXPLORER_ID: &str = "gcaudan.explorer";
 /// How long the preview may take; past it, the click does nothing else.
 pub const PEEK_TIMEOUT: Duration = Duration::from_secs(3);
 /// How often a running preview is checked.
@@ -98,7 +98,7 @@ fn explorer_in(result: &Value) -> Option<(PathBuf, PathBuf)> {
 }
 
 /// `peek`'s argument: the file, and its lines after a colon.
-pub fn peek_arg(path: &str, lines: Option<Lines>) -> String {
+fn peek_arg(path: &str, lines: Option<Lines>) -> String {
     match lines {
         Some(lines) => format!("{path}:{}", lines.peek_places()),
         None => path.to_string(),

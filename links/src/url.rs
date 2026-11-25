@@ -9,7 +9,7 @@ use herdr_api::links::is_refused_in_name;
 /// What every link starts with.
 pub const PREFIX: &str = "dx-open:///";
 /// The longest link read, in bytes (`str::len`).
-pub const MAX_LENGTH: usize = 2048;
+const MAX_LENGTH: usize = 2048;
 
 /// A link read: an absolute Windows path (`C:\folder\file.rs`) and its lines.
 #[derive(Debug, Clone, PartialEq, Eq)]

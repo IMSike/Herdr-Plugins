@@ -47,7 +47,7 @@ pub fn plan(settings: &Settings, target: &Target) -> Step {
 /// Opening `target` with its program: at once for a type of `open_types`;
 /// for another one, selected, unless `run_programs` allows it, confirmed
 /// first with `confirm_programs`.
-pub fn with_application(settings: &Settings, target: &Target) -> Act {
+fn with_application(settings: &Settings, target: &Target) -> Act {
     if settings.opens(target.name()) {
         Act::Open
     } else if !settings.run_programs {

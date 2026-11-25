@@ -86,7 +86,7 @@ pub fn resolve(path: &str) -> Result<Target, Refused> {
 /// a network share (`\\?\UNC\…`), or is anything but a drive's: a path of a
 /// volume or device namespace (`\\?\GLOBALROOT\…`, `\\.\COM1`); refused too
 /// when that plain path is past `MAX_PATH`.
-pub fn local_path(canonical: &str) -> Result<String, Refused> {
+fn local_path(canonical: &str) -> Result<String, Refused> {
     let plain = canonical.strip_prefix(r"\\?\").unwrap_or(canonical);
     let bytes = plain.as_bytes();
     let on_drive =
