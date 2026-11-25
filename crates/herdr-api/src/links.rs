@@ -19,14 +19,15 @@ pub const TEMPLATE: &str = include_str!("../../../links/templates/links.toml");
 
 /// The file types the default application may open: none runs code by
 /// itself when Windows opens it with the program it associates with it, as
-/// installed by default (that program may still have flaws), but a PDF,
-/// whose reader (Acrobat, Edge's) may run the JavaScript it holds, in its
-/// sandbox. Documents, images, sound and video, data and configuration, and
+/// installed by default (that program may still have flaws), but for the
+/// risks the plugin's page lists: a PDF's JavaScript, a `.docx`'s template,
+/// the formulas of a `.csv` or a `.tsv`, a `.jsx` an Adobe application
+/// runs. Documents, images, sound and video, data and configuration, and
 /// source code Windows does not run (not `.js`, `.py`, `.ps1`, `.sh`…).
 /// Markup a browser opens (`.html`, `.svg`, `.xml`) is left out: its scripts
 /// would run. So are OpenDocument files (LibreOffice Basic macros) and RTF.
 #[rustfmt::skip]
-pub const OPEN_TYPES: &[&str] = &[
+const OPEN_TYPES: &[&str] = &[
     // Text and documents.
     "txt", "md", "markdown", "rst", "adoc", "log", "pdf", "docx",
     "xlsx", "pptx",
