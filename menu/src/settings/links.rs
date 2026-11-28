@@ -8,8 +8,9 @@ use toml_edit::{Array, Value};
 /// Why nothing is written to a `links.toml` the links plugin sets aside.
 const SET_ASIDE: &str =
     "links.toml mis de côté : corrigez d'abord le fichier (Ouvrir les fichiers de configuration…)";
-/// Why the open types are not emptied but by `*`.
-const EMPTY_ON_PURPOSE: &str = "liste vide refusée : pour qu'aucun fichier ne s'ouvre avec son application (sauf avec run_programs), « * » dans « Retirer un type… »";
+/// Why the open types are not emptied but on purpose.
+const EMPTY_ON_PURPOSE: &str =
+    "liste vide refusée : retirez le dernier type, puis confirmez avec Entrée";
 
 /// Where `action` is among the values of « Clic sur un fichier », as the
 /// screen shows them (`FileAction::ALL`).
@@ -78,7 +79,7 @@ impl State {
     /// Runs `change` on `links.toml`, read again first: a file set aside
     /// now is not written, one fixed since the screen opened is. `None` when
     /// the links plugin is not installed.
-    fn with_links_file<T>(
+    pub(super) fn with_links_file<T>(
         &mut self,
         change: impl FnOnce(&mut Self, &std::path::Path) -> Result<T, String>,
     ) -> Option<Result<T, String>> {
@@ -128,43 +129,6 @@ impl State {
         })
     }
 
-    /// Starts typing the open types, from the list the file holds now;
-    /// `None`, nothing to show yet.
-    pub(super) fn type_open_types(&mut self) -> Option<Result<String, String>> {
-        if let Err(e) = self.with_links_file(|_, _| Ok(()))? {
-            return Some(Err(e));
-        }
-        self.typing = Some(self.links.as_ref()?.open_types.join(", "));
-        None
-    }
-
-    /// Starts typing one type to add or remove, from nothing; `None`,
-    /// nothing to show yet.
-    pub(super) fn type_one_type(&mut self) -> Option<Result<String, String>> {
-        if let Err(e) = self.with_links_file(|_, _| Ok(()))? {
-            return Some(Err(e));
-        }
-        self.typing = Some(String::new());
-        None
-    }
-
-    /// Types typed with commas or spaces between them, with or without their
-    /// dot. An empty list is only set on purpose, by `*` in « Retirer un
-    /// type… ».
-    pub(super) fn save_open_types(&mut self, text: &str) -> Result<String, String> {
-        let mut types: Vec<String> = Vec::new();
-        for written in text.split([',', ' ']).filter(|t| !t.trim().is_empty()) {
-            let t = links::open_type(written)?;
-            if !types.contains(&t) {
-                types.push(t);
-            }
-        }
-        if types.is_empty() {
-            return Err(EMPTY_ON_PURPOSE.into());
-        }
-        self.write_types(types).unwrap_or_else(|| Ok(String::new()))
-    }
-
     /// Adds one type, written with or without its dot, to the list the file
     /// holds now: a type written there by hand since the screen opened stays.
     pub(super) fn add_type(&mut self, text: &str) -> Result<String, String> {
@@ -178,20 +142,21 @@ impl State {
         }
     }
 
-    /// Removes one type from the list the file holds now; `*` empties the
-    /// list, said as the warning it is. Removing the last one is refused:
-    /// emptying it is only done with `*`.
+    /// Empties the open types, once confirmed: said as the warning it is.
+    pub(super) fn empty_types(&mut self) -> Option<Result<String, String>> {
+        Some(self.write_types(Vec::new())?.and_then(|_| {
+            Err(
+                "liste vidée : plus aucun fichier ne s'ouvre avec son application, sauf avec run_programs (enregistré)"
+                    .into(),
+            )
+        }))
+    }
+
+    /// Removes one type from the list the file holds now. Removing the last
+    /// one is refused: emptying it is only done on purpose (`empty_types`).
     pub(super) fn remove_type(&mut self, text: &str) -> Result<String, String> {
         if self.links.is_none() {
             return Ok(String::new());
-        }
-        if text.trim() == "*" {
-            self.write_types(Vec::new())
-                .unwrap_or_else(|| Ok(String::new()))?;
-            return Err(
-                "liste vidée : plus aucun fichier ne s'ouvre avec son application, sauf avec run_programs (enregistré)"
-                    .into(),
-            );
         }
         let t = links::open_type(text)?;
         match self.edit_types(|array| remove_from(array, &t)) {
@@ -237,7 +202,7 @@ impl State {
 
     /// Makes `open_types` hold `types`, the file's list changed in place
     /// (see `keep_only_types`).
-    fn write_types(&mut self, types: Vec<String>) -> Option<Result<String, String>> {
+    pub(super) fn write_types(&mut self, types: Vec<String>) -> Option<Result<String, String>> {
         let saved = self.write_links(|_, path| {
             let unset = Array::new();
             store::edit_array(path, files::LINKS_TEMPLATE, "open_types", unset, |array| {
@@ -332,15 +297,15 @@ mod tests {
             l.confirm_programs = false;
         }
         let read = || links::Settings::read(&path).unwrap().settings;
-        assert!(state.step(Item::RunPrograms, true).unwrap().is_ok());
+        assert!(state.switch_run_programs().unwrap().is_ok());
         assert!(read().run_programs && read().confirm_programs);
         let shown = state.links.as_ref().unwrap();
         assert!(shown.run_programs && shown.confirm_programs);
         // Turned off on purpose, it stays off until programs are let run again.
         assert!(state.step(Item::ConfirmPrograms, true).unwrap().is_ok());
-        assert!(state.step(Item::RunPrograms, true).unwrap().is_ok());
+        assert!(state.switch_run_programs().unwrap().is_ok());
         assert!(!read().run_programs && !read().confirm_programs);
-        assert!(state.step(Item::RunPrograms, true).unwrap().is_ok());
+        assert!(state.switch_run_programs().unwrap().is_ok());
         assert!(read().run_programs && read().confirm_programs);
     }
 
@@ -349,7 +314,7 @@ mod tests {
         let mut state = state();
         state.focus(Item::LinkFile);
         let text = rendered(&state, 92, 60);
-        for expected in ["Liens", "Clic sur un fichier", "aperçu", "Danger"] {
+        for expected in ["Liens", "Ctrl+clic sur un fichier", "aperçu", "Danger"] {
             assert!(text.contains(expected), "{expected:?} missing:\n{text}");
         }
         // Confirming only means something once programs may run.
@@ -372,7 +337,7 @@ mod tests {
     fn a_wrong_type_is_not_saved() {
         let dir = herdr_api::TempDir::new("menu-open-types").unwrap();
         let mut state = state_in(&dir);
-        assert!(state.save_open_types("md, a/b").is_err());
+        assert!(state.add_type("a/b").is_err());
         assert_eq!(
             state.links.as_ref().unwrap().open_types,
             links::Settings::default().open_types
@@ -380,15 +345,18 @@ mod tests {
         assert!(!dir.join(links::SETTINGS_FILE).exists());
         let tar = state.add_type("tar.gz").unwrap_err();
         assert!(tar.contains("« gz »"), "{tar}");
-        assert!(state.save_open_types(" , ").is_err());
+        assert!(state.add_type(" ").is_err());
     }
 
     #[test]
-    fn types_are_typed_with_commas_or_spaces_between_them() {
+    fn types_are_added_with_commas_or_spaces_between_them() {
         let dir = herdr_api::TempDir::new("menu-types-typed").unwrap();
         let mut state = state_in(&dir);
-        let said = state.save_open_types(".MD, txt  rs,,MD");
-        assert!(said.is_ok(), "{said:?}");
+        state.write_types(vec!["md".into()]).unwrap().unwrap();
+        // After the last element: added.
+        state.part = 1;
+        state.save_typed(Item::OpenTypes, ".MD, txt  rs,,MD");
+        assert!(!state.status.as_ref().unwrap().1, "{:?}", state.status);
         let open_types = &state.links.as_ref().unwrap().open_types;
         assert_eq!(open_types, &["md", "txt", "rs"]);
     }
@@ -411,7 +379,7 @@ mod tests {
         assert!(!file(&dir).contains(&"pdf".to_string()));
         assert!(state.remove_type("pdf").is_err());
         // Back to the list it ships with.
-        assert!(state.step(Item::ResetTypes, true).unwrap().is_ok());
+        state.reset(Item::OpenTypes);
         assert_eq!(file(&dir), links::Settings::default().open_types);
     }
 
@@ -465,36 +433,32 @@ mod tests {
     /// written, and a file set aside meanwhile left as it is.
     #[test]
     fn a_setting_is_not_written_to_a_file_broken_since_the_screen_opened() {
-        for item in [
-            Item::LinkFile,
-            Item::RunPrograms,
-            Item::ConfirmPrograms,
-            Item::ResetTypes,
-            Item::OpenTypes,
-        ] {
+        type Change = fn(&mut State) -> Option<Result<String, String>>;
+        let changes: [(&str, Change); 5] = [
+            ("file", |s| s.step(Item::LinkFile, true)),
+            ("run_programs", |s| s.switch_run_programs()),
+            ("confirm_programs", |s| s.step(Item::ConfirmPrograms, true)),
+            ("reset", |s| s.reset_types()),
+            // Typing a type, refused before it starts.
+            ("open_types", |s| {
+                s.start_typing(Item::OpenTypes);
+                s.status.take().map(|(said, _)| Err(said))
+            }),
+        ];
+        for (name, change) in changes {
             let dir = herdr_api::TempDir::new("menu-links-broken").unwrap();
             let path = dir.join(links::SETTINGS_FILE);
             let mut state = state_in(&dir);
             assert!(!state.links_set_aside);
             let broken = "file = \"select\"\nbogus = 1\n";
             std::fs::write(&path, broken).unwrap();
-            let said = state.step(item, true).unwrap().unwrap_err();
-            assert!(
-                said.starts_with("links.toml mis de côté"),
-                "{item:?}: {said}"
-            );
-            assert!(state.links_set_aside, "{item:?}");
-            assert!(state.typing.is_none(), "{item:?}");
-            assert_eq!(state.links, Some(links::Settings::set_aside()), "{item:?}");
-            assert_eq!(std::fs::read_to_string(&path).unwrap(), broken, "{item:?}");
+            let said = change(&mut state).unwrap().unwrap_err();
+            assert!(said.starts_with("links.toml mis de côté"), "{name}: {said}");
+            assert!(state.links_set_aside, "{name}");
+            assert!(state.typing.is_none(), "{name}");
+            assert_eq!(state.links, Some(links::Settings::set_aside()), "{name}");
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), broken, "{name}");
         }
-        // A whole list typed, likewise.
-        let dir = herdr_api::TempDir::new("menu-links-broken-list").unwrap();
-        let path = dir.join(links::SETTINGS_FILE);
-        let mut state = state_in(&dir);
-        std::fs::write(&path, "bogus = 1\n").unwrap();
-        assert!(state.save_open_types("md, pdf").is_err());
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "bogus = 1\n");
     }
 
     /// A setting changed on the screen is written on the file as it is now:
@@ -535,21 +499,22 @@ mod tests {
         // the confirmation left as it was.
         std::fs::write(&path, "run_programs = true\nconfirm_programs = false\n").unwrap();
         assert!(!state.links.as_ref().unwrap().run_programs);
-        assert!(state.step(Item::RunPrograms, true).unwrap().is_ok());
+        assert!(state.switch_run_programs().unwrap().is_ok());
         assert!(!read().run_programs && !read().confirm_programs);
         assert_eq!(state.links, Some(read()));
     }
 
-    /// « Types ouverts » starts from the list the file holds now, a type
-    /// added by hand since the screen opened included.
+    /// A type typed starts from the list the file holds now, a type added by
+    /// hand since the screen opened included.
     #[test]
-    fn the_open_types_typed_start_from_the_file() {
+    fn the_open_type_typed_starts_from_the_file() {
         let dir = herdr_api::TempDir::new("menu-types-prefill").unwrap();
         let path = dir.join(links::SETTINGS_FILE);
         let mut state = state_in(&dir);
         std::fs::write(&path, "open_types = [\"md\", \"log\"]\n").unwrap();
-        assert!(state.step(Item::OpenTypes, true).is_none());
-        assert_eq!(state.typing.as_deref(), Some("md, log"));
+        state.part = 1;
+        state.start_typing(Item::OpenTypes);
+        assert_eq!(state.typing.as_deref(), Some("log"));
     }
 
     #[test]
@@ -572,7 +537,7 @@ mod tests {
         assert!(remove_from(&mut array, "rs").is_err());
         // The last type the plugin would keep is not removed by mistake.
         let refused = remove_from(&mut array, "md").unwrap_err();
-        assert!(refused.contains("« * »"), "{refused}");
+        assert!(refused.contains("confirmez"), "{refused}");
         assert_eq!(array.to_string().trim(), r#"["md", "tar.gz"]"#);
     }
 
@@ -594,13 +559,14 @@ mod tests {
             std::fs::read_to_string(&path).unwrap(),
             "open_types = [\n    # Mine.\n    \"tar.gz\", # wrong\n    \"pdf\",\n    \"txt\",\n]\n"
         );
-        assert!(state.save_open_types("pdf, rs").is_err());
+        assert!(state.add_type("rs").is_err());
+        assert!(state.remove_type("txt").is_err());
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
             "open_types = [\n    # Mine.\n    \"tar.gz\", # wrong\n    \"pdf\",\n    \"rs\",\n]\n"
         );
         // Resetting replaces the whole list.
-        assert!(state.step(Item::ResetTypes, true).unwrap().is_ok());
+        state.reset(Item::OpenTypes);
         let reset = std::fs::read_to_string(&path).unwrap();
         assert!(
             !reset.contains("Mine") && !reset.contains("tar.gz"),
@@ -617,15 +583,15 @@ mod tests {
         let mut state = state_in(&dir);
         state.links = Some(links::Settings::set_aside());
         state.links_set_aside = true;
-        for item in [Item::AddType, Item::RemoveType, Item::OpenTypes] {
-            let said = state.step(item, true).unwrap();
-            assert!(said.unwrap_err().starts_with("links.toml mis de côté"));
-            assert!(state.typing.is_none(), "{item:?}");
-        }
-        for item in [Item::ResetTypes, Item::LinkFile, Item::RunPrograms] {
-            assert!(state.step(item, true).unwrap().is_err(), "{item:?}");
-        }
-        assert!(state.add_type("txt").is_err() && state.remove_type("*").is_err());
+        state.start_typing(Item::OpenTypes);
+        let (said, _) = state.status.take().unwrap();
+        assert!(said.starts_with("links.toml mis de côté"), "{said}");
+        assert!(state.typing.is_none());
+        assert!(state.reset_types().unwrap().is_err());
+        assert!(state.switch_run_programs().unwrap().is_err());
+        assert!(state.empty_types().unwrap().is_err());
+        assert!(state.step(Item::LinkFile, true).unwrap().is_err());
+        assert!(state.add_type("txt").is_err() && state.remove_type("md").is_err());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), broken);
     }
 
@@ -659,27 +625,27 @@ mod tests {
     fn an_empty_list_is_only_set_on_purpose() {
         let dir = herdr_api::TempDir::new("menu-empty-types").unwrap();
         let mut state = state_in(&dir);
-        assert!(state.save_open_types("md").is_ok());
+        assert!(state.write_types(vec!["md".into()]).unwrap().is_ok());
         // The last one cannot go by mistake.
         let refused = state.remove_type("md").unwrap_err();
-        assert!(refused.contains("« * »"), "{refused}");
+        assert!(refused.contains("confirmez"), "{refused}");
         assert_eq!(state.links.as_ref().unwrap().open_types, ["md"]);
-        // `*` empties it, and says so as a warning.
-        let warned = state.remove_type("*").unwrap_err();
+        // Emptied once confirmed, and said as a warning.
+        let warned = state.empty_types().unwrap().unwrap_err();
         assert!(warned.starts_with("liste vidée"), "{warned}");
         let written = links::Settings::read(&dir.join(links::SETTINGS_FILE)).unwrap();
         assert!(written.settings.open_types.is_empty());
     }
 
-    /// A list written one type per line, emptied by `*`, then given a type:
+    /// A list written one type per line, emptied, then given a type:
     /// written on the list's line, not before a line break of its own.
     #[test]
-    fn a_type_added_after_star_is_written_on_the_list_s_line() {
+    fn a_type_added_to_an_emptied_list_is_written_on_its_line() {
         let dir = herdr_api::TempDir::new("menu-refill-types").unwrap();
         let path = dir.join(links::SETTINGS_FILE);
         std::fs::write(&path, "open_types = [\n    \"md\",\n    \"pdf\",\n]\n").unwrap();
         let mut state = state_in(&dir);
-        assert!(state.remove_type("*").is_err());
+        assert!(state.empty_types().unwrap().is_err());
         assert!(state.add_type("md").unwrap().starts_with("md ajouté"));
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),

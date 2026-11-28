@@ -4,6 +4,7 @@
 //! configuration reloaded.
 
 mod canvas;
+mod edit;
 pub mod files;
 mod links;
 mod sessions;
@@ -107,16 +108,38 @@ enum Shown {
         options: Vec<String>,
         current: usize,
     },
-    /// A number changed by steps.
+    /// A number changed by steps, or typed after Enter.
     Number(String),
-    /// Text typed after Enter.
-    Text(String),
-    /// Three thresholds, typed after Enter, and their unit.
+    /// A list, each element on its own: one chosen with the arrows, then
+    /// changed or removed; one added after the last.
+    List(Vec<String>),
+    /// Three thresholds, one chosen with the arrows, then typed; and their
+    /// unit.
     Levels(Vec<String>, &'static str),
-    /// A value typed after Enter, from nothing: what to type, as a hint.
-    Prompt(&'static str),
     /// Something done on Enter.
     Action,
+}
+
+/// A change that waits for Enter: one that could do harm, or that empties
+/// a list on purpose.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Confirm {
+    RunPrograms,
+    EmptyTypes,
+}
+
+impl Confirm {
+    /// What the status line asks.
+    fn question(self) -> &'static str {
+        match self {
+            Self::RunPrograms => {
+                "Lancer les programmes ? Un Ctrl+clic pourra exécuter un programme ou un script."
+            }
+            Self::EmptyTypes => {
+                "Vider la liste ? Plus aucun fichier ne s'ouvrira avec son application."
+            }
+        }
+    }
 }
 
 /// A yes-or-no setting, shown as two choices.
@@ -151,9 +174,6 @@ enum Item {
     Levels(Levels),
     LinkFile,
     OpenTypes,
-    AddType,
-    RemoveType,
-    ResetTypes,
     RunPrograms,
     ConfirmPrograms,
     OpenFiles,
@@ -176,7 +196,7 @@ impl Item {
             Self::Update => "\u{F06B0} Mettre à jour…",
             // nf-md-puzzle, a plugin
             Self::Declined => "\u{F0431} Reproposer les plugins refusés",
-            Self::Ttl => "Durée de vie des valeurs",
+            Self::Ttl => "Durée de vie d'une valeur",
             Self::Shells => "Shells",
             Self::TabBar => "Barre d'onglets",
             Self::Colors => "Couleurs",
@@ -184,12 +204,8 @@ impl Item {
             Self::Levels(Levels::Memory) => "Seuils mémoire (Herdr)",
             Self::Levels(Levels::MachineCpu) => "Seuils CPU (machine)",
             Self::Levels(Levels::MachineMemory) => "Seuils mémoire (machine)",
-            Self::LinkFile => "Clic sur un fichier",
+            Self::LinkFile => "Ctrl+clic sur un fichier",
             Self::OpenTypes => "Types ouverts",
-            Self::AddType => "Ajouter un type…",
-            Self::RemoveType => "Retirer un type…",
-            // nf-md-restore
-            Self::ResetTypes => "\u{F099B} Rétablir les types par défaut",
             Self::RunPrograms => "Lancer les programmes",
             Self::ConfirmPrograms => "Confirmer avant d'ouvrir",
             // nf-md-pencil
@@ -205,12 +221,7 @@ impl Item {
     fn is_action(self) -> bool {
         matches!(
             self,
-            Self::Update
-                | Self::Declined
-                | Self::ResetTypes
-                | Self::OpenFiles
-                | Self::Reload
-                | Self::Recover
+            Self::Update | Self::Declined | Self::OpenFiles | Self::Reload | Self::Recover
         )
     }
 }
@@ -284,10 +295,24 @@ struct State {
     /// The list scrolls to show the selection: after a key, not after the
     /// mouse, which leaves the list where it is (the wheel moves it alone).
     follow: bool,
+    /// The part of the selected item the arrows chose: an element of a list
+    /// (its length for the one to add), or a threshold.
+    part: usize,
     /// The last thing done, or why it failed (in red).
     status: Option<(String, bool)>,
-    /// The text being typed for the selected item (shells, thresholds).
+    /// The text being typed for the selected item's part.
     typing: Option<String>,
+    /// The text typed is the value it started from: the first character
+    /// typed replaces it, as a selected text would be.
+    fresh: bool,
+    /// A change that waits for Enter, said on the status line.
+    confirm: Option<Confirm>,
+    /// The files as they were before the last change, to put them back; and
+    /// whether that change was undone already (putting them back redoes it).
+    undo: Option<edit::Snapshot>,
+    undone: bool,
+    /// Where the mouse is: the part of the screen under it is highlighted.
+    hover: Option<(u16, u16)>,
     /// Set when the screen closes to show the session's snapshots.
     recover: bool,
     /// What has a new version (`Herdr 0.9.6 · Explorer`), from the last
@@ -315,8 +340,14 @@ impl State {
             selected: 0,
             top: 0,
             follow: true,
+            part: 0,
             status: None,
             typing: None,
+            fresh: false,
+            confirm: None,
+            undo: None,
+            undone: false,
+            hover: None,
             recover: false,
             news: None,
             declined: Vec::new(),
@@ -350,6 +381,7 @@ impl State {
         if tab != self.current_tab() {
             self.tab = tab;
             self.selected = 0;
+            self.part = 0;
             self.top = 0;
         }
         false
@@ -406,9 +438,6 @@ impl State {
                     Row::Header(Section::Links),
                     Row::Item(Item::LinkFile),
                     Row::Item(Item::OpenTypes),
-                    Row::Item(Item::AddType),
-                    Row::Item(Item::RemoveType),
-                    Row::Item(Item::ResetTypes),
                     Row::Blank,
                     Row::Header(Section::Danger),
                     Row::Item(Item::RunPrograms),
@@ -467,9 +496,12 @@ impl State {
         panic!("{item:?} on no tab");
     }
 
-    /// Selects the item `index`; the screen stays open.
+    /// Selects the item `index`, from its first part; the screen stays open.
     fn select(&mut self, index: usize) -> bool {
-        self.selected = index;
+        if index != self.selected {
+            self.selected = index;
+            self.part = 0;
+        }
         false
     }
 
@@ -551,7 +583,7 @@ impl State {
             },
             Item::CheckUpdates => yes_no(self.menu.check_updates),
             Item::Ttl => Shown::Number(format!("{} s", sidebar.map_or(0, |s| s.ttl_seconds))),
-            Item::Shells => Shown::Text(sidebar.map_or_else(String::new, |s| s.shells.join(", "))),
+            Item::Shells => Shown::List(sidebar.map_or_else(Vec::new, |s| s.shells.clone())),
             Item::TabBar => yes_no(sidebar.is_some_and(|s| s.tab_bar)),
             Item::Colors => yes_no(sidebar.is_some_and(|s| s.colors)),
             Item::Levels(which) => Shown::Levels(
@@ -566,23 +598,18 @@ impl State {
                     .to_vec(),
                 current: self.links.as_ref().map_or(0, |l| links::file_index(l.file)),
             },
-            Item::OpenTypes => Shown::Text(
+            Item::OpenTypes => Shown::List(
                 self.links
                     .as_ref()
-                    .map_or_else(String::new, |l| l.open_types.join(", ")),
+                    .map_or_else(Vec::new, |l| l.open_types.clone()),
             ),
-            Item::AddType => Shown::Prompt("une extension : md, .log ou $$$"),
-            Item::RemoveType => Shown::Prompt("un type de la liste, ou * pour la vider"),
             Item::RunPrograms => yes_no(self.links.as_ref().is_some_and(|l| l.run_programs)),
             Item::ConfirmPrograms => {
                 yes_no(self.links.as_ref().is_some_and(|l| l.confirm_programs))
             }
-            Item::Update
-            | Item::Declined
-            | Item::ResetTypes
-            | Item::OpenFiles
-            | Item::Reload
-            | Item::Recover => Shown::Action,
+            Item::Update | Item::Declined | Item::OpenFiles | Item::Reload | Item::Recover => {
+                Shown::Action
+            }
         }
     }
 
@@ -597,33 +624,37 @@ impl State {
         };
         let (what, key, file) = match item {
             Item::DecimalComma => (
-                "Une virgule ou un point avant les décimales.",
+                "Sépare les décimales par une virgule (2,4 Go) ou par un point (2.4 Go), dans le pane Tools comme dans la sidebar.",
                 "decimal_comma",
                 both,
             ),
-            Item::PercentSpace => ("Une espace fine avant le signe %.", "percent_space", both),
+            Item::PercentSpace => (
+                "Met une espace fine entre un pourcentage et son signe : 4 % plutôt que 4%.",
+                "percent_space",
+                both,
+            ),
             Item::CpuDecimal => (
-                "Les parts de CPU des totaux, avec une décimale ou sans.",
+                "Écrit les parts de CPU des totaux avec une décimale (4,2%) ou arrondies à l'unité (4%).",
                 "cpu_decimal",
                 both,
             ),
             Item::MemoryUnit => (
-                "L'unité des tailles : K, M, G ; Ko, Mo, Go ; ou KB, MB, GB.",
+                "Comment s'écrivent les tailles : la lettre seule (K, M, G), à la française (Ko, Mo, Go) ou à l'anglaise (KB, MB, GB).",
                 "memory_unit",
                 both,
             ),
             Item::MemorySpace => (
-                "Une espace fine entre une taille et son unité.",
+                "Met une espace fine entre une taille et son unité : 2,4 Go plutôt que 2,4Go.",
                 "memory_space",
                 both,
             ),
             Item::Totals => (
-                "Les totaux sous les icônes : une ligne, ou quatre barres.",
+                "Comment le pane Tools montre les totaux CPU et mémoire, de Herdr et de la machine, sous ses icônes : une ligne de texte, ou quatre barres qui se remplissent.",
                 "totals",
                 menu.into(),
             ),
             Item::CheckUpdates => (
-                "Settings et « Mettre à jour » en vert quand Herdr ou un plugin a une nouvelle version : vérifié au démarrage, puis toutes les 4 h tant qu'un pane Tools est ouvert.",
+                "Cherche les nouvelles versions de Herdr et des plugins installés depuis GitHub, au démarrage puis toutes les 4 h tant qu'un pane Tools est ouvert : Settings et « Mettre à jour » passent alors en vert.",
                 "check_updates",
                 menu.into(),
             ),
@@ -638,67 +669,67 @@ impl State {
                 String::new(),
             ),
             Item::Ttl => (
-                "Combien de temps une valeur dure sans mesure nouvelle (5 à 600 s).",
+                "Combien de secondes la sidebar garde une valeur (CPU, mémoire, shells) quand plus rien ne la mesure : passé ce délai, elle disparaît plutôt que de rester périmée. De 1 à 600 s ; Entrée pour la taper.",
                 "ttl_seconds",
                 side.into(),
             ),
             Item::Shells => (
-                "Les programmes comptés comme shells, séparés par des virgules.",
+                "Les noms de programmes que la sidebar compte comme des shells sous un agent (sans .exe, majuscules ou non) : un shell sous un agent signale qu'il est au travail.",
                 "shells",
                 side.into(),
             ),
             Item::TabBar => (
-                "Les totaux CPU et mémoire à droite de la barre d'onglets.",
+                "Montre aussi les totaux CPU et mémoire, de Herdr et de la machine, à droite de la barre d'onglets.",
                 "tab_bar",
                 side.into(),
             ),
             Item::Colors => (
-                "Les chiffres en vert, jaune, orange ou rouge selon leurs seuils.",
+                "Colore les chiffres de la sidebar en vert, jaune, orange ou rouge selon les seuils ci-dessous ; sur non, les seuils sont sans effet.",
                 "colors",
                 side.into(),
             ),
-            Item::Levels(which) => (
-                "Trois seuils croissants, entre vert, jaune, orange et rouge.",
-                which.key(),
+            Item::Levels(Levels::Cpu) => (
+                "La part de CPU de Herdr et de tout ce qu'il lance où la couleur passe au jaune, à l'orange, puis au rouge : trois valeurs croissantes, en %.",
+                Levels::Cpu.key(),
+                side.into(),
+            ),
+            Item::Levels(Levels::Memory) => (
+                "La mémoire utilisée par Herdr et tout ce qu'il lance où la couleur passe au jaune, à l'orange, puis au rouge : trois valeurs croissantes, en Go.",
+                Levels::Memory.key(),
+                side.into(),
+            ),
+            Item::Levels(Levels::MachineCpu) => (
+                "La part de CPU de toute la machine où la couleur passe au jaune, à l'orange, puis au rouge : trois valeurs croissantes, en %.",
+                Levels::MachineCpu.key(),
+                side.into(),
+            ),
+            Item::Levels(Levels::MachineMemory) => (
+                "La part de mémoire utilisée de toute la machine où la couleur passe au jaune, à l'orange, puis au rouge : trois valeurs croissantes, en %.",
+                Levels::MachineMemory.key(),
                 side.into(),
             ),
             Item::LinkFile => (
-                "Ctrl+clic sur un fichier de dx : l'aperçu de herdr-explorer (sans lui, l'application), sa sélection dans l'Explorateur, ou son application.",
+                "Ce que fait un Ctrl+clic sur un fichier affiché par dx : l'aperçu de herdr-explorer (sans lui, l'application), sa sélection dans l'Explorateur de fichiers, ou son ouverture avec son application.",
                 "file",
                 link.into(),
             ),
             Item::OpenTypes => (
-                "Les types que l'application par défaut peut ouvrir, séparés par des virgules ou des espaces ; un fichier d'un autre type est sélectionné.",
-                "open_types",
-                link.into(),
-            ),
-            Item::AddType => (
-                "Une extension de plus que l'application peut ouvrir, avec ou sans point ; seule la dernière compte (gz, pas tar.gz).",
-                "open_types",
-                link.into(),
-            ),
-            Item::RemoveType => (
-                "Une extension à retirer ; « * » vide la liste : plus aucun fichier ne s'ouvre alors avec son application, sauf avec run_programs.",
-                "open_types",
-                link.into(),
-            ),
-            Item::ResetTypes => (
-                "Remet la liste des types ouverts par défaut.",
+                "Les extensions qu'un Ctrl+clic peut ouvrir avec leur application par défaut ; un fichier d'un autre type est seulement sélectionné. Seule la dernière extension compte (gz, pas tar.gz).",
                 "open_types",
                 link.into(),
             ),
             Item::RunPrograms => (
-                "DANGER : un fichier d'un autre type s'ouvre aussi avec son programme : un programme ou un script se lance.",
+                "DANGER : un fichier d'un autre type s'ouvre aussi avec son programme : un Ctrl+clic sur un programme ou un script le lance. Demande une confirmation.",
                 "run_programs",
                 link.into(),
             ),
             Item::ConfirmPrograms => (
-                "Montre le vrai chemin d'un fichier d'un autre type et attend Entrée avant de l'ouvrir.",
+                "Avant d'ouvrir un fichier d'un autre type, montre son vrai chemin et attend Entrée.",
                 "confirm_programs",
                 link.into(),
             ),
             Item::OpenFiles => (
-                "Ouvre les fichiers dans un éditeur, et ferme cet écran.",
+                "Ouvre les fichiers de configuration (Herdr et les plugins) dans un éditeur, et ferme cet écran.",
                 "",
                 String::new(),
             ),
@@ -834,26 +865,36 @@ impl State {
 
     /// Changes `item` by one step (`forward` or back); whether the screen
     /// should close. A choice goes round its values when `round`, and
-    /// stops at its first or last one otherwise, as its row shows them;
-    /// only `round` (Enter, a click) types a value or runs an action.
+    /// stops at its first or last one otherwise, as its row shows them; the
+    /// arrows choose an element of a list or a threshold. Only `round`
+    /// (Enter, a click) types a value or runs an action.
     fn change(&mut self, item: Item, forward: bool, round: bool) -> bool {
-        if !round {
-            match self.shown(item) {
-                Shown::Choice { options, current } => {
-                    let at_end = if forward {
-                        current + 1 >= options.len()
-                    } else {
-                        current == 0
-                    };
-                    if at_end {
-                        return false;
-                    }
-                }
-                Shown::Number(_) => {}
-                Shown::Text(_) | Shown::Levels(..) | Shown::Prompt(_) | Shown::Action => {
+        match self.shown(item) {
+            Shown::Choice { options, current } if !round => {
+                let at_end = if forward {
+                    current + 1 >= options.len()
+                } else {
+                    current == 0
+                };
+                if at_end {
                     return false;
                 }
             }
+            // The element to add, after the last, is one more part.
+            Shown::List(list) if !round => {
+                self.move_part(forward, list.len() + 1);
+                return false;
+            }
+            Shown::Levels(values, _) if !round => {
+                self.move_part(forward, values.len());
+                return false;
+            }
+            Shown::List(_) | Shown::Levels(..) | Shown::Number(_) if round => {
+                self.start_typing(item);
+                return false;
+            }
+            Shown::Action if !round => return false,
+            _ => {}
         }
         if item == Item::Recover {
             self.recover = true;
@@ -950,22 +991,14 @@ impl State {
             }
             Item::TabBar => self.toggle_sidebar("tab_bar", |s| &mut s.tab_bar)?,
             Item::Colors => self.toggle_sidebar("colors", |s| &mut s.colors)?,
-            Item::Shells => {
-                self.typing = Some(self.sidebar.as_ref()?.shells.join(", "));
-                return None;
-            }
-            Item::Levels(which) => {
-                let values = which.of(self.sidebar.as_ref()?);
-                let text: Vec<String> = values.iter().map(|v| number(*v)).collect();
-                self.typing = Some(text.join(" "));
-                return None;
-            }
+            // Typed, see `change`.
+            Item::Shells | Item::Levels(_) | Item::OpenTypes => return None,
             Item::LinkFile => self.step_link_file(forward)?,
-            Item::OpenTypes => return self.type_open_types(),
-            Item::AddType | Item::RemoveType => return self.type_one_type(),
-            Item::ResetTypes => self
-                .reset_types()?
-                .map(|saved| format!("types par défaut rétablis, {saved}")),
+            // Letting programs run waits for Enter.
+            Item::RunPrograms if !self.links.as_ref()?.run_programs => {
+                self.confirm = Some(Confirm::RunPrograms);
+                return None;
+            }
             Item::RunPrograms => self.switch_run_programs()?,
             Item::ConfirmPrograms => {
                 self.toggle_links("confirm_programs", |l| l.confirm_programs)?
@@ -987,19 +1020,6 @@ impl State {
             "proposés de nouveau à la prochaine vérification : {}",
             ids.join(", ")
         ))
-    }
-
-    /// Saves what was typed for `item`.
-    fn save_typed(&mut self, item: Item, text: &str) {
-        let result = match item {
-            Item::Shells => self.save_shells(text),
-            Item::Levels(which) => self.save_levels(which, text),
-            Item::OpenTypes => self.save_open_types(text),
-            Item::AddType => self.add_type(text),
-            Item::RemoveType => self.remove_type(text),
-            _ => return,
-        };
-        self.report(result);
     }
 
     fn save_shells(&mut self, text: &str) -> Result<String, String> {
@@ -1107,99 +1127,169 @@ fn show(state: &mut State) -> io::Result<()> {
     let mut shown = Vec::new();
     loop {
         let drawn = draw(state, &mut shown)?;
-        let items = state.items();
-        let item = state.selected_item(&items);
-        let last = items.len() - 1;
         let event = event::read()?;
         match event {
             Event::Key(_) => state.follow = true,
-            Event::Mouse(_) => state.follow = false,
+            Event::Mouse(mouse) => {
+                state.follow = false;
+                state.hover = Some((mouse.column, mouse.row));
+            }
             _ => {}
         }
-        if let Some(text) = &mut state.typing {
-            if let Event::Key(key) = event
-                && key.kind == KeyEventKind::Press
-            {
-                match key.code {
-                    KeyCode::Enter => {
-                        let text = std::mem::take(text);
-                        state.typing = None;
-                        state.save_typed(item, &text);
-                    }
-                    KeyCode::Esc => state.typing = None,
-                    KeyCode::Backspace => {
-                        text.pop();
-                    }
-                    KeyCode::Char(c) if !is_control(key.modifiers) => text.push(c),
-                    _ => {}
-                }
-            }
-            continue;
-        }
-        let close = match event {
-            // Ctrl+L and the like are no l: only Ctrl+C means something.
-            Event::Key(key) if key.kind == KeyEventKind::Press && is_control(key.modifiers) => {
-                key.code == KeyCode::Char('c')
-            }
-            Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-                KeyCode::Esc | KeyCode::Char('q') => true,
-                KeyCode::Up | KeyCode::Char('k') => {
-                    state.select((state.selected + last) % items.len())
-                }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    state.select((state.selected + 1) % items.len())
-                }
-                KeyCode::Home | KeyCode::Char('g') => state.select(0),
-                KeyCode::End | KeyCode::Char('G') => state.select(last),
-                KeyCode::Tab => state.next_tab(true),
-                KeyCode::BackTab => state.next_tab(false),
-                KeyCode::Char(c @ '1'..='9') => {
-                    let tabs = state.tabs();
-                    match tabs.get(usize::from(c as u8 - b'1')) {
-                        Some(&tab) => state.show_tab(tab),
-                        None => false,
-                    }
-                }
-                KeyCode::Left | KeyCode::Char('h') => state.change(item, false, false),
-                KeyCode::Right | KeyCode::Char('l') => state.change(item, true, false),
-                KeyCode::Enter | KeyCode::Char(' ') => state.change(item, true, true),
-                _ => false,
-            },
-            Event::Mouse(mouse) => match (mouse.kind, drawn.at(mouse.column, mouse.row)) {
-                (MouseEventKind::Moved, Some(target)) => match target.item() {
-                    Some(index) => state.select(index),
-                    None => false,
-                },
-                (MouseEventKind::Down(MouseButton::Left), Some(target)) => match target {
-                    Target::Tab(tab) => match state.tabs().get(tab) {
-                        Some(&tab) => state.show_tab(tab),
-                        None => false,
-                    },
-                    Target::Item(index) => {
-                        state.selected = index;
-                        state.change(items[index], true, true)
-                    }
-                    Target::Choose(index, option) => {
-                        state.selected = index;
-                        state.choose(items[index], option);
-                        false
-                    }
-                    Target::Step(index, forward) => {
-                        state.selected = index;
-                        state.change(items[index], forward, false)
-                    }
-                },
-                (MouseEventKind::ScrollDown, _) => {
-                    state.scroll((drawn.top + WHEEL_ROWS).min(drawn.max_top))
-                }
-                (MouseEventKind::ScrollUp, _) => state.scroll(drawn.top.saturating_sub(WHEEL_ROWS)),
-                _ => false,
-            },
-            _ => false,
-        };
-        if close {
+        if handle(state, &drawn, &event) {
             return Ok(());
         }
+    }
+}
+
+/// Answers `event` on the screen drawn as `drawn`; whether the screen
+/// should close.
+fn handle(state: &mut State, drawn: &view::Drawn, event: &Event) -> bool {
+    let items = state.items();
+    let item = state.selected_item(&items);
+    let last = items.len() - 1;
+    let press = match event {
+        Event::Key(key) if key.kind == KeyEventKind::Press => Some(*key),
+        _ => None,
+    };
+    let click = match event {
+        Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
+            Some(drawn.at(mouse.column, mouse.row))
+        }
+        _ => None,
+    };
+    // A change waiting for Enter: Enter or its button does it, any other
+    // key or click drops it.
+    if state.confirm.is_some() {
+        match (press, click) {
+            (Some(key), _) => state.tracked(|s| s.answer(key.code == KeyCode::Enter)),
+            (_, Some(Some(Target::Confirm(yes)))) => state.tracked(|s| s.answer(yes)),
+            (_, Some(_)) => state.answer(false),
+            _ => {}
+        }
+        return false;
+    }
+    if let Some(text) = &mut state.typing {
+        if let Some(key) = press {
+            let fresh = std::mem::take(&mut state.fresh);
+            match key.code {
+                KeyCode::Enter => {
+                    let text = std::mem::take(text);
+                    state.typing = None;
+                    state.tracked(|s| s.save_typed(item, &text));
+                }
+                KeyCode::Esc => state.typing = None,
+                // The value it started from goes at once.
+                KeyCode::Backspace if fresh => text.clear(),
+                KeyCode::Backspace => {
+                    text.pop();
+                }
+                KeyCode::Char(c) if !is_control(key.modifiers) => {
+                    if fresh {
+                        text.clear();
+                    }
+                    text.push(c);
+                }
+                _ => state.fresh = fresh,
+            }
+        }
+        return false;
+    }
+    if let Some(key) = press {
+        // Ctrl+L and the like are no l: only Ctrl+C means something.
+        if is_control(key.modifiers) {
+            return key.code == KeyCode::Char('c');
+        }
+        return match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => true,
+            KeyCode::Up | KeyCode::Char('k') => state.select((state.selected + last) % items.len()),
+            KeyCode::Down | KeyCode::Char('j') => state.select((state.selected + 1) % items.len()),
+            KeyCode::Home | KeyCode::Char('g') => state.select(0),
+            KeyCode::End | KeyCode::Char('G') => state.select(last),
+            KeyCode::Tab => state.next_tab(true),
+            KeyCode::BackTab => state.next_tab(false),
+            KeyCode::Char(c @ '1'..='9') => match state.tabs().get(usize::from(c as u8 - b'1')) {
+                Some(&tab) => state.show_tab(tab),
+                None => false,
+            },
+            KeyCode::Left | KeyCode::Char('h') => state.change(item, false, false),
+            KeyCode::Right | KeyCode::Char('l') => state.change(item, true, false),
+            KeyCode::Enter | KeyCode::Char(' ') => state.tracked(|s| s.change(item, true, true)),
+            KeyCode::Delete | KeyCode::Backspace => {
+                state.tracked(|s| s.remove_part(item));
+                false
+            }
+            KeyCode::Char('r') if !state.is_default(item) => {
+                state.tracked(|s| s.reset(item));
+                false
+            }
+            KeyCode::Char('u') => {
+                state.undo();
+                false
+            }
+            _ => false,
+        };
+    }
+    let Event::Mouse(mouse) = event else {
+        return false;
+    };
+    match (mouse.kind, click) {
+        (MouseEventKind::Moved, _) => {
+            match drawn.at(mouse.column, mouse.row).and_then(Target::item) {
+                Some(index) => state.select(index),
+                None => false,
+            }
+        }
+        (_, Some(Some(target))) => {
+            if let Some(index) = target.item() {
+                state.select(index);
+            }
+            match target {
+                Target::Tab(tab) => match state.tabs().get(tab) {
+                    Some(&tab) => state.show_tab(tab),
+                    None => false,
+                },
+                // A list waits for its element to be chosen.
+                Target::Item(index) if matches!(state.shown(items[index]), Shown::List(_)) => false,
+                Target::Item(index) => state.tracked(|s| s.change(items[index], true, true)),
+                Target::Choose(index, option) => {
+                    state.tracked(|s| s.choose(items[index], option));
+                    false
+                }
+                Target::Step(index, forward) => {
+                    state.tracked(|s| s.change(items[index], forward, false))
+                }
+                // A list's element is chosen; the one to add, or a threshold,
+                // typed at once.
+                Target::Part(index, part) => {
+                    state.part = part;
+                    let at_end = matches!(state.shown(items[index]), Shown::List(list) if part >= list.len());
+                    if at_end || matches!(items[index], Item::Levels(_)) {
+                        state.start_typing(items[index]);
+                    }
+                    false
+                }
+                Target::Remove(index, part) => {
+                    state.part = part;
+                    state.tracked(|s| s.remove_part(items[index]));
+                    false
+                }
+                Target::Reset(index) => {
+                    state.tracked(|s| s.reset(items[index]));
+                    false
+                }
+                Target::Undo => {
+                    state.undo();
+                    false
+                }
+                Target::Confirm(_) => false,
+            }
+        }
+        (MouseEventKind::ScrollDown, _) => {
+            state.scroll((drawn.top + WHEEL_ROWS).min(drawn.max_top))
+        }
+        (MouseEventKind::ScrollUp, _) => state.scroll(drawn.top.saturating_sub(WHEEL_ROWS)),
+        _ => false,
     }
 }
 
@@ -1321,12 +1411,12 @@ mod tests {
             links.open_types = (1..=30).map(|i| format!("ext{i}")).collect();
         }
         let text = rendered(&state, 70, 40);
-        assert!(text.contains("ext1, ext2,"), "{text}");
-        assert!(text.contains("ext30"), "{text}");
+        assert!(text.contains(" ext1✕  ext2 "), "{text}");
+        assert!(text.contains(" ext30   +"), "{text}");
         let list = text
             .lines()
             .filter(|line| line.contains("ext") && !line.contains("extension"));
-        assert_eq!(list.clone().count(), 5, "{text}");
+        assert!(list.clone().count() > 1, "{text}");
         assert!(list.clone().all(|line| !line.contains('…')), "{text}");
     }
 
@@ -1511,11 +1601,15 @@ mod tests {
                 }
                 Item::Shells => state.save_shells("pwsh, bash"),
                 Item::Levels(which) => state.save_levels(which, "1 2 3"),
-                Item::OpenTypes => state.save_open_types(".MD, txt, rs"),
-                Item::AddType => state.add_type(".$$$"),
-                Item::RemoveType => state.remove_type("TXT"),
-                // Tried on its own below.
-                Item::ResetTypes => continue,
+                Item::OpenTypes => {
+                    let types = ["md", "txt", "rs"].map(String::from).to_vec();
+                    let written = state.write_types(types).unwrap();
+                    assert!(written.is_ok(), "{written:?}");
+                    let added = state.add_type(".$$$");
+                    assert!(added.is_ok(), "{added:?}");
+                    state.remove_type("TXT")
+                }
+                Item::RunPrograms => state.switch_run_programs().unwrap(),
                 _ => state.step(item, true).unwrap(),
             };
             assert!(said.is_ok(), "{item:?}: {said:?}");
