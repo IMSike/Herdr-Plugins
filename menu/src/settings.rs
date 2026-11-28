@@ -910,6 +910,14 @@ impl State {
             Shown::Choice { current, .. } => Some(current),
             _ => None,
         };
+        // From the value the file holds now, which the screen may not show.
+        if matches!(
+            item,
+            Item::LinkFile | Item::RunPrograms | Item::ConfirmPrograms
+        ) && let Some(Err(e)) = self.check_links_file()
+        {
+            return self.report(Err(e));
+        }
         while let Some(before) = current(self).filter(|&c| c != option) {
             match self.step(item, true) {
                 Some(result) => self.report(result),
@@ -976,7 +984,7 @@ impl State {
             Item::LinkFile => self.step_link_file(forward)?,
             // As the file holds it now, which the screen may not show yet:
             // letting programs run waits for Enter, stopping them does not.
-            Item::RunPrograms => match self.with_links_file(|_, _| Ok(()))? {
+            Item::RunPrograms => match self.check_links_file()? {
                 Err(e) => Err(e),
                 Ok(()) if self.links.as_ref()?.run_programs => self.set_run_programs(false)?,
                 Ok(()) => {

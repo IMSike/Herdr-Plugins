@@ -50,7 +50,7 @@ impl State {
     /// add, from its value otherwise, which the first character replaces.
     pub(super) fn start_typing(&mut self, item: Item) {
         if item == Item::OpenTypes
-            && let Some(Err(e)) = self.with_links_file(|_, _| Ok(()))
+            && let Some(Err(e)) = self.check_links_file()
         {
             self.report(Err(e));
             return;
@@ -182,11 +182,20 @@ impl State {
                 self.save_shells(list)
                     .map(|saved| format!("{element} retiré, {saved}"))
             }
-            Item::OpenTypes if list.len() == 1 => {
-                self.confirm = Some(Confirm::EmptyTypes);
-                return;
-            }
-            Item::OpenTypes => self.remove_type(&element),
+            // The list the file holds now, which may be longer than the one
+            // shown: emptying it waits for Enter.
+            Item::OpenTypes => match self.check_links_file() {
+                Some(Err(e)) => Err(e),
+                _ if self
+                    .links
+                    .as_ref()
+                    .is_some_and(|l| l.open_types == [element.as_str()]) =>
+                {
+                    self.confirm = Some(Confirm::EmptyTypes);
+                    return;
+                }
+                _ => self.remove_type(&element),
+            },
             _ => return,
         };
         self.report(result);
@@ -570,5 +579,25 @@ mod tests {
         // Turned off at once.
         state.change(Item::RunPrograms, true, true);
         assert!(!run(&state) && state.confirm.is_none());
+    }
+
+    #[test]
+    fn a_stale_screen_acts_on_the_file() {
+        let dir = herdr_api::TempDir::new("menu-edit-stale").unwrap();
+        let mut state = state_in(&dir);
+        let path = dir.join(links::SETTINGS_FILE);
+        // Shown on, off in the file: « non » asks nothing.
+        state.links.as_mut().unwrap().run_programs = true;
+        std::fs::write(&path, "run_programs = false\n").unwrap();
+        state.choose(Item::RunPrograms, 0);
+        assert!(state.confirm.is_none());
+        assert!(!state.links.as_ref().unwrap().run_programs);
+        // The last type shown, but not the last in the file: removed alone.
+        state.links.as_mut().unwrap().open_types = vec!["md".into()];
+        std::fs::write(&path, "open_types = [\"md\", \"txt\"]\n").unwrap();
+        state.part = 0;
+        state.remove_part(Item::OpenTypes);
+        assert!(state.confirm.is_none());
+        assert_eq!(state.links.as_ref().unwrap().open_types, ["txt"]);
     }
 }

@@ -92,6 +92,13 @@ impl State {
         Some(change(self, &path))
     }
 
+    /// Reads `links.toml` again, to act on what it holds now; why it cannot
+    /// be written, when it is set aside. `None` when the links plugin is
+    /// not installed.
+    pub(super) fn check_links_file(&mut self) -> Option<Result<(), String>> {
+        self.with_links_file(|_, _| Ok(()))
+    }
+
     /// Sets `run_programs` to `run`. Turned on, it turns `confirm_programs`
     /// on first, each time: letting programs run always starts with
     /// confirming them, whatever was chosen before.
