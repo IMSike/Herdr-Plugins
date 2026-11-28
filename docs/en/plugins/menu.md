@@ -150,49 +150,50 @@ The window waits for Enter before closing, an error included. While it is open, 
 **Settings** (`s`) opens a settings screen in a popup of 70% of the terminal's width and 80% of its height:
 
 ```
- 󰒓 Réglages                                                              1/19
+ 󰒓 Réglages   Affichage   Sidebar   Liens   Système                      1/12
 
- Format des nombres ────────────────────────────────────── 4% · 853M · 2,4G ┃
- ▌ Virgule décimale                 2.4G   2,4G                             ┃
-   Espace avant %                   4%   4 %                                ┃
-   CPU avec une décimale            4%   4,2%                               ┃
-   Unités de la mémoire             2,4G   2,4Go   2,4GB                    ┃
-   Espace avant l'unité             2,4G   2,4 G                            ┃
-                                                                            ┃
- Pane Tools ─────────────────────────────────────────────────────────────── ┃
-   Totaux CPU / mémoire             une ligne   barres                      ┃
-                                                                            ┃
- Mises à jour ───────────────────────────────────────────────────────────── │
-   Signaler les mises à jour        non   oui                               │
-   󰚰 Mettre à jour…                                                         │
-                                                                            │
- Sidebar ────────────────────────────────────────────────────────────────── │
-   Durée de vie des valeurs        ‹ 20 s ›                                 │
-   Shells                           bash, sh, zsh, fish, dash, nu, pwsh, …  │
- ──────────────────────────────────────────────────────────────────────────
+ Format des nombres ──────────────────────────────────────── 4% · 853M · 2,4G
+ ▌ Virgule décimale           2.4G   2,4G
+   Espace avant %             4%   4 %
+   CPU avec une décimale      4%   4,2%
+   Unités de la mémoire       2,4G   2,4Go   2,4GB
+   Espace avant l'unité       2,4G   2,4 G
+
+ Totaux CPU / mémoire ───────────────────────────────────────────────────────
+   Pane Tools                 une ligne   barres
+   Barre d'onglets            non   oui
+
+ Couleurs par seuil ─────────────────────────────────────────────────────────
+   Couleurs                   non   oui
+   Seuils CPU (Herdr)         ━━ 10 ━━ 25 ━━ 50 ━━ %
+   Seuils mémoire (Herdr)     ━━ 1 ━━ 2 ━━ 4 ━━ Go
+   Seuils CPU (machine)       ━━ 50 ━━ 70 ━━ 90 ━━ %
+   Seuils mémoire (machine)   ━━ 60 ━━ 75 ━━ 90 ━━ %
+ ────────────────────────────────────────────────────────────────────────────
    Une virgule ou un point avant les décimales.
    ✓ enregistré dans menu.toml
- ↑↓ naviguer   ←→ choisir   Espace suivant   Tab section   Échap fermer
+ ↑↓ naviguer   ←→ choisir   Espace suivant   Tab onglet   Échap fermer
 ```
 
-- The settings are grouped in sections, each value in a column of its own, centered in a wide popup. A setting with a few values shows them all, the current one highlighted (in yellow on the selected line); the number formats are shown as they would write a figure, with the current format, and the header of their section shows a CPU share and two sizes in that format. A number (`‹ 20 s ›`) shows the arrows that change it; a set of thresholds shows the four colors around its values.
+- The settings are split into tabs, named in the title bar, the current one in yellow: **Affichage** (number formats, CPU and memory totals, threshold colors), **Sidebar** (how long a value lasts, the shells), **Liens** (what a click on a file does, the open types, the Danger section) and **Système** (updates, configuration files, Herdr's reload, recovering a session). A tab whose plugin is not installed is not shown; on a narrow popup, the title gives way to the tabs, then only the current tab is named.
+- In a tab, the settings are grouped in sections, each value in a column of its own, across the width of the popup. A list (the shells, the open types) shows whole, on as many lines as it takes, cut between its elements. A setting with a few values shows them all, the current one highlighted (in yellow on the selected line); the number formats are shown as they would write a figure, with the current format, and the header of their section shows a CPU share and two sizes in that format. A number (`‹ 20 s ›`) shows the arrows that change it; a set of thresholds shows the four colors around its values.
 - Under the list: what the selected line does, with the setting and the files it writes when the popup is wide enough; the last thing done (`✓` in green, or `✗` in red with the reason); and the keys of the selected line.
-- Keys: up and down (or `j`/`k`) choose a line, Home/End (or `g`/`G`) the first or last, Tab the first line of the next section, Shift+Tab the first line of its section, or of the one above. Left and right (or `h`/`l`) move a choice towards its first or last value (stopping there) or a number by a step, and do nothing on the other lines; Enter or Space take a choice to its next value, round the list, add a step to a number, start typing, or run the line's action; each change is saved at once. Escape, `q` or Ctrl+C closes the screen.
-- Mouse: hovering a line selects it, a click on one of its values chooses that value, a click on `‹` or `›` steps a number, a click elsewhere on the line acts as Enter, and the wheel moves the selection; the scrollbar only shows where the list is.
-- On a small popup, the list scrolls (a scrollbar on its right says where it is), and the description, then the status line, give way to it; a name or value too long is cut with `…`, and typed text shows its end.
+- Keys: up and down (or `j`/`k`) choose a line, Home/End (or `g`/`G`) the first or last, Tab the next tab and Shift+Tab the one before (round the tabs), `1` to `4` a tab by its place, from its first line. Left and right (or `h`/`l`) move a choice towards its first or last value (stopping there) or a number by a step, and do nothing on the other lines; Enter or Space take a choice to its next value, round the list, add a step to a number, start typing, or run the line's action; each change is saved at once. Escape, `q` or Ctrl+C closes the screen.
+- Mouse: a click on a tab shows it, hovering a line selects it, a click on one of its values chooses that value, a click on `‹` or `›` steps a number, a click elsewhere on the line acts as Enter, and the wheel scrolls the list without moving the selection (the next key brings it back into view); the scrollbar only shows where the list is.
+- On a small popup, the list scrolls (a scrollbar on the right edge says where it is), and the description, then the status line, give way to it; a name or value too long is cut with `…`, and typed text shows its end.
 
 A file that is a link (deployed by stow or chezmoi, say) stays a link: the file it points to is written. When the file stays ignored after a change (another of its settings is invalid), the screen says so in red, with the reason, and shows the new value, which the file holds: the next change turns it back.
 
 | Line | Effect | File |
 |---|---|---|
 | Virgule décimale, Espace avant %, CPU avec une décimale, Unités de la mémoire, Espace avant l'unité | `decimal_comma`, `percent_space`, `cpu_decimal`, `memory_unit`, `memory_space` | `menu.toml` and `sidebar.toml` |
-| Totaux CPU / mémoire | `totals` | `menu.toml` |
+| Pane Tools (Totaux CPU / mémoire) | `totals` | `menu.toml` |
 | Signaler les mises à jour | `check_updates` | `menu.toml` |
 | Mettre à jour… | updates Herdr and the plugins installed from GitHub, in green followed by what has a new version, see [Built-in entries](#built-in-entries) | |
 | Reproposer les plugins refusés | shown while a new plugin was declined: forgets the declined plugins, offered again from the next check, see [New plugins](#new-plugins) | |
 | Durée de vie des valeurs | `ttl_seconds`, by 5 seconds, from 5 to 600 | `sidebar.toml` |
 | Shells | `shells`: Enter to type them, separated by commas, Enter to save, Escape to cancel | `sidebar.toml` |
-| Totaux dans la barre d'onglets | `tab_bar` | `sidebar.toml` |
+| Barre d'onglets (Totaux CPU / mémoire) | `tab_bar` | `sidebar.toml` |
 | Couleurs | `colors`: the [threshold colors](sidebar.md#threshold-colors) | `sidebar.toml` |
 | Seuils CPU, Seuils mémoire (Herdr; machine) | the four sets of thresholds: Enter to type three increasing values separated by spaces (`10 25 50`), Enter to save, Escape to cancel | `sidebar.toml` |
 | Clic sur un fichier | `file`: what a ctrl+click on a file of dx does, **aperçu** (herdr-explorer's preview), **sélection** (in the File Explorer) or **application** (its program), see [links](links.md) | `links.toml` |
@@ -205,7 +206,7 @@ A file that is a link (deployed by stow or chezmoi, say) stays a link: the file 
 | Recharger la configuration de Herdr | reloads Herdr's `config.toml` and says whether Herdr applied it, in part (a section it refuses or that needs a restart keeps its current settings: the first reason is shown), or refused it | |
 | Récupérer une session… | opens the session's snapshots, to restore one, see [Recovering a session](#recovering-a-session) | |
 
-The Sidebar and color lines only show when the [sidebar](sidebar.md) plugin is installed, the Liens and Danger ones when the [links](links.md) plugin is; the Danger section's title is red. When the sidebar ignores its `sidebar.toml` (unknown setting, thresholds out of order…), the screen says why in red and shows the defaults, the values the sidebar uses. When the links plugin sets its `links.toml` aside (a syntax error, an unknown setting, a wrong value of another setting), the screen says why in red and shows what the plugin then goes by: **sélection**, no program run; it writes nothing to that file until it is fixed (by hand, from « Ouvrir les fichiers de configuration… »), so as not to replace your values with those. Values changed by hand while the screen is open are kept. A type the links plugin leaves out of `open_types` is said in red too. A file is written with its comments and its other settings kept: a setting commented out in it takes its value in its place. A plugin's file that does not exist yet is first created from its template, every setting commented out at its default.
+The Sidebar tab, the tab bar's totals and the threshold colors only show when the [sidebar](sidebar.md) plugin is installed, the Liens tab when the [links](links.md) plugin is; the Danger section's title is red. When the sidebar ignores its `sidebar.toml` (unknown setting, thresholds out of order…), the screen says why in red and shows the defaults, the values the sidebar uses. When the links plugin sets its `links.toml` aside (a syntax error, an unknown setting, a wrong value of another setting), the screen says why in red and shows what the plugin then goes by: **sélection**, no program run; it writes nothing to that file until it is fixed (by hand, from « Ouvrir les fichiers de configuration… »), so as not to replace your values with those. Values changed by hand while the screen is open are kept. A type the links plugin leaves out of `open_types` is said in red too. A file is written with its comments and its other settings kept: a setting commented out in it takes its value in its place. A plugin's file that does not exist yet is first created from its template, every setting commented out at its default.
 
 **Ouvrir les fichiers de configuration…** opens, together, Herdr's `config.toml` (the path Herdr's help gives, which follows `HERDR_CONFIG_PATH`), `menu.toml`, `sidebar.toml` when the sidebar is installed, and `links.toml` when the links plugin is. The editor is `VISUAL`, else `EDITOR` (arguments allowed); without them, on Windows, VS Code when it is on `PATH`, else Notepad, one window per file; elsewhere `nano`, else `vi`. The settings screen closes and Herdr stays free to use:
 

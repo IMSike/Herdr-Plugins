@@ -1,13 +1,13 @@
 //! How the settings screen is laid out: a title bar, the settings in
-//! sections, each value in a column of its own (every choice shown, the
-//! current one highlighted), a scrollbar when the list does not fit, the
-//! selected setting's description, the last thing done, and the keys.
+//! sections across the popup's width, each value in a column of its own
+//! (every choice shown, the current one highlighted), a scrollbar on the
+//! right edge when the list does not fit, the selected setting's description, the last thing done, and the keys.
 //!
 //! Drawn on a `Canvas` without a terminal; `Drawn::at` tells what a click
 //! lands on.
 
 use super::canvas::{Canvas, Style};
-use super::{Item, Row, Section, Shown, State};
+use super::{Item, Row, Section, Shown, State, Tab};
 use crate::colors::{TRACK_COLOR, level_color};
 use crate::ui::{fit, width};
 use crossterm::style::Color;
@@ -34,27 +34,28 @@ pub(super) const RED: Color = level_color(Level::Red);
 /// The levels between thresholds, in order.
 const LEVELS: [Level; 4] = [Level::Green, Level::Yellow, Level::Orange, Level::Red];
 
-/// The widest the settings are drawn: a wider popup centers them.
-const MAX_CONTENT: u16 = 88;
 /// The widest a setting's name takes, as a share of the content (percent).
 const MAX_LABEL_SHARE: u16 = 45;
 /// nf-md-cog, the menu's icon for the settings.
 const TITLE_ICON: &str = "\u{F0493}";
 
-/// What a click lands on: an item (by its index among the items), one of
-/// its choices, or a step of its number.
+/// What a click lands on: a tab (by its index among the tabs), an item (by
+/// its index among the tab's items), one of its choices, or a step of its
+/// number.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Target {
+    Tab(usize),
     Item(usize),
     Choose(usize, usize),
     Step(usize, bool),
 }
 
 impl Target {
-    /// The index of the item it belongs to.
-    pub fn item(self) -> usize {
+    /// The index of the item it belongs to, if any.
+    pub fn item(self) -> Option<usize> {
         match self {
-            Self::Item(i) | Self::Choose(i, _) | Self::Step(i, _) => i,
+            Self::Tab(_) => None,
+            Self::Item(i) | Self::Choose(i, _) | Self::Step(i, _) => Some(i),
         }
     }
 }
@@ -67,12 +68,13 @@ struct Hit {
     target: Target,
 }
 
-/// The screen drawn, what its parts answer, and the first row of the list
-/// it shows.
+/// The screen drawn, what its parts answer, the first row of the list it
+/// shows and the last row that can be first.
 pub struct Drawn {
     pub canvas: Canvas,
     hits: Vec<Hit>,
     pub top: usize,
+    pub max_top: usize,
 }
 
 impl Drawn {
@@ -147,7 +149,7 @@ fn areas(height: u16) -> Areas {
 }
 
 /// The columns of the list: from `left` to `right` (excluded), the values
-/// from `value`, the scrollbar at `bar`.
+/// from `value`, the scrollbar at `bar`, on the last column.
 struct Columns {
     left: u16,
     right: u16,
@@ -157,12 +159,12 @@ struct Columns {
 }
 
 fn columns(width: u16, label_width: usize, scrolls: bool) -> Columns {
-    let content = width.saturating_sub(2).min(MAX_CONTENT);
-    let left = (width - content) / 2;
-    let mut right = left + content;
-    let bar = (scrolls && content > 4).then(|| {
-        right -= 2;
-        right + 1
+    // A column of margin on each side, the scrollbar in the right one.
+    let left = u16::from(width > 2);
+    let mut right = width.saturating_sub(1).max(left);
+    let bar = (scrolls && right - left > 4).then(|| {
+        right -= 1;
+        width - 1
     });
     let room = right - left;
     let label = u16::try_from(label_width)
@@ -177,26 +179,155 @@ fn columns(width: u16, label_width: usize, scrolls: bool) -> Columns {
     }
 }
 
-/// The first row of the list to show in `visible` rows, from `top`, moved
-/// just enough to show row `at`, and the row above it when that is its
-/// section's header.
-fn scrolled(top: usize, at: usize, visible: usize, len: usize, header_above: bool) -> usize {
+/// The lines an item takes, `first` to `last`, and whether the line above
+/// is its section's header.
+#[derive(Clone, Copy)]
+struct Span {
+    first: usize,
+    last: usize,
+    header_above: bool,
+}
+
+/// The first line of the list to show in `visible` lines, from `top`,
+/// moved just enough to show the lines of `span`, and the line above them
+/// when that is their section's header; their first line when they do not
+/// all fit.
+fn scrolled(top: usize, span: Span, visible: usize, len: usize) -> usize {
     if visible == 0 {
-        return at;
+        return span.first;
     }
     let mut top = top.min(len.saturating_sub(visible));
-    let from = if header_above {
-        at.saturating_sub(1)
+    let from = if span.header_above {
+        span.first.saturating_sub(1)
     } else {
-        at
+        span.first
     };
     if from < top {
         top = from;
     }
-    if at >= top + visible {
-        top = at + 1 - visible;
+    if span.last >= top + visible {
+        top = (span.last + 1 - visible).min(span.first);
     }
     top
+}
+
+/// A list (`a, b, c`) cut into lines of `cells`, between its elements, a
+/// comma at the end of each line but the last; an element too long for a
+/// line is cut with `…`.
+fn wrap_list(text: &str, cells: usize) -> Vec<String> {
+    if cells < 2 {
+        return vec![ellipsize(text, cells)];
+    }
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for element in text.split(", ") {
+        if line.is_empty() {
+            line = ellipsize(element, cells - 1);
+        } else if width(&line) + 2 + width(element) < cells {
+            line.push_str(", ");
+            line.push_str(element);
+        } else {
+            lines.push(format!("{line},"));
+            line = ellipsize(element, cells - 1);
+        }
+    }
+    lines.push(line);
+    lines
+}
+
+/// A line of the list: a row, or the next line of an item's list (`part`,
+/// from 1) in `wrapped`, the lists cut into lines.
+#[derive(Clone, Copy)]
+struct Line {
+    row: Row,
+    part: usize,
+    wrap: Option<usize>,
+}
+
+/// The lines of `rows` in `cols`: a list (shells, types) on as many lines
+/// as it takes, unless it is being typed; and the lists cut into lines.
+fn lines(
+    state: &State,
+    rows: &[Row],
+    cols: &Columns,
+    selected: Item,
+) -> (Vec<Line>, Vec<Vec<String>>) {
+    let room =
+        usize::from(cols.right.saturating_sub(1).saturating_sub(cols.value)).saturating_sub(1);
+    let mut lines = Vec::new();
+    let mut wrapped = Vec::new();
+    for &row in rows {
+        let list = match row {
+            Row::Item(item) if !(state.typing.is_some() && item == selected) => {
+                match state.shown(item) {
+                    Shown::Text(text) if !text.is_empty() && room > 0 => {
+                        Some(wrap_list(&text, room))
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        match list {
+            Some(list) => {
+                for part in 0..list.len() {
+                    lines.push(Line {
+                        row,
+                        part,
+                        wrap: Some(wrapped.len()),
+                    });
+                }
+                wrapped.push(list);
+            }
+            None => lines.push(Line {
+                row,
+                part: 0,
+                wrap: None,
+            }),
+        }
+    }
+    (lines, wrapped)
+}
+
+/// The title bar: the icon, the title and the tabs, the current one
+/// highlighted, until column `end`; without the title when they do not
+/// fit, and only the current tab when they still do not.
+fn title_bar(canvas: &mut Canvas, hits: &mut Vec<Hit>, state: &State, end: u16, y: u16) {
+    const TITLE: &str = "Réglages";
+    canvas.text(1, y, TITLE_ICON, Style::fg(YELLOW).on(BG1));
+    let current = state.current_tab();
+    let tabs: Vec<(usize, Tab)> = state.tabs().into_iter().enumerate().collect();
+    let cells = |tabs: &[(usize, Tab)]| -> usize {
+        tabs.iter()
+            .map(|(_, t)| width(t.title()) + 3)
+            .sum::<usize>()
+    };
+    let after_title = 3 + width(TITLE) as u16 + 2;
+    let end_cells = usize::from(end);
+    let (mut x, tabs) = if usize::from(after_title) + cells(&tabs) <= end_cells {
+        canvas.text(3, y, TITLE, Style::fg(FG).on(BG1).bold());
+        (after_title, tabs)
+    } else if 3 + cells(&tabs) <= end_cells {
+        (3, tabs)
+    } else {
+        let only: Vec<_> = tabs.into_iter().filter(|&(_, t)| t == current).collect();
+        (3, only)
+    };
+    for (i, tab) in tabs {
+        let style = if tab == current {
+            Style::fg(ON_ACCENT).on(YELLOW).bold()
+        } else {
+            Style::fg(FG4).on(BG1)
+        };
+        let after = canvas.text_to(x, y, &format!(" {} ", tab.title()), style, end);
+        hits.push(Hit {
+            y,
+            x,
+            end: after,
+            target: Target::Tab(i),
+        });
+        x = after + 1;
+    }
 }
 
 /// The thumb of a scrollbar of `visible` rows over `len`, from `top`: its
@@ -256,7 +387,7 @@ fn hints(item: Item, shown: &Shown, typing: bool) -> Vec<(&'static str, &'static
         Shown::Action if item == Item::ResetTypes => hints.push(("Entrée", "rétablir")),
         Shown::Action => hints.push(("Entrée", "ouvrir")),
     }
-    hints.extend([("Tab", "section"), ("Échap", "fermer")]);
+    hints.extend([("Tab", "onglet"), ("Échap", "fermer")]);
     hints
 }
 
@@ -269,13 +400,7 @@ pub fn render(state: &State, width: u16, height: u16) -> Drawn {
     let items = state.items();
     let index = state.selected.min(items.len() - 1);
     let selected = items[index];
-    let at = rows
-        .iter()
-        .position(|row| *row == Row::Item(selected))
-        .unwrap_or(0);
-    let header_above = at > 0 && matches!(rows[at - 1], Row::Header(_));
     let visible = usize::from(areas.rows);
-    let top = scrolled(state.top, at, visible, rows.len(), header_above);
     // The actions, without a value, take the whole row.
     let label_width = items
         .iter()
@@ -283,24 +408,51 @@ pub fn render(state: &State, width: u16, height: u16) -> Drawn {
         .map(|item| self::width(item.label()))
         .max()
         .unwrap_or(0);
-    let cols = columns(width, label_width, rows.len() > visible);
+    // The scrollbar when the lines do not fit, which takes a column from them.
+    let mut cols = columns(width, label_width, false);
+    let (mut lines, mut wrapped) = self::lines(state, &rows, &cols, selected);
+    if lines.len() > visible {
+        cols = columns(width, label_width, true);
+        (lines, wrapped) = self::lines(state, &rows, &cols, selected);
+    }
+    let first = lines
+        .iter()
+        .position(|line| line.row == Row::Item(selected))
+        .unwrap_or(0);
+    let span = Span {
+        first,
+        last: lines
+            .iter()
+            .rposition(|line| line.row == Row::Item(selected))
+            .unwrap_or(first),
+        header_above: first > 0 && matches!(lines[first - 1].row, Row::Header(_)),
+    };
+    let max_top = lines.len().saturating_sub(visible);
+    // The wheel moves the list alone; a key brings the selection back.
+    let top = if state.follow {
+        scrolled(state.top, span, visible, lines.len())
+    } else {
+        state.top.min(max_top)
+    };
     let shown = state.shown(selected);
 
     if let Some(y) = areas.title {
         let bar = Style::default().on(BG1);
         canvas.fill(0, y, width, bar);
-        canvas.text(1, y, TITLE_ICON, Style::fg(YELLOW).on(BG1));
-        canvas.text(3, y, "Réglages", Style::fg(FG).on(BG1).bold());
         let position = format!("{}/{} ", index + 1, items.len());
-        let x = width.saturating_sub(self::width(&position) as u16);
-        if x > 13 {
-            canvas.text(x, y, &position, Style::fg(FG4).on(BG1));
+        let mut end = width.saturating_sub(self::width(&position) as u16);
+        if end > 13 {
+            canvas.text(end, y, &position, Style::fg(FG4).on(BG1));
+            end -= 1;
+        } else {
+            end = width;
         }
+        title_bar(&mut canvas, &mut hits, state, end, y);
     }
 
-    for (offset, row) in rows.iter().skip(top).take(visible).enumerate() {
+    for (offset, line) in lines.iter().skip(top).take(visible).enumerate() {
         let y = areas.list + offset as u16;
-        match *row {
+        match line.row {
             Row::Blank => {}
             Row::Header(section) => header(&mut canvas, &cols, y, section, state),
             Row::Item(item) => {
@@ -317,6 +469,8 @@ pub fn render(state: &State, width: u16, height: u16) -> Drawn {
                     y,
                     index: i,
                     selected: item == selected,
+                    wrapped: line.wrap.map(|w| wrapped[w].as_slice()),
+                    part: line.part,
                 };
                 row.draw(&mut canvas, &mut hits, state, item, typing);
             }
@@ -324,7 +478,7 @@ pub fn render(state: &State, width: u16, height: u16) -> Drawn {
     }
 
     if let Some(x) = cols.bar {
-        let (start, size) = thumb(rows.len(), visible, top);
+        let (start, size) = thumb(lines.len(), visible, top);
         for r in 0..visible {
             let (glyph, color) = if (start..start + size).contains(&r) {
                 ("┃", FG4)
@@ -376,7 +530,12 @@ pub fn render(state: &State, width: u16, height: u16) -> Drawn {
         }
     }
 
-    Drawn { canvas, hits, top }
+    Drawn {
+        canvas,
+        hits,
+        top,
+        max_top,
+    }
 }
 
 /// A section's title (Danger's in red), a rule after it, and its note at
@@ -413,6 +572,9 @@ struct RowDraw<'a> {
     y: u16,
     index: usize,
     selected: bool,
+    /// The item's list cut into lines, and the line drawn here.
+    wrapped: Option<&'a [String]>,
+    part: usize,
 }
 
 impl RowDraw<'_> {
@@ -440,6 +602,15 @@ impl RowDraw<'_> {
             bg: base.bg,
             ..Style::fg(GREY)
         };
+        // The next lines of a list: its part alone, under its first line.
+        if let Some(part) = self
+            .wrapped
+            .and_then(|w| w.get(self.part))
+            .filter(|_| self.part > 0)
+        {
+            canvas.text_to(cols.value + 1, y, part, base, limit);
+            return;
+        }
         if item.is_action() {
             // No value: the name takes the row, its key at the end.
             const KEY: &str = "Entrée ↵";
@@ -519,7 +690,11 @@ impl RowDraw<'_> {
                 canvas.text_to(cols.value + 1, y, &hint, dim.italic(), limit);
             }
             Shown::Text(text) => {
-                canvas.text_to(cols.value + 1, y, &ellipsize(&text, room - 1), base, limit);
+                let first = match self.wrapped.and_then(|w| w.first()) {
+                    Some(first) => first.clone(),
+                    None => ellipsize(&text, room - 1),
+                };
+                canvas.text_to(cols.value + 1, y, &first, base, limit);
             }
             Shown::Levels(values, unit) => {
                 let mut x = cols.value + 1;
@@ -592,12 +767,12 @@ mod tests {
     }
 
     #[test]
-    fn a_wide_screen_centers_the_settings() {
+    fn the_settings_take_the_width_and_the_scrollbar_its_edge() {
         let wide = columns(140, 30, false);
-        assert_eq!((wide.left, wide.right), (26, 114));
-        assert_eq!(wide.value, 26 + 2 + 30 + 2);
+        assert_eq!((wide.left, wide.right, wide.bar), (1, 139, None));
+        assert_eq!(wide.value, 1 + 2 + 30 + 2);
         let narrow = columns(40, 30, true);
-        assert_eq!((narrow.left, narrow.right, narrow.bar), (1, 37, Some(38)));
+        assert_eq!((narrow.left, narrow.right, narrow.bar), (1, 38, Some(39)));
         // The name gives way to the value.
         assert_eq!(narrow.label, 16);
         let none = columns(0, 30, true);
@@ -606,16 +781,40 @@ mod tests {
 
     #[test]
     fn the_list_scrolls_to_the_selection_and_its_header() {
+        let at = |line, header_above| Span {
+            first: line,
+            last: line,
+            header_above,
+        };
         // Within view: no move.
-        assert_eq!(scrolled(0, 5, 10, 30, false), 0);
+        assert_eq!(scrolled(0, at(5, false), 10, 30), 0);
         // Below: just enough.
-        assert_eq!(scrolled(0, 12, 10, 30, false), 3);
+        assert_eq!(scrolled(0, at(12, false), 10, 30), 3);
         // Above: its header too.
-        assert_eq!(scrolled(8, 6, 10, 30, true), 5);
-        assert_eq!(scrolled(8, 6, 10, 30, false), 6);
+        assert_eq!(scrolled(8, at(6, true), 10, 30), 5);
+        assert_eq!(scrolled(8, at(6, false), 10, 30), 6);
         // A taller screen: no rows left blank at the end.
-        assert_eq!(scrolled(25, 26, 10, 30, false), 20);
-        assert_eq!(scrolled(4, 3, 0, 30, false), 3);
+        assert_eq!(scrolled(25, at(26, false), 10, 30), 20);
+        assert_eq!(scrolled(4, at(3, false), 0, 30), 3);
+        // A list on several lines: all of them, or its first ones.
+        let list = |first, last| Span {
+            first,
+            last,
+            header_above: false,
+        };
+        assert_eq!(scrolled(0, list(8, 11), 10, 30), 2);
+        assert_eq!(scrolled(0, list(8, 30), 10, 40), 8);
+    }
+
+    #[test]
+    fn a_list_wraps_between_its_elements() {
+        assert_eq!(wrap_list("txt, md, rst", 20), ["txt, md, rst"]);
+        assert_eq!(wrap_list("txt, md, rst", 9), ["txt, md,", "rst"]);
+        assert_eq!(wrap_list("markdown, md", 6), ["mark…,", "md"]);
+        assert_eq!(wrap_list("txt", 1), ["…"]);
+        for line in wrap_list("txt, md, markdown, rst, adoc, log, pdf", 10) {
+            assert!(width(&line) <= 10, "{line}");
+        }
     }
 
     #[test]
@@ -655,6 +854,7 @@ mod tests {
                 },
             ],
             top: 0,
+            max_top: 0,
         };
         assert_eq!(drawn.at(5, 1), Some(Target::Choose(2, 1)));
         assert_eq!(drawn.at(1, 1), Some(Target::Item(2)));

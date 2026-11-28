@@ -150,49 +150,50 @@ La fenêtre attend Entrée avant de se fermer, erreur comprise. Tant qu'elle est
 **Settings** (`s`) ouvre un écran de réglages dans un popup de 70 % de la largeur du terminal et 80 % de sa hauteur :
 
 ```
- 󰒓 Réglages                                                              1/19
+ 󰒓 Réglages   Affichage   Sidebar   Liens   Système                      1/12
 
- Format des nombres ────────────────────────────────────── 4% · 853M · 2,4G ┃
- ▌ Virgule décimale                 2.4G   2,4G                             ┃
-   Espace avant %                   4%   4 %                                ┃
-   CPU avec une décimale            4%   4,2%                               ┃
-   Unités de la mémoire             2,4G   2,4Go   2,4GB                    ┃
-   Espace avant l'unité             2,4G   2,4 G                            ┃
-                                                                            ┃
- Pane Tools ─────────────────────────────────────────────────────────────── ┃
-   Totaux CPU / mémoire             une ligne   barres                      ┃
-                                                                            ┃
- Mises à jour ───────────────────────────────────────────────────────────── │
-   Signaler les mises à jour        non   oui                               │
-   󰚰 Mettre à jour…                                                         │
-                                                                            │
- Sidebar ────────────────────────────────────────────────────────────────── │
-   Durée de vie des valeurs        ‹ 20 s ›                                 │
-   Shells                           bash, sh, zsh, fish, dash, nu, pwsh, …  │
- ──────────────────────────────────────────────────────────────────────────
+ Format des nombres ──────────────────────────────────────── 4% · 853M · 2,4G
+ ▌ Virgule décimale           2.4G   2,4G
+   Espace avant %             4%   4 %
+   CPU avec une décimale      4%   4,2%
+   Unités de la mémoire       2,4G   2,4Go   2,4GB
+   Espace avant l'unité       2,4G   2,4 G
+
+ Totaux CPU / mémoire ───────────────────────────────────────────────────────
+   Pane Tools                 une ligne   barres
+   Barre d'onglets            non   oui
+
+ Couleurs par seuil ─────────────────────────────────────────────────────────
+   Couleurs                   non   oui
+   Seuils CPU (Herdr)         ━━ 10 ━━ 25 ━━ 50 ━━ %
+   Seuils mémoire (Herdr)     ━━ 1 ━━ 2 ━━ 4 ━━ Go
+   Seuils CPU (machine)       ━━ 50 ━━ 70 ━━ 90 ━━ %
+   Seuils mémoire (machine)   ━━ 60 ━━ 75 ━━ 90 ━━ %
+ ────────────────────────────────────────────────────────────────────────────
    Une virgule ou un point avant les décimales.
    ✓ enregistré dans menu.toml
- ↑↓ naviguer   ←→ choisir   Espace suivant   Tab section   Échap fermer
+ ↑↓ naviguer   ←→ choisir   Espace suivant   Tab onglet   Échap fermer
 ```
 
-- Les réglages sont groupés en sections, chaque valeur dans une colonne à elle, au centre d'un popup large. Un réglage à quelques valeurs les montre toutes, l'actuelle en évidence (en jaune sur la ligne choisie) ; les formats des nombres sont montrés comme ils écriraient un chiffre, avec le format actuel, et l'en-tête de leur section montre une part de CPU et deux tailles dans ce format. Un nombre (`‹ 20 s ›`) montre les flèches qui le changent ; un jeu de seuils montre les quatre couleurs autour de ses valeurs.
+- Les réglages sont répartis en onglets, nommés dans la barre de titre, l'actuel en jaune : **Affichage** (formats des nombres, totaux CPU et mémoire, couleurs par seuil), **Sidebar** (durée de vie des valeurs, shells), **Liens** (ce que fait un clic sur un fichier, les types ouverts, la section Danger) et **Système** (mises à jour, fichiers de configuration, rechargement de Herdr, récupération d'une session). L'onglet d'un plugin non installé n'apparaît pas ; dans un popup étroit, le titre laisse la place aux onglets, puis seul l'onglet actuel est nommé.
+- Dans un onglet, les réglages sont groupés en sections, chaque valeur dans une colonne à elle, sur toute la largeur du popup. Une liste (les shells, les types ouverts) s'affiche en entier, sur autant de lignes qu'il faut, coupée entre ses éléments. Un réglage à quelques valeurs les montre toutes, l'actuelle en évidence (en jaune sur la ligne choisie) ; les formats des nombres sont montrés comme ils écriraient un chiffre, avec le format actuel, et l'en-tête de leur section montre une part de CPU et deux tailles dans ce format. Un nombre (`‹ 20 s ›`) montre les flèches qui le changent ; un jeu de seuils montre les quatre couleurs autour de ses valeurs.
 - Sous la liste : ce que fait la ligne choisie, avec le réglage et les fichiers qu'elle écrit quand le popup est assez large ; la dernière chose faite (`✓` en vert, ou `✗` en rouge avec la raison) ; et les touches de la ligne choisie.
-- Touches : haut et bas (ou `j`/`k`) choisissent une ligne, Début/Fin (ou `g`/`G`) la première ou la dernière, Tab la première ligne de la section suivante, Maj+Tab la première ligne de sa section, ou de celle au-dessus. Gauche et droite (ou `h`/`l`) déplacent un choix vers sa première ou sa dernière valeur (en s'y arrêtant) ou un nombre d'un pas, et ne font rien sur les autres lignes ; Entrée ou Espace passent un choix à sa valeur suivante, en faisant le tour, ajoutent un pas à un nombre, commencent la saisie ou lancent l'action de la ligne ; chaque changement est enregistré aussitôt. Échap, `q` ou Ctrl+C ferme l'écran.
-- Souris : survoler une ligne la sélectionne, un clic sur l'une de ses valeurs choisit cette valeur, un clic sur `‹` ou `›` change un nombre d'un pas, un clic ailleurs sur la ligne fait comme Entrée, et la molette déplace la sélection ; la barre de défilement montre seulement où en est la liste.
-- Dans un petit popup, la liste défile (une barre de défilement à sa droite dit où elle en est), et la description, puis la ligne d'état, lui laissent la place ; un nom ou une valeur trop longs sont coupés avec `…`, et un texte saisi montre sa fin.
+- Touches : haut et bas (ou `j`/`k`) choisissent une ligne, Début/Fin (ou `g`/`G`) la première ou la dernière, Tab l'onglet suivant et Maj+Tab le précédent (en faisant le tour), `1` à `4` un onglet par sa place, depuis sa première ligne. Gauche et droite (ou `h`/`l`) déplacent un choix vers sa première ou sa dernière valeur (en s'y arrêtant) ou un nombre d'un pas, et ne font rien sur les autres lignes ; Entrée ou Espace passent un choix à sa valeur suivante, en faisant le tour, ajoutent un pas à un nombre, commencent la saisie ou lancent l'action de la ligne ; chaque changement est enregistré aussitôt. Échap, `q` ou Ctrl+C ferme l'écran.
+- Souris : un clic sur un onglet l'affiche, survoler une ligne la sélectionne, un clic sur l'une de ses valeurs choisit cette valeur, un clic sur `‹` ou `›` change un nombre d'un pas, un clic ailleurs sur la ligne fait comme Entrée, et la molette fait défiler la liste sans déplacer la sélection (la touche suivante la ramène en vue) ; la barre de défilement montre seulement où en est la liste.
+- Dans un petit popup, la liste défile (une barre de défilement contre le bord droit dit où elle en est), et la description, puis la ligne d'état, lui laissent la place ; un nom ou une valeur trop longs sont coupés avec `…`, et un texte saisi montre sa fin.
 
 Un fichier qui est un lien (déployé par stow ou chezmoi, par exemple) reste un lien : c'est le fichier vers lequel il pointe qui est écrit. Quand le fichier reste ignoré après un changement (un autre de ses réglages est invalide), l'écran le dit en rouge, avec la raison, et affiche la nouvelle valeur, que le fichier contient : le changement suivant la remet.
 
 | Ligne | Effet | Fichier |
 |---|---|---|
 | Virgule décimale, Espace avant %, CPU avec une décimale, Unités de la mémoire, Espace avant l'unité | `decimal_comma`, `percent_space`, `cpu_decimal`, `memory_unit`, `memory_space` | `menu.toml` et `sidebar.toml` |
-| Totaux CPU / mémoire | `totals` | `menu.toml` |
+| Pane Tools (Totaux CPU / mémoire) | `totals` | `menu.toml` |
 | Signaler les mises à jour | `check_updates` | `menu.toml` |
 | Mettre à jour… | met à jour Herdr et les plugins installés depuis GitHub, en vert suivi de ce qui a une nouvelle version, voir [Entrées intégrées](#entrées-intégrées) | |
 | Reproposer les plugins refusés | affichée tant qu'un nouveau plugin a été refusé : oublie les plugins refusés, proposés de nouveau dès la vérification suivante, voir [Nouveaux plugins](#nouveaux-plugins) | |
 | Durée de vie des valeurs | `ttl_seconds`, par pas de 5 secondes, de 5 à 600 | `sidebar.toml` |
 | Shells | `shells` : Entrée pour les taper, séparés par des virgules, Entrée pour enregistrer, Échap pour annuler | `sidebar.toml` |
-| Totaux dans la barre d'onglets | `tab_bar` | `sidebar.toml` |
+| Barre d'onglets (Totaux CPU / mémoire) | `tab_bar` | `sidebar.toml` |
 | Couleurs | `colors` : les [couleurs par seuil](sidebar.md#couleurs-par-seuil) | `sidebar.toml` |
 | Seuils CPU, Seuils mémoire (Herdr ; machine) | les quatre jeux de seuils : Entrée pour taper trois valeurs croissantes séparées par des espaces (`10 25 50`), Entrée pour enregistrer, Échap pour annuler | `sidebar.toml` |
 | Clic sur un fichier | `file` : ce que fait un ctrl+clic sur un fichier de dx, **aperçu** (l'aperçu de herdr-explorer), **sélection** (dans l'Explorateur de fichiers) ou **application** (son programme), voir [links](links.md) | `links.toml` |
@@ -205,7 +206,7 @@ Un fichier qui est un lien (déployé par stow ou chezmoi, par exemple) reste un
 | Recharger la configuration de Herdr | recharge le `config.toml` de Herdr et dit si Herdr l'a appliqué, en partie (une section qu'il refuse ou qui demande un redémarrage garde ses réglages actuels : la première raison est affichée), ou refusé | |
 | Récupérer une session… | ouvre les snapshots de la session, pour en restaurer un, voir [Récupérer une session](#récupérer-une-session) | |
 
-Les lignes Sidebar et Couleurs n'apparaissent que si le plugin [sidebar](sidebar.md) est installé, les lignes Liens et Danger que si le plugin [links](links.md) l'est ; le titre de la section Danger est en rouge. Quand la sidebar ignore son `sidebar.toml` (réglage inconnu, seuils pas en ordre…), l'écran dit pourquoi en rouge et affiche les valeurs par défaut, celles qu'utilise la sidebar. Quand le plugin links met son `links.toml` de côté (une erreur de syntaxe, un réglage inconnu, une valeur fausse d'un autre réglage), l'écran dit pourquoi en rouge et affiche ce que le plugin applique alors : **sélection**, aucun programme lancé ; il n'écrit rien dans ce fichier tant qu'il n'est pas corrigé (à la main, depuis « Ouvrir les fichiers de configuration… »), pour ne pas remplacer vos valeurs par celles-là. Les valeurs changées à la main pendant que l'écran est ouvert sont gardées. Un type que le plugin links écarte de `open_types` est dit en rouge aussi. Un fichier est écrit en gardant ses commentaires et ses autres réglages : un réglage en commentaire y prend sa valeur à sa place. Le fichier d'un plugin qui n'existe pas encore est d'abord créé depuis son modèle, tous les réglages en commentaire à leur valeur par défaut.
+L'onglet Sidebar, les totaux de la barre d'onglets et les couleurs par seuil n'apparaissent que si le plugin [sidebar](sidebar.md) est installé, l'onglet Liens que si le plugin [links](links.md) l'est ; le titre de la section Danger est en rouge. Quand la sidebar ignore son `sidebar.toml` (réglage inconnu, seuils pas en ordre…), l'écran dit pourquoi en rouge et affiche les valeurs par défaut, celles qu'utilise la sidebar. Quand le plugin links met son `links.toml` de côté (une erreur de syntaxe, un réglage inconnu, une valeur fausse d'un autre réglage), l'écran dit pourquoi en rouge et affiche ce que le plugin applique alors : **sélection**, aucun programme lancé ; il n'écrit rien dans ce fichier tant qu'il n'est pas corrigé (à la main, depuis « Ouvrir les fichiers de configuration… »), pour ne pas remplacer vos valeurs par celles-là. Les valeurs changées à la main pendant que l'écran est ouvert sont gardées. Un type que le plugin links écarte de `open_types` est dit en rouge aussi. Un fichier est écrit en gardant ses commentaires et ses autres réglages : un réglage en commentaire y prend sa valeur à sa place. Le fichier d'un plugin qui n'existe pas encore est d'abord créé depuis son modèle, tous les réglages en commentaire à leur valeur par défaut.
 
 **Ouvrir les fichiers de configuration…** ouvre ensemble le `config.toml` de Herdr (le chemin que donne l'aide de Herdr, qui suit `HERDR_CONFIG_PATH`), `menu.toml`, `sidebar.toml` quand la sidebar est installée, et `links.toml` quand le plugin links l'est. L'éditeur est `VISUAL`, sinon `EDITOR` (arguments permis) ; sans eux, sous Windows, VS Code quand il est dans le `PATH`, sinon le Bloc-notes, une fenêtre par fichier ; ailleurs `nano`, sinon `vi`. L'écran des réglages se ferme et Herdr reste libre d'utilisation :
 

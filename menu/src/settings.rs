@@ -27,6 +27,8 @@ pub const BAR_ENV: &str = "HERDR_MENU_BAR";
 /// A step of `ttl_seconds`, and its bounds.
 const TTL_STEP: u64 = 5;
 const TTL_MAX: u64 = 600;
+/// The rows of the list a notch of the wheel scrolls.
+const WHEEL_ROWS: usize = 3;
 /// The size the number formats are shown with: 2.4 GiB, and 853 MiB.
 const SAMPLE_SIZE: u64 = 2_576_980_378;
 const SAMPLE_SMALL_SIZE: u64 = 853 * 1024 * 1024;
@@ -47,16 +49,36 @@ enum Row {
     Item(Item),
 }
 
-/// The sections of the screen.
+/// The tabs of the screen, each a few sections.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Tab {
+    Display,
+    Sidebar,
+    Links,
+    System,
+}
+
+impl Tab {
+    fn title(self) -> &'static str {
+        match self {
+            Self::Display => "Affichage",
+            Self::Sidebar => "Sidebar",
+            Self::Links => "Liens",
+            Self::System => "Système",
+        }
+    }
+}
+
+/// The sections of a tab.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Section {
     Numbers,
-    Tools,
-    Updates,
-    Sidebar,
+    Totals,
     Colors,
+    Measures,
     Links,
     Danger,
+    Updates,
     Files,
     Session,
 }
@@ -65,12 +87,12 @@ impl Section {
     fn title(self) -> &'static str {
         match self {
             Self::Numbers => "Format des nombres",
-            Self::Tools => "Pane Tools",
-            Self::Updates => "Mises à jour",
-            Self::Sidebar => "Sidebar",
+            Self::Totals => "Totaux CPU / mémoire",
             Self::Colors => "Couleurs par seuil",
+            Self::Measures => "Mesures",
             Self::Links => "Liens",
             Self::Danger => "Danger",
+            Self::Updates => "Mises à jour",
             Self::Files => "Configuration",
             Self::Session => "Session",
         }
@@ -148,7 +170,7 @@ impl Item {
             Self::CpuDecimal => "CPU avec une décimale",
             Self::MemoryUnit => "Unités de la mémoire",
             Self::MemorySpace => "Espace avant l'unité",
-            Self::Totals => "Totaux CPU / mémoire",
+            Self::Totals => "Pane Tools",
             Self::CheckUpdates => "Signaler les mises à jour",
             // nf-md-update, the icon the `Update` entry had
             Self::Update => "\u{F06B0} Mettre à jour…",
@@ -156,7 +178,7 @@ impl Item {
             Self::Declined => "\u{F0431} Reproposer les plugins refusés",
             Self::Ttl => "Durée de vie des valeurs",
             Self::Shells => "Shells",
-            Self::TabBar => "Totaux dans la barre d'onglets",
+            Self::TabBar => "Barre d'onglets",
             Self::Colors => "Couleurs",
             Self::Levels(Levels::Cpu) => "Seuils CPU (Herdr)",
             Self::Levels(Levels::Memory) => "Seuils mémoire (Herdr)",
@@ -254,9 +276,14 @@ struct State {
     /// it can be used again: the user's own values would be lost under the
     /// fallback ones.
     links_set_aside: bool,
+    /// The tab on screen, and the selected item among its items.
+    tab: Tab,
     selected: usize,
     /// The first row of the list on screen.
     top: usize,
+    /// The list scrolls to show the selection: after a key, not after the
+    /// mouse, which leaves the list where it is (the wheel moves it alone).
+    follow: bool,
     /// The last thing done, or why it failed (in red).
     status: Option<(String, bool)>,
     /// The text being typed for the selected item (shells, thresholds).
@@ -284,8 +311,10 @@ impl State {
             sidebar,
             links,
             links_set_aside: false,
+            tab: Tab::Display,
             selected: 0,
             top: 0,
+            follow: true,
             status: None,
             typing: None,
             recover: false,
@@ -294,110 +323,160 @@ impl State {
         }
     }
 
-    fn rows(&self) -> Vec<Row> {
-        let mut rows = vec![
-            Row::Header(Section::Numbers),
-            Row::Item(Item::DecimalComma),
-            Row::Item(Item::PercentSpace),
-            Row::Item(Item::CpuDecimal),
-            Row::Item(Item::MemoryUnit),
-            Row::Item(Item::MemorySpace),
-            Row::Blank,
-            Row::Header(Section::Tools),
-            Row::Item(Item::Totals),
-            Row::Blank,
-            Row::Header(Section::Updates),
-            Row::Item(Item::CheckUpdates),
-            Row::Item(Item::Update),
-        ];
-        if !self.declined.is_empty() {
-            rows.push(Row::Item(Item::Declined));
-        }
+    /// The tabs shown: Sidebar and Liens when their plugin is installed.
+    fn tabs(&self) -> Vec<Tab> {
+        let mut tabs = vec![Tab::Display];
         if self.sidebar.is_some() {
-            rows.extend([
-                Row::Blank,
-                Row::Header(Section::Sidebar),
+            tabs.push(Tab::Sidebar);
+        }
+        if self.links.is_some() {
+            tabs.push(Tab::Links);
+        }
+        tabs.push(Tab::System);
+        tabs
+    }
+
+    /// The tab on screen: the first when its plugin is gone.
+    fn current_tab(&self) -> Tab {
+        if self.tabs().contains(&self.tab) {
+            self.tab
+        } else {
+            Tab::Display
+        }
+    }
+
+    /// Shows `tab`, from its first item; the screen stays open.
+    fn show_tab(&mut self, tab: Tab) -> bool {
+        if tab != self.current_tab() {
+            self.tab = tab;
+            self.selected = 0;
+            self.top = 0;
+        }
+        false
+    }
+
+    /// Shows the next tab (`forward`) or the one before, round the tabs.
+    fn next_tab(&mut self, forward: bool) -> bool {
+        let tabs = self.tabs();
+        let at = tabs
+            .iter()
+            .position(|&t| t == self.current_tab())
+            .unwrap_or(0);
+        let next = if forward {
+            (at + 1) % tabs.len()
+        } else {
+            (at + tabs.len() - 1) % tabs.len()
+        };
+        self.show_tab(tabs[next])
+    }
+
+    /// The rows of the tab on screen.
+    fn rows(&self) -> Vec<Row> {
+        let mut rows = Vec::new();
+        match self.current_tab() {
+            Tab::Display => {
+                rows.extend([
+                    Row::Header(Section::Numbers),
+                    Row::Item(Item::DecimalComma),
+                    Row::Item(Item::PercentSpace),
+                    Row::Item(Item::CpuDecimal),
+                    Row::Item(Item::MemoryUnit),
+                    Row::Item(Item::MemorySpace),
+                    Row::Blank,
+                    Row::Header(Section::Totals),
+                    Row::Item(Item::Totals),
+                ]);
+                if self.sidebar.is_some() {
+                    rows.extend([
+                        Row::Item(Item::TabBar),
+                        Row::Blank,
+                        Row::Header(Section::Colors),
+                        Row::Item(Item::Colors),
+                    ]);
+                    rows.extend(Levels::ALL.map(|l| Row::Item(Item::Levels(l))));
+                }
+            }
+            Tab::Sidebar => rows.extend([
+                Row::Header(Section::Measures),
                 Row::Item(Item::Ttl),
                 Row::Item(Item::Shells),
-                Row::Item(Item::TabBar),
-                Row::Blank,
-                Row::Header(Section::Colors),
-                Row::Item(Item::Colors),
-            ]);
-            rows.extend(Levels::ALL.map(|l| Row::Item(Item::Levels(l))));
-        }
-        if let Some(links) = &self.links {
-            rows.extend([
-                Row::Blank,
-                Row::Header(Section::Links),
-                Row::Item(Item::LinkFile),
-                Row::Item(Item::OpenTypes),
-                Row::Item(Item::AddType),
-                Row::Item(Item::RemoveType),
-                Row::Item(Item::ResetTypes),
-                Row::Blank,
-                Row::Header(Section::Danger),
-                Row::Item(Item::RunPrograms),
-            ]);
-            // Only meaningful once programs may run.
-            if links.run_programs {
-                rows.push(Row::Item(Item::ConfirmPrograms));
+            ]),
+            Tab::Links => {
+                rows.extend([
+                    Row::Header(Section::Links),
+                    Row::Item(Item::LinkFile),
+                    Row::Item(Item::OpenTypes),
+                    Row::Item(Item::AddType),
+                    Row::Item(Item::RemoveType),
+                    Row::Item(Item::ResetTypes),
+                    Row::Blank,
+                    Row::Header(Section::Danger),
+                    Row::Item(Item::RunPrograms),
+                ]);
+                // Only meaningful once programs may run.
+                if self.links.as_ref().is_some_and(|l| l.run_programs) {
+                    rows.push(Row::Item(Item::ConfirmPrograms));
+                }
+            }
+            Tab::System => {
+                rows.extend([
+                    Row::Header(Section::Updates),
+                    Row::Item(Item::CheckUpdates),
+                    Row::Item(Item::Update),
+                ]);
+                if !self.declined.is_empty() {
+                    rows.push(Row::Item(Item::Declined));
+                }
+                rows.extend([
+                    Row::Blank,
+                    Row::Header(Section::Files),
+                    Row::Item(Item::OpenFiles),
+                    Row::Item(Item::Reload),
+                    Row::Blank,
+                    Row::Header(Section::Session),
+                    Row::Item(Item::Recover),
+                ]);
             }
         }
-        rows.extend([
-            Row::Blank,
-            Row::Header(Section::Files),
-            Row::Item(Item::OpenFiles),
-            Row::Item(Item::Reload),
-            Row::Blank,
-            Row::Header(Section::Session),
-            Row::Item(Item::Recover),
-        ]);
         rows
     }
 
-    /// The index, among the items, of the first item of each section.
-    fn section_starts(&self) -> Vec<usize> {
-        let mut starts = Vec::new();
-        let mut items = 0;
-        let mut after_header = false;
-        for row in self.rows() {
-            match row {
-                Row::Header(_) => after_header = true,
-                Row::Item(_) => {
-                    if after_header {
-                        starts.push(items);
-                    }
-                    after_header = false;
-                    items += 1;
-                }
-                Row::Blank => {}
-            }
+    /// The items of every tab.
+    #[cfg(test)]
+    fn all_items(&mut self) -> Vec<Item> {
+        let (tab, selected) = (self.tab, self.selected);
+        let mut items = Vec::new();
+        for t in self.tabs() {
+            self.tab = t;
+            items.extend(self.items());
         }
-        starts
+        (self.tab, self.selected) = (tab, selected);
+        items
     }
 
-    /// The first item of the next section (`forward`), or the first item of
-    /// a section above the selected item: its own section's when it is not
-    /// that one; round the list.
-    fn next_section(&self, forward: bool) -> usize {
-        let starts = self.section_starts();
-        let found = if forward {
-            starts.iter().find(|&&s| s > self.selected)
-        } else {
-            starts.iter().rev().find(|&&s| s < self.selected)
-        };
-        let round = if forward {
-            starts.first()
-        } else {
-            starts.last()
-        };
-        found.or(round).copied().unwrap_or(0)
+    /// Shows the tab of `item`, and selects it.
+    #[cfg(test)]
+    fn focus(&mut self, item: Item) {
+        for t in self.tabs() {
+            self.tab = t;
+            if let Some(index) = self.items().iter().position(|&i| i == item) {
+                self.selected = index;
+                return;
+            }
+        }
+        panic!("{item:?} on no tab");
     }
 
     /// Selects the item `index`; the screen stays open.
     fn select(&mut self, index: usize) -> bool {
         self.selected = index;
+        false
+    }
+
+    /// Shows the list from row `top`, the selection left where it is; the
+    /// screen stays open.
+    fn scroll(&mut self, top: usize) -> bool {
+        self.top = top;
         false
     }
 
@@ -1032,6 +1111,11 @@ fn show(state: &mut State) -> io::Result<()> {
         let item = state.selected_item(&items);
         let last = items.len() - 1;
         let event = event::read()?;
+        match event {
+            Event::Key(_) => state.follow = true,
+            Event::Mouse(_) => state.follow = false,
+            _ => {}
+        }
         if let Some(text) = &mut state.typing {
             if let Event::Key(key) = event
                 && key.kind == KeyEventKind::Press
@@ -1067,29 +1151,48 @@ fn show(state: &mut State) -> io::Result<()> {
                 }
                 KeyCode::Home | KeyCode::Char('g') => state.select(0),
                 KeyCode::End | KeyCode::Char('G') => state.select(last),
-                KeyCode::Tab => state.select(state.next_section(true)),
-                KeyCode::BackTab => state.select(state.next_section(false)),
+                KeyCode::Tab => state.next_tab(true),
+                KeyCode::BackTab => state.next_tab(false),
+                KeyCode::Char(c @ '1'..='9') => {
+                    let tabs = state.tabs();
+                    match tabs.get(usize::from(c as u8 - b'1')) {
+                        Some(&tab) => state.show_tab(tab),
+                        None => false,
+                    }
+                }
                 KeyCode::Left | KeyCode::Char('h') => state.change(item, false, false),
                 KeyCode::Right | KeyCode::Char('l') => state.change(item, true, false),
                 KeyCode::Enter | KeyCode::Char(' ') => state.change(item, true, true),
                 _ => false,
             },
             Event::Mouse(mouse) => match (mouse.kind, drawn.at(mouse.column, mouse.row)) {
-                (MouseEventKind::Moved, Some(target)) => state.select(target.item()),
-                (MouseEventKind::Down(MouseButton::Left), Some(target)) => {
-                    state.selected = target.item();
-                    let item = items[target.item()];
-                    match target {
-                        Target::Item(_) => state.change(item, true, true),
-                        Target::Choose(_, option) => {
-                            state.choose(item, option);
-                            false
-                        }
-                        Target::Step(_, forward) => state.change(item, forward, false),
+                (MouseEventKind::Moved, Some(target)) => match target.item() {
+                    Some(index) => state.select(index),
+                    None => false,
+                },
+                (MouseEventKind::Down(MouseButton::Left), Some(target)) => match target {
+                    Target::Tab(tab) => match state.tabs().get(tab) {
+                        Some(&tab) => state.show_tab(tab),
+                        None => false,
+                    },
+                    Target::Item(index) => {
+                        state.selected = index;
+                        state.change(items[index], true, true)
                     }
+                    Target::Choose(index, option) => {
+                        state.selected = index;
+                        state.choose(items[index], option);
+                        false
+                    }
+                    Target::Step(index, forward) => {
+                        state.selected = index;
+                        state.change(items[index], forward, false)
+                    }
+                },
+                (MouseEventKind::ScrollDown, _) => {
+                    state.scroll((drawn.top + WHEEL_ROWS).min(drawn.max_top))
                 }
-                (MouseEventKind::ScrollDown, _) => state.select((state.selected + 1).min(last)),
-                (MouseEventKind::ScrollUp, _) => state.select(state.selected.saturating_sub(1)),
+                (MouseEventKind::ScrollUp, _) => state.scroll(drawn.top.saturating_sub(WHEEL_ROWS)),
                 _ => false,
             },
             _ => false,
@@ -1152,7 +1255,11 @@ mod tests {
             " 2.4G   2,4G",
             " 2,4G   2,4Go   2,4GB",
             "━━ 10 ━━ 25 ━━ 50 ━━ %",
-            "‹ 20 s ›",
+            " Affichage ",
+            " Sidebar ",
+            " Liens ",
+            " Système ",
+            "Barre d'onglets",
             "Couleurs par seuil",
             "Seuils mémoire (Herdr)",
             "✓ enregistré dans menu.toml",
@@ -1161,10 +1268,66 @@ mod tests {
         ] {
             assert!(text.contains(expected), "{expected:?} missing:\n{text}");
         }
-        // Without the sidebar, its sections are gone.
+        assert!(!text.contains("Mesures"), "{text}");
+        state.next_tab(true);
+        let text = rendered(&state, 92, 60);
+        assert!(
+            text.contains("Mesures") && text.contains("‹ 20 s ›"),
+            "{text}"
+        );
+        // Without the sidebar, its tab and sections are gone.
         state.sidebar = None;
         let text = rendered(&state, 92, 60);
-        assert!(!text.contains("Sidebar") && !text.contains("Seuils"));
+        assert!(
+            !text.contains("Sidebar") && !text.contains("Seuils"),
+            "{text}"
+        );
+        assert!(text.contains("Format des nombres"), "{text}");
+    }
+
+    #[test]
+    fn tab_goes_from_tab_to_tab() {
+        let mut state = state();
+        assert_eq!(
+            state.tabs(),
+            [Tab::Display, Tab::Sidebar, Tab::Links, Tab::System]
+        );
+        state.selected = 3;
+        state.next_tab(true);
+        assert_eq!((state.tab, state.selected), (Tab::Sidebar, 0));
+        state.next_tab(false);
+        state.next_tab(false);
+        assert_eq!(state.tab, Tab::System);
+        state.next_tab(true);
+        assert_eq!(state.tab, Tab::Display);
+        // The same tab keeps its selection.
+        state.selected = 2;
+        state.show_tab(Tab::Display);
+        assert_eq!(state.selected, 2);
+        // Without the links plugin, its tab is gone.
+        state.links = None;
+        state.show_tab(Tab::System);
+        state.next_tab(false);
+        assert_eq!(state.tab, Tab::Sidebar);
+        state.tab = Tab::Links;
+        assert_eq!(state.current_tab(), Tab::Display);
+    }
+
+    #[test]
+    fn a_long_list_shows_on_several_lines() {
+        let mut state = state();
+        state.focus(Item::OpenTypes);
+        if let Some(links) = &mut state.links {
+            links.open_types = (1..=30).map(|i| format!("ext{i}")).collect();
+        }
+        let text = rendered(&state, 70, 40);
+        assert!(text.contains("ext1, ext2,"), "{text}");
+        assert!(text.contains("ext30"), "{text}");
+        let list = text
+            .lines()
+            .filter(|line| line.contains("ext") && !line.contains("extension"));
+        assert_eq!(list.clone().count(), 5, "{text}");
+        assert!(list.clone().all(|line| !line.contains('…')), "{text}");
     }
 
     #[test]
@@ -1183,13 +1346,36 @@ mod tests {
             (30, 12),
             (200, 60),
         ] {
-            for selected in 0..state.items().len() {
-                state.selected = selected;
-                state.typing = (selected % 2 == 0).then(|| "pwsh, bash, zsh, fish".into());
-                let drawn = view::render(&state, w, h);
-                state.top = drawn.top;
+            for tab in state.tabs() {
+                state.tab = tab;
+                for selected in 0..state.items().len() {
+                    state.selected = selected;
+                    state.typing = (selected % 2 == 0).then(|| "pwsh, bash, zsh, fish".into());
+                    let drawn = view::render(&state, w, h);
+                    state.top = drawn.top;
+                }
             }
         }
+    }
+
+    #[test]
+    fn the_wheel_scrolls_the_list_not_the_selection() {
+        let mut state = state();
+        let drawn = view::render(&state, 70, 14);
+        assert_eq!(drawn.top, 0);
+        // Scrolled past its end: stops at the last rows.
+        state.scroll(usize::MAX);
+        state.follow = false;
+        let drawn = view::render(&state, 70, 14);
+        assert_eq!(drawn.top, drawn.max_top);
+        assert!(drawn.max_top > 0);
+        assert_eq!(state.selected, 0);
+        let text = drawn.canvas.to_text();
+        assert!(!text.contains("Virgule décimale"), "{text}");
+        // A key brings the selection back into view.
+        state.follow = true;
+        let text = rendered(&state, 70, 14);
+        assert!(text.contains("Virgule décimale"), "{text}");
     }
 
     #[test]
@@ -1197,7 +1383,7 @@ mod tests {
         let mut state = state();
         state.selected = state.items().len() - 1;
         let text = rendered(&state, 70, 14);
-        assert!(text.contains("Récupérer une session"), "{text}");
+        assert!(text.contains("Seuils mémoire (machine)"), "{text}");
         assert!(!text.contains("Virgule décimale"), "{text}");
         // The scrollbar's thumb, at the bottom.
         assert!(text.contains('┃'), "{text}");
@@ -1206,11 +1392,7 @@ mod tests {
     #[test]
     fn typed_text_shows_its_end_and_the_keys_to_save_it() {
         let mut state = state();
-        state.selected = state
-            .items()
-            .iter()
-            .position(|&i| i == Item::Shells)
-            .unwrap();
+        state.focus(Item::Shells);
         state.typing = Some("pwsh, bash, zsh, fish, nu, elvish, xonsh, tcsh".into());
         let text = rendered(&state, 56, 11);
         assert!(text.contains("tcsh▏"), "{text}");
@@ -1220,6 +1402,7 @@ mod tests {
     #[test]
     fn the_update_says_what_has_a_new_version() {
         let mut state = state();
+        state.show_tab(Tab::System);
         let text = rendered(&state, 92, 40);
         assert!(text.contains("Mises à jour") && text.contains("Mettre à jour…"));
         assert!(!text.contains("Herdr 0.9.6"));
@@ -1229,28 +1412,6 @@ mod tests {
             text.contains("Mettre à jour… · Herdr 0.9.6 · Explorer"),
             "{text}"
         );
-    }
-
-    #[test]
-    fn tab_goes_from_section_to_section() {
-        let state = state();
-        let starts = state.section_starts();
-        assert_eq!(starts.len(), 9);
-        let items = state.items();
-        assert_eq!(items[starts[1]], Item::Totals);
-        assert_eq!(items[starts[2]], Item::CheckUpdates);
-        assert_eq!(items[starts[5]], Item::LinkFile);
-        assert_eq!(items[starts[6]], Item::RunPrograms);
-        assert_eq!(items[starts[7]], Item::OpenFiles);
-        assert_eq!(state.next_section(true), starts[1]);
-        assert_eq!(items[starts[8]], Item::Recover);
-        // Back from the first section: round to the last.
-        assert_eq!(state.next_section(false), starts[8]);
-        let within = State {
-            selected: starts[2] + 1,
-            ..state
-        };
-        assert_eq!(within.next_section(false), starts[2]);
     }
 
     #[test]
@@ -1343,7 +1504,7 @@ mod tests {
         let mut state = state_in(&dir);
         // A file holding a setting its plugin does not know is ignored:
         // `written` says so.
-        for item in state.items() {
+        for item in state.all_items() {
             let said = match item {
                 Item::Update | Item::Declined | Item::OpenFiles | Item::Reload | Item::Recover => {
                     continue;
@@ -1360,7 +1521,7 @@ mod tests {
             assert!(said.is_ok(), "{item:?}: {said:?}");
         }
         // Shown once programs may run.
-        assert!(state.items().contains(&Item::ConfirmPrograms));
+        assert!(state.all_items().contains(&Item::ConfirmPrograms));
         let said = state.step(Item::ConfirmPrograms, true).unwrap();
         assert!(said.is_ok(), "{said:?}");
         let written = herdr_api::links::Settings::read(&dir.join(herdr_api::links::SETTINGS_FILE))

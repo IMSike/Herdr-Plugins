@@ -347,6 +347,7 @@ mod tests {
     #[test]
     fn the_links_sections_show_when_the_plugin_is_installed() {
         let mut state = state();
+        state.focus(Item::LinkFile);
         let text = rendered(&state, 92, 60);
         for expected in ["Liens", "Clic sur un fichier", "aperçu", "Danger"] {
             assert!(text.contains(expected), "{expected:?} missing:\n{text}");
