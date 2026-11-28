@@ -56,10 +56,15 @@ fn read(path: &Path, template: &str) -> Result<String, String> {
 /// Writes `text` to the file at `path`, its folder created when missing;
 /// the error names the path.
 pub fn write(path: &Path, text: &str) -> Result<(), String> {
+    write_bytes(path, text.as_bytes())
+}
+
+/// Writes `bytes` to the file at `path`, as `write` does.
+pub fn write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("{} : {e}", dir.display()))?;
     }
-    herdr_api::write_atomic(path, text.as_bytes()).map_err(|e| format!("{} : {e}", path.display()))
+    herdr_api::write_atomic(path, bytes).map_err(|e| format!("{} : {e}", path.display()))
 }
 
 fn parse(text: &str) -> Result<DocumentMut, String> {

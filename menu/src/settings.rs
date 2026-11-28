@@ -243,21 +243,6 @@ fn number(value: f64) -> String {
     }
 }
 
-/// Three thresholds typed with spaces between them (`10 25 50`), a comma
-/// or a point before decimals.
-fn parse_levels(text: &str) -> Result<Thresholds, String> {
-    let values: Vec<f64> = text
-        .split_whitespace()
-        .map(|v| v.replace(',', ".").parse::<f64>())
-        .collect::<Result<_, _>>()
-        .map_err(|_| "seuils : des nombres séparés par des espaces")?;
-    let thresholds: Thresholds = values
-        .try_into()
-        .map_err(|_| "seuils : trois valeurs, séparées par des espaces")?;
-    check_thresholds(&thresholds)?;
-    Ok(thresholds)
-}
-
 /// Thresholds as they are written: whole numbers as integers (`[10, 25,
 /// 50]`, not `[10.0, …]`), unless too large for one to hold them exactly,
 /// which would change them.
@@ -307,9 +292,9 @@ struct State {
     fresh: bool,
     /// A change that waits for Enter, said on the status line.
     confirm: Option<Confirm>,
-    /// The files as they were before the last change, to put them back; and
-    /// whether that change was undone already (putting them back redoes it).
-    undo: Option<edit::Snapshot>,
+    /// The last change made to the files, to undo it; and whether it was
+    /// undone already (undoing it again redoes it).
+    undo: Option<edit::Change>,
     undone: bool,
     /// Where the mouse is: the part of the screen under it is highlighted.
     hover: Option<(u16, u16)>,
@@ -510,11 +495,6 @@ impl State {
     fn scroll(&mut self, top: usize) -> bool {
         self.top = top;
         false
-    }
-
-    /// The selected one of `items`, the screen's items.
-    fn selected_item(&self, items: &[Item]) -> Item {
-        items[self.selected.min(items.len() - 1)]
     }
 
     fn items(&self) -> Vec<Item> {
@@ -994,12 +974,16 @@ impl State {
             // Typed, see `change`.
             Item::Shells | Item::Levels(_) | Item::OpenTypes => return None,
             Item::LinkFile => self.step_link_file(forward)?,
-            // Letting programs run waits for Enter.
-            Item::RunPrograms if !self.links.as_ref()?.run_programs => {
-                self.confirm = Some(Confirm::RunPrograms);
-                return None;
-            }
-            Item::RunPrograms => self.switch_run_programs()?,
+            // As the file holds it now, which the screen may not show yet:
+            // letting programs run waits for Enter, stopping them does not.
+            Item::RunPrograms => match self.with_links_file(|_, _| Ok(()))? {
+                Err(e) => Err(e),
+                Ok(()) if self.links.as_ref()?.run_programs => self.set_run_programs(false)?,
+                Ok(()) => {
+                    self.confirm = Some(Confirm::RunPrograms);
+                    return None;
+                }
+            },
             Item::ConfirmPrograms => {
                 self.toggle_links("confirm_programs", |l| l.confirm_programs)?
             }
@@ -1022,20 +1006,16 @@ impl State {
         ))
     }
 
-    fn save_shells(&mut self, text: &str) -> Result<String, String> {
-        let shells: Vec<String> = text
-            .split([',', ' '])
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string)
-            .collect();
+    /// Writes `shells` to `sidebar.toml`.
+    fn save_shells(&mut self, shells: Vec<String>) -> Result<String, String> {
         let array: toml_edit::Array = shells.iter().map(String::as_str).collect();
         self.set_in_sidebar("shells", array.into(), |s| s.shells = shells)
             .unwrap_or_else(|| Ok(String::new()))
     }
 
-    fn save_levels(&mut self, which: Levels, text: &str) -> Result<String, String> {
-        let thresholds = parse_levels(text)?;
+    /// Writes a set of thresholds to `sidebar.toml`, once they are in order.
+    fn save_levels(&mut self, which: Levels, thresholds: Thresholds) -> Result<String, String> {
+        check_thresholds(&thresholds)?;
         self.set_in_sidebar(which.key(), levels_array(&thresholds).into(), |s| {
             *which.of_mut(s) = thresholds
         })
@@ -1146,8 +1126,10 @@ fn show(state: &mut State) -> io::Result<()> {
 /// should close.
 fn handle(state: &mut State, drawn: &view::Drawn, event: &Event) -> bool {
     let items = state.items();
-    let item = state.selected_item(&items);
     let last = items.len() - 1;
+    // A row gone since (after an undo, say): no selection past the last.
+    state.selected = state.selected.min(last);
+    let item = items[state.selected];
     let press = match event {
         Event::Key(key) if key.kind == KeyEventKind::Press => Some(*key),
         _ => None,
@@ -1562,12 +1544,7 @@ mod tests {
     }
 
     #[test]
-    fn thresholds_are_typed_with_spaces() {
-        assert_eq!(parse_levels("10 25 50"), Ok([10.0, 25.0, 50.0]));
-        assert_eq!(parse_levels(" 0,5  1 2.5 "), Ok([0.5, 1.0, 2.5]));
-        assert!(parse_levels("10 25").is_err());
-        assert!(parse_levels("10 x 50").is_err());
-        assert!(parse_levels("50 25 10").is_err());
+    fn thresholds_show_as_written() {
         assert_eq!(number(10.0), "10");
         assert_eq!(number(2.5), "2.5");
     }
@@ -1599,8 +1576,8 @@ mod tests {
                 Item::Update | Item::Declined | Item::OpenFiles | Item::Reload | Item::Recover => {
                     continue;
                 }
-                Item::Shells => state.save_shells("pwsh, bash"),
-                Item::Levels(which) => state.save_levels(which, "1 2 3"),
+                Item::Shells => state.save_shells(vec!["pwsh".into(), "bash".into()]),
+                Item::Levels(which) => state.save_levels(which, [1.0, 2.0, 3.0]),
                 Item::OpenTypes => {
                     let types = ["md", "txt", "rs"].map(String::from).to_vec();
                     let written = state.write_types(types).unwrap();
@@ -1609,7 +1586,7 @@ mod tests {
                     assert!(added.is_ok(), "{added:?}");
                     state.remove_type("TXT")
                 }
-                Item::RunPrograms => state.switch_run_programs().unwrap(),
+                Item::RunPrograms => state.set_run_programs(true).unwrap(),
                 _ => state.step(item, true).unwrap(),
             };
             assert!(said.is_ok(), "{item:?}: {said:?}");
@@ -1628,15 +1605,14 @@ mod tests {
     }
 
     #[test]
-    fn typed_thresholds_read_back_as_typed() {
+    fn thresholds_written_read_back_as_they_are() {
         let file =
             std::env::temp_dir().join(format!("herdr-menu-levels-{}.toml", std::process::id()));
-        for text in ["10 25 50", "0,5 1 2.5", "1e19 2e19 3e19"] {
-            let thresholds = parse_levels(text).unwrap();
+        for thresholds in [[10.0, 25.0, 50.0], [0.5, 1.0, 2.5], [1e19, 2e19, 3e19]] {
             let line = format!("cpu_levels = {}\n", levels_array(&thresholds));
             std::fs::write(&file, line).unwrap();
             let read = Settings::read(&file).unwrap();
-            assert_eq!(*Levels::Cpu.of(&read), thresholds, "{text}");
+            assert_eq!(*Levels::Cpu.of(&read), thresholds, "{thresholds:?}");
         }
         assert_eq!(
             levels_array(&[10.0, 25.0, 50.0]).to_string(),

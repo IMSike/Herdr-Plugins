@@ -50,6 +50,8 @@ const RESET_ROOM: usize = 30;
 const ADD: &str = "+";
 /// Marks, at its end, the element of a list a click removes.
 const REMOVE: &str = "✕";
+/// A button of the status line, and under the mouse.
+const BUTTON: (Style, Style) = (Style::fg(FG).on(BG2), Style::fg(FG).on(BG3));
 
 /// What a click lands on: a tab (by its index among the tabs), an item (by
 /// its index among the tab's items), one of its choices, a step of its
@@ -127,15 +129,13 @@ impl Pen<'_> {
     }
 
     /// `text` at column `x` of row `y` until `limit`, as a part to click:
-    /// in `hovered` under the mouse. Where it ends.
-    #[allow(clippy::too_many_arguments)]
+    /// in the second style under the mouse, the first otherwise. Where it
+    /// ends.
     fn button(
         &mut self,
-        x: u16,
-        y: u16,
+        (x, y): (u16, u16),
         text: &str,
-        style: Style,
-        hovered: Style,
+        (style, hovered): (Style, Style),
         limit: u16,
         target: Target,
     ) -> u16 {
@@ -438,7 +438,7 @@ fn title_bar(pen: &mut Pen, state: &State, end: u16, y: u16) {
             (Style::fg(FG4).on(BG1), Style::fg(FG).on(BG3))
         };
         let text = format!(" {} ", tab.title());
-        x = pen.button(x, y, &text, style, hovered, end, Target::Tab(i)) + 1;
+        x = pen.button((x, y), &text, (style, hovered), end, Target::Tab(i)) + 1;
     }
 }
 
@@ -697,17 +697,14 @@ fn status_line(pen: &mut Pen, state: &State, cols: &Columns, y: u16) {
         );
         if text_end > x {
             let yes = Style::fg(ON_ACCENT).on(YELLOW).bold();
-            let after = pen.button(text_end + 1, y, YES, yes, yes, end, Target::Confirm(true));
-            let no = Style::fg(FG).on(BG2);
-            pen.button(
-                after + 1,
-                y,
-                NO,
-                no,
-                Style::fg(FG).on(BG3),
+            let after = pen.button(
+                (text_end + 1, y),
+                YES,
+                (yes, yes),
                 end,
-                Target::Confirm(false),
+                Target::Confirm(true),
             );
+            pen.button((after + 1, y), NO, BUTTON, end, Target::Confirm(false));
         }
         return;
     }
@@ -720,16 +717,7 @@ fn status_line(pen: &mut Pen, state: &State, cols: &Columns, y: u16) {
         };
         let bx = end.saturating_sub(self::width(label) as u16);
         if bx > x + 12 {
-            let style = Style::fg(FG).on(BG2);
-            pen.button(
-                bx,
-                y,
-                label,
-                style,
-                Style::fg(FG).on(BG3),
-                end,
-                Target::Undo,
-            );
+            pen.button((bx, y), label, BUTTON, end, Target::Undo);
             text_end = bx - 1;
         }
     }
@@ -868,7 +856,7 @@ impl RowDraw<'_> {
                         };
                         let target = Target::Choose(self.index, i);
                         let text = format!(" {option} ");
-                        x = pen.button(x, y, &text, style, hovered, end, target) + 1;
+                        x = pen.button((x, y), &text, (style, hovered), end, target) + 1;
                     }
                 } else {
                     let current = options.get(current).map_or("", String::as_str);
@@ -901,7 +889,13 @@ impl RowDraw<'_> {
                         };
                         let hovered = Style::fg(FG).on(BG3).bold();
                         let target = Target::Part(self.index, i);
-                        x = pen.button(x, y, &format!(" {value} "), style, hovered, end, target);
+                        x = pen.button(
+                            (x, y),
+                            &format!(" {value} "),
+                            (style, hovered),
+                            end,
+                            target,
+                        );
                     }
                 }
                 pen.canvas.text_to(x + 1, y, unit, dim, end);
@@ -940,7 +934,7 @@ impl RowDraw<'_> {
             } else {
                 style
             };
-            let shown = if (hovered || chosen == Some(*i)) && !is_add && cells > 3 {
+            let shown = if (hovered || chosen == Some(*i)) && !is_add {
                 // The `✕` in place of the last space: the width stays.
                 format!("{}{REMOVE}", fit(text, usize::from(cells) - 1))
             } else {
@@ -984,7 +978,7 @@ impl RowDraw<'_> {
         };
         let hovered = Style::fg(ON_ACCENT).on(YELLOW).bold();
         let target = Target::Reset(self.index);
-        pen.button(x, self.y, label, style, hovered, cols.limit(), target);
+        pen.button((x, self.y), label, (style, hovered), cols.limit(), target);
     }
 
     /// The field typing the item's chosen part: what it types, then the
@@ -1013,17 +1007,16 @@ impl RowDraw<'_> {
     fn stepper(&self, pen: &mut Pen, value: &str, base: Style, dim: Style, end: u16) {
         let (cols, y) = (self.cols, self.y);
         let arrow = Style::fg(FG).on(BG3);
+        let styles = (dim, arrow);
         let back = pen.button(
-            cols.value,
-            y,
+            (cols.value, y),
             "‹ ",
-            dim,
-            arrow,
+            styles,
             end,
             Target::Step(self.index, false),
         );
         let x = pen.canvas.text_to(back, y, value, base.bold(), end);
-        pen.button(x, y, " ›", dim, arrow, end, Target::Step(self.index, true));
+        pen.button((x, y), " ›", styles, end, Target::Step(self.index, true));
     }
 }
 

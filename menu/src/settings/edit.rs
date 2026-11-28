@@ -2,18 +2,28 @@
 //! chosen with the arrows, then typed or removed; a setting put back to its
 //! default; the last change undone; a change that waits for Enter.
 
-use super::{Confirm, Files, Item, Shown, State, TTL_MAX, config, levels_unit, number, store};
+use super::{Confirm, Files, Item, Shown, State, TTL_MAX, config, levels_unit, store};
 use herdr_api::links;
 use herdr_api::sidebar::Settings;
+use std::collections::HashSet;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 
 /// What a threshold is, as the field typing it says.
 const LEVEL_NAMES: [&str; 3] = ["jaune dès", "orange dès", "rouge dès"];
 
 /// The settings files as they are at a moment: each file's bytes, `None`
-/// for one that does not exist.
+/// for one that does not exist. A file that cannot be read is left out:
+/// nothing would put it back.
 #[derive(Debug, PartialEq)]
 pub struct Snapshot(Vec<(PathBuf, Option<Vec<u8>>)>);
+
+/// A change made to the settings files: what they were before it, and
+/// after it.
+pub struct Change {
+    before: Snapshot,
+    after: Snapshot,
+}
 
 impl State {
     /// Moves the part chosen among `count` (`forward` or back), stopping at
@@ -66,19 +76,15 @@ impl State {
     /// What the field typing `item`'s chosen part says before the text.
     pub(super) fn typing_prompt(&self, item: Item) -> String {
         let part = self.part_of(item);
-        match self.shown(item) {
-            Shown::List(list) => match list.get(part) {
+        match (item, self.shown(item)) {
+            (_, Shown::List(list)) => match list.get(part) {
                 Some(element) => format!("remplacer {element} par "),
                 None => "ajouter ".into(),
             },
-            Shown::Levels(..) => {
-                let unit = match item {
-                    Item::Levels(which) => levels_unit(which),
-                    _ => "",
-                };
-                format!("{} ({unit}) ", LEVEL_NAMES[part.min(2)])
+            (Item::Levels(which), _) => {
+                format!("{} ({}) ", LEVEL_NAMES[part.min(2)], levels_unit(which))
             }
-            Shown::Number(_) => "secondes ".into(),
+            (_, Shown::Number(_)) => "secondes ".into(),
             _ => String::new(),
         }
     }
@@ -88,15 +94,24 @@ impl State {
         let part = self.part_of(item);
         let result = match (item, self.shown(item)) {
             (Item::Shells, Shown::List(mut list)) => {
-                let typed: Vec<String> = split_list(text);
-                if part < list.len() {
-                    list.splice(part..=part, typed);
-                } else if let Some(there) = typed.iter().find(|t| list.contains(t)) {
-                    return self.report(Ok(format!("{there} est déjà dans la liste")));
-                } else {
+                let typed = split_list(text);
+                let adding = part >= list.len();
+                let (count, nothing) = (list.len(), typed.is_empty());
+                if adding {
                     list.extend(typed);
+                } else {
+                    list.splice(part..=part, typed);
                 }
-                self.save_shells(&list.join(", "))
+                // The sidebar takes a shell's name in any case: once each.
+                let mut seen = HashSet::new();
+                list.retain(|shell| seen.insert(shell.to_lowercase()));
+                if adding && list.len() == count {
+                    if !nothing {
+                        self.report(Ok(format!("{} : déjà dans la liste", text.trim())));
+                    }
+                    return;
+                }
+                self.save_shells(list)
             }
             (Item::OpenTypes, Shown::List(list)) => match list.get(part) {
                 Some(old) => self.replace_type(old, text),
@@ -111,39 +126,27 @@ impl State {
                     said
                 }
             },
-            (Item::Levels(which), Shown::Levels(mut values, _)) => {
-                if let Some(value) = values.get_mut(part) {
-                    *value = text.trim().replace(',', ".");
-                }
-                self.save_levels(which, &values.join(" "))
+            (Item::Levels(which), _) => {
+                let Some(sidebar) = &self.sidebar else {
+                    return;
+                };
+                let mut thresholds = *which.of(sidebar);
+                threshold(text).and_then(|value| {
+                    thresholds[part.min(2)] = value;
+                    self.save_levels(which, thresholds)
+                })
             }
             (Item::Ttl, _) => self.save_ttl(text),
             _ => return,
         };
-        self.report(result);
+        // Nothing typed, nothing changed: the last message stays.
+        if !matches!(&result, Ok(said) if said.is_empty()) {
+            self.report(result);
+        }
         // The element added stays chosen: the next one is added after it.
         if let Shown::List(list) = self.shown(item) {
             self.part = self.part.min(list.len());
         }
-    }
-
-    /// Replaces the open type `old` with the one typed: added first, so
-    /// that the list is never empty; nothing typed removes it.
-    fn replace_type(&mut self, old: &str, text: &str) -> Result<String, String> {
-        if text.trim().is_empty() {
-            return self.remove_type(old);
-        }
-        let new = links::open_type(text)?;
-        if new == old {
-            return Ok(String::new());
-        }
-        self.add_type(&new)?;
-        let saved = self.remove_type(old)?;
-        Ok(saved.replacen(
-            &format!("{old} retiré"),
-            &format!("{old} remplacé par {new}"),
-            1,
-        ))
     }
 
     /// `ttl_seconds` as typed: a whole number of seconds, 1 to 600.
@@ -176,7 +179,7 @@ impl State {
         let result = match item {
             Item::Shells => {
                 list.remove(part);
-                self.save_shells(&list.join(", "))
+                self.save_shells(list)
                     .map(|saved| format!("{element} retiré, {saved}"))
             }
             Item::OpenTypes if list.len() == 1 => {
@@ -224,23 +227,15 @@ impl State {
 
     /// Puts `item` back to its default value.
     pub(super) fn reset(&mut self, item: Item) {
-        let defaults = self.defaults();
-        let result = match (item, defaults.shown(item)) {
+        let result = match (item, self.defaults().shown(item)) {
             (_, Shown::Choice { current, .. }) => return self.choose(item, current),
             (Item::Ttl, _) => self.save_ttl(&Settings::default().ttl_seconds.to_string()),
-            (Item::Shells, Shown::List(list)) => self.save_shells(&list.join(", ")),
+            (Item::Shells, _) => self.save_shells(Settings::default().shells),
             (Item::OpenTypes, _) => match self.reset_types() {
                 Some(result) => result.map(|saved| format!("types par défaut rétablis, {saved}")),
                 None => return,
             },
-            (Item::Levels(which), _) => {
-                let values: Vec<String> = which
-                    .of(&Settings::default())
-                    .iter()
-                    .map(|v| number(*v))
-                    .collect();
-                self.save_levels(which, &values.join(" "))
-            }
+            (Item::Levels(which), _) => self.save_levels(which, *which.of(&Settings::default())),
             _ => return,
         };
         self.report(result);
@@ -254,7 +249,11 @@ impl State {
             paths
                 .into_iter()
                 .flatten()
-                .map(|path| (path.clone(), std::fs::read(path).ok()))
+                .filter_map(|path| match std::fs::read(path) {
+                    Ok(bytes) => Some((path.clone(), Some(bytes))),
+                    Err(e) if e.kind() == ErrorKind::NotFound => Some((path.clone(), None)),
+                    Err(_) => None,
+                })
                 .collect(),
         )
     }
@@ -264,51 +263,83 @@ impl State {
     pub(super) fn tracked<T>(&mut self, change: impl FnOnce(&mut Self) -> T) -> T {
         let before = self.snapshot();
         let result = change(self);
-        if self.snapshot() != before {
-            self.undo = Some(before);
+        let after = self.snapshot();
+        if after != before {
+            self.undo = Some(Change { before, after });
             self.undone = false;
         }
         result
     }
 
-    /// Puts the files back as they were before the last change, and shows
-    /// them; done again, it redoes the change.
+    /// Puts the files the last change wrote back as they were, and shows
+    /// them; done again, it redoes the change. A file changed since, by
+    /// hand or by a plugin, is not overwritten: nothing is undone then.
     pub(super) fn undo(&mut self) {
-        let Some(before) = self.undo.take() else {
+        let Some(Change { before, after }) = self.undo.take() else {
             return;
         };
+        let bytes_in = |snapshot: &Snapshot, path: &PathBuf| {
+            snapshot
+                .0
+                .iter()
+                .find(|(p, _)| p == path)
+                .map(|(_, b)| b.clone())
+        };
+        let written: Vec<_> = before
+            .0
+            .iter()
+            .filter(|(path, bytes)| bytes_in(&after, path).as_ref() != Some(bytes))
+            .collect();
         let now = self.snapshot();
+        if let Some((path, _)) = written
+            .iter()
+            .find(|(path, _)| bytes_in(&now, path) != bytes_in(&after, path))
+        {
+            let name = path.file_name().unwrap_or_default().to_string_lossy();
+            return self.report(Err(format!("{name} a changé depuis : rien n'est annulé")));
+        }
         let mut failed = None;
-        for (path, bytes) in before.0 {
+        for (path, bytes) in written {
             let put_back = match bytes {
-                Some(bytes) => store::write(&path, &String::from_utf8_lossy(&bytes)),
-                None => {
-                    std::fs::remove_file(&path).map_err(|e| format!("{} : {e}", path.display()))
-                }
+                Some(bytes) => store::write_bytes(path, bytes),
+                None => std::fs::remove_file(path).map_err(|e| format!("{} : {e}", path.display())),
             };
             failed = failed.or(put_back.err());
         }
-        self.reread();
-        self.undo = Some(now);
+        let ignored = self.reread();
+        self.undo = Some(Change {
+            before: after,
+            after: before,
+        });
         self.undone = !self.undone;
-        self.report(match failed {
+        self.report(match failed.or(ignored) {
             Some(e) => Err(e),
             None if self.undone => Ok("modification annulée".into()),
             None => Ok("modification refaite".into()),
         });
     }
 
-    /// Shows the settings as the files hold them now.
-    fn reread(&mut self) {
+    /// Shows the settings as the files hold them now; why a plugin ignores
+    /// its file, if one does, as the screen says when it opens.
+    fn reread(&mut self) -> Option<String> {
+        let mut ignored = None;
         if let Some(path) = &self.files.menu {
-            self.menu = config::load(path.parent()).0;
+            let (menu, error) = config::load(path.parent());
+            self.menu = menu;
+            ignored = ignored.or(error);
         }
         if let Some(path) = &self.files.sidebar {
-            self.sidebar = Some(Settings::read(path).unwrap_or_default());
+            let (settings, error) = match Settings::read(path) {
+                Ok(settings) => (settings, None),
+                Err(e) => (Settings::default(), Some(e)),
+            };
+            self.sidebar = Some(settings);
+            ignored = ignored.or(error);
         }
         if let Some(path) = self.files.links.clone() {
-            self.reread_links(&path);
+            ignored = ignored.or(self.reread_links(&path));
         }
+        ignored
     }
 
     /// Answers the change waiting for Enter: done (`yes`) or dropped.
@@ -320,7 +351,7 @@ impl State {
             return self.report(Ok("rien n'a changé".into()));
         }
         let result = match confirm {
-            Confirm::RunPrograms => self.switch_run_programs(),
+            Confirm::RunPrograms => self.set_run_programs(true),
             Confirm::EmptyTypes => self.empty_types(),
         };
         if let Some(result) = result {
@@ -337,6 +368,14 @@ fn split_list(text: &str) -> Vec<String> {
         .filter(|s| !s.is_empty())
         .map(str::to_string)
         .collect()
+}
+
+/// A threshold as typed, a comma or a point before its decimals.
+fn threshold(text: &str) -> Result<f64, String> {
+    text.trim()
+        .replace(',', ".")
+        .parse()
+        .map_err(|_| "seuil : un nombre, une virgule ou un point avant les décimales".into())
 }
 
 #[cfg(test)]
@@ -379,6 +418,17 @@ mod tests {
         assert!(state.fresh);
         state.save_typed(Item::Shells, "xonsh");
         assert_eq!(shells(&state)[0], "xonsh");
+        // Typed again, in another case: once.
+        state.part = 1;
+        state.save_typed(Item::Shells, "XONSH");
+        assert_eq!(
+            shells(&state)
+                .iter()
+                .filter(|s| s.eq_ignore_ascii_case("xonsh"))
+                .count(),
+            1
+        );
+        state.part = 0;
         state.remove_part(Item::Shells);
         assert!(!shells(&state).contains(&"xonsh".to_string()));
     }
@@ -390,8 +440,8 @@ mod tests {
         let types = |s: &State| s.links.as_ref().unwrap().open_types.clone();
         let first = types(&state)[0].clone();
         state.part = 0;
-        state.save_typed(Item::OpenTypes, ".RS");
-        assert!(types(&state).contains(&"rs".to_string()));
+        state.save_typed(Item::OpenTypes, ".ZIG");
+        assert_eq!(types(&state)[0], "zig");
         assert!(!types(&state).contains(&first));
         // Down to one type: removing it asks first.
         state.write_types(vec!["md".into()]).unwrap().unwrap();
@@ -431,6 +481,14 @@ mod tests {
     }
 
     #[test]
+    fn a_threshold_is_typed_with_a_comma_or_a_point() {
+        assert_eq!(threshold(" 2,5 "), Ok(2.5));
+        assert_eq!(threshold("10"), Ok(10.0));
+        assert!(threshold("dix").is_err());
+        assert!(threshold("1 2").is_err());
+    }
+
+    #[test]
     fn the_duration_is_typed_in_seconds() {
         let dir = herdr_api::TempDir::new("menu-edit-ttl").unwrap();
         let mut state = state_in(&dir);
@@ -451,7 +509,7 @@ mod tests {
         state.reset(Item::Totals);
         assert!(state.is_default(Item::Totals));
         let item = Item::Levels(Levels::Memory);
-        state.save_levels(Levels::Memory, "1 5 9").unwrap();
+        state.save_levels(Levels::Memory, [1.0, 5.0, 9.0]).unwrap();
         assert!(!state.is_default(item));
         state.reset(item);
         assert!(state.is_default(item));
@@ -475,6 +533,28 @@ mod tests {
         let mut state = state_in(&dir);
         state.tracked(|s| s.move_part(true, 3));
         assert!(state.undo.is_none());
+        // A file the change did not write stays as it is now.
+        let dir = herdr_api::TempDir::new("menu-edit-undo-by-hand").unwrap();
+        let mut state = state_in(&dir);
+        let sidebar = dir.join(herdr_api::sidebar::SETTINGS_FILE);
+        std::fs::write(&sidebar, "colors = false\n").unwrap();
+        state.tracked(|s| s.change(Item::Totals, true, true));
+        std::fs::write(&sidebar, "colors = true\n").unwrap();
+        state.undo();
+        assert_eq!(
+            std::fs::read_to_string(&sidebar).unwrap(),
+            "colors = true\n"
+        );
+        // A file the change wrote, changed since: nothing undone.
+        let menu = dir.join(config::FILE_NAME);
+        state.tracked(|s| s.change(Item::Totals, true, true));
+        std::fs::write(&menu, "totals = \"line\"\n").unwrap();
+        state.undo();
+        assert_eq!(
+            std::fs::read_to_string(&menu).unwrap(),
+            "totals = \"line\"\n"
+        );
+        assert!(state.status.as_ref().unwrap().1);
     }
 
     #[test]

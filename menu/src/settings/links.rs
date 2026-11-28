@@ -12,7 +12,7 @@ const SET_ASIDE: &str =
 const EMPTY_ON_PURPOSE: &str =
     "liste vide refusée : retirez le dernier type, puis confirmez avec Entrée";
 
-/// Where `action` is among the values of « Clic sur un fichier », as the
+/// Where `action` is among the values of « Ctrl+clic sur un fichier », as the
 /// screen shows them (`FileAction::ALL`).
 pub(super) fn file_index(action: FileAction) -> usize {
     FileAction::ALL
@@ -21,7 +21,7 @@ pub(super) fn file_index(action: FileAction) -> usize {
         .unwrap_or(0)
 }
 
-/// How « Clic sur un fichier » names `action`.
+/// How « Ctrl+clic sur un fichier » names `action`.
 pub(super) fn file_label(action: FileAction) -> &'static str {
     match action {
         FileAction::Preview => "aperçu",
@@ -92,12 +92,11 @@ impl State {
         Some(change(self, &path))
     }
 
-    /// Turns `run_programs` over, as the file holds it now. Turned on, it
-    /// turns `confirm_programs` on first, each time: letting programs run
-    /// always starts with confirming them, whatever was chosen before.
-    pub(super) fn switch_run_programs(&mut self) -> Option<Result<String, String>> {
-        self.set_in_links(|l| {
-            let run = !l.run_programs;
+    /// Sets `run_programs` to `run`. Turned on, it turns `confirm_programs`
+    /// on first, each time: letting programs run always starts with
+    /// confirming them, whatever was chosen before.
+    pub(super) fn set_run_programs(&mut self, run: bool) -> Option<Result<String, String>> {
+        self.set_in_links(|_| {
             let mut keys = Vec::new();
             if run {
                 keys.push(("confirm_programs", true.into()));
@@ -164,6 +163,20 @@ impl State {
             Some(result) => {
                 result.map(|saved| format!("{t} retiré, {}", saved.unwrap_or_default()))
             }
+        }
+    }
+
+    /// Replaces the open type `old` with the one typed, at its place in the
+    /// list the file holds now; nothing typed removes it.
+    pub(super) fn replace_type(&mut self, old: &str, text: &str) -> Result<String, String> {
+        if text.trim().is_empty() {
+            return self.remove_type(old);
+        }
+        let new = links::open_type(text)?;
+        match self.edit_types(|array| replace_in(array, old, &new)) {
+            None | Some(Ok(None)) => Ok(String::new()),
+            Some(result) => result
+                .map(|saved| format!("{old} remplacé par {new}, {}", saved.unwrap_or_default())),
         }
     }
 
@@ -270,6 +283,27 @@ fn remove_from(array: &mut Array, t: &str) -> Result<bool, String> {
     Ok(true)
 }
 
+/// Puts `new` in place of the entries of `array`, `open_types`, that are
+/// `old`: the first keeps its place and its comment, the others go; when
+/// `new` is there already, they only go. Whether it changed.
+fn replace_in(array: &mut Array, old: &str, new: &str) -> Result<bool, String> {
+    if old == new {
+        return Ok(false);
+    }
+    let is_old = |value: &Value| type_of(value).as_deref() == Some(old);
+    let Some(at) = array.iter().position(is_old) else {
+        return Err(format!("{old} n'est pas dans la liste"));
+    };
+    if !array
+        .iter()
+        .any(|value| type_of(value).as_deref() == Some(new))
+    {
+        array.replace(at, new);
+    }
+    store::remove_where(array, is_old);
+    Ok(true)
+}
+
 /// The types `links.toml` holds that the links plugin leaves out, said.
 fn skipped_types(skipped: &[String]) -> Option<String> {
     (!skipped.is_empty()).then(|| {
@@ -297,15 +331,15 @@ mod tests {
             l.confirm_programs = false;
         }
         let read = || links::Settings::read(&path).unwrap().settings;
-        assert!(state.switch_run_programs().unwrap().is_ok());
+        assert!(state.set_run_programs(true).unwrap().is_ok());
         assert!(read().run_programs && read().confirm_programs);
         let shown = state.links.as_ref().unwrap();
         assert!(shown.run_programs && shown.confirm_programs);
         // Turned off on purpose, it stays off until programs are let run again.
         assert!(state.step(Item::ConfirmPrograms, true).unwrap().is_ok());
-        assert!(state.switch_run_programs().unwrap().is_ok());
+        assert!(state.set_run_programs(false).unwrap().is_ok());
         assert!(!read().run_programs && !read().confirm_programs);
-        assert!(state.switch_run_programs().unwrap().is_ok());
+        assert!(state.set_run_programs(true).unwrap().is_ok());
         assert!(read().run_programs && read().confirm_programs);
     }
 
@@ -436,7 +470,7 @@ mod tests {
         type Change = fn(&mut State) -> Option<Result<String, String>>;
         let changes: [(&str, Change); 5] = [
             ("file", |s| s.step(Item::LinkFile, true)),
-            ("run_programs", |s| s.switch_run_programs()),
+            ("run_programs", |s| s.set_run_programs(true)),
             ("confirm_programs", |s| s.step(Item::ConfirmPrograms, true)),
             ("reset", |s| s.reset_types()),
             // Typing a type, refused before it starts.
@@ -499,7 +533,7 @@ mod tests {
         // the confirmation left as it was.
         std::fs::write(&path, "run_programs = true\nconfirm_programs = false\n").unwrap();
         assert!(!state.links.as_ref().unwrap().run_programs);
-        assert!(state.switch_run_programs().unwrap().is_ok());
+        assert!(state.step(Item::RunPrograms, true).unwrap().is_ok());
         assert!(!read().run_programs && !read().confirm_programs);
         assert_eq!(state.links, Some(read()));
     }
@@ -588,7 +622,7 @@ mod tests {
         assert!(said.starts_with("links.toml mis de côté"), "{said}");
         assert!(state.typing.is_none());
         assert!(state.reset_types().unwrap().is_err());
-        assert!(state.switch_run_programs().unwrap().is_err());
+        assert!(state.set_run_programs(true).unwrap().is_err());
         assert!(state.empty_types().unwrap().is_err());
         assert!(state.step(Item::LinkFile, true).unwrap().is_err());
         assert!(state.add_type("txt").is_err() && state.remove_type("md").is_err());
