@@ -1,14 +1,18 @@
 //! The `Update` entry. Herdr refuses `herdr update` inside one of its panes
 //! (`HERDR_ENV`), so the entry opens a terminal window of its own, outside
 //! Herdr, which runs `herdr-menu update`: what has a new version (see
-//! `check`), ticked, to untick; the update of what stays ticked; then, when
-//! the server must restart to run Herdr's new version, a confirmation that
-//! says what stops.
+//! `check`), ticked, to untick, and the plugins of a repository not
+//! installed (see `discover`), unticked, to tick; the update of what stays
+//! ticked, then the install; the plugins that update brought, likewise;
+//! then, when the server must restart to run Herdr's new version, a
+//! confirmation that says what stops.
 
 pub mod check;
+pub mod discover;
 
 use crate::herdr;
 use crate::window::{self, herdr_shown};
+use discover::NewPlugin;
 use herdr_api::Taken;
 use serde_json::Value;
 
@@ -63,37 +67,43 @@ fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
     if offered.is_empty() {
         return Ok("Herdr et les plugins installés depuis GitHub sont à jour.".into());
     }
-    let labels: Vec<String> = offered.iter().map(|(_, label)| label.clone()).collect();
-    let ticked = crate::ui::pick("Mises à jour", &labels, "mettre à jour")
-        .map_err(|e| format!("liste impossible : {e}"))?;
-    let chosen: Vec<&Offer> = offered
-        .iter()
-        .zip(ticked.unwrap_or_default())
-        .filter(|(_, ticked)| *ticked)
-        .map(|((offer, _), _)| offer)
-        .collect();
+    let first: Vec<String> = found.new.iter().map(|p| p.id.clone()).collect();
+    let chosen = choose("Mises à jour", "mettre à jour", offered)?;
     if chosen.is_empty() {
         return Ok("Rien n'a été mis à jour.".into());
     }
-    let herdr = chosen.contains(&&Offer::Herdr);
+    let herdr = chosen.contains(&Offer::Herdr);
     let plugins: Vec<String> = chosen
         .iter()
         .filter_map(|offer| match offer {
             Offer::Plugin(id) => Some(id.clone()),
-            Offer::Herdr => None,
+            _ => None,
         })
         .collect();
-    let installed = install(herdr, &plugins);
+    let mut new: Vec<NewPlugin> = new_plugins(&chosen);
+    let done = install(herdr, &plugins, &new);
     // What is still new once done, even when a step failed midway.
     println!("\nVérification des versions…");
-    check::now_and_keep();
-    installed?;
+    let after = check::now_and_keep();
+    done?;
+    // Plugins the update just brought to a repository: offered at once.
+    // Not those already offered: the last check's, when Herdr no longer
+    // lists its plugins.
+    let brought: Vec<(Offer, String)> = (after.new.into_iter())
+        .filter(|p| !first.contains(&p.id))
+        .map(new_offer)
+        .collect();
+    if !brought.is_empty() {
+        let more = new_plugins(&choose("Nouveaux plugins", "installer", brought)?);
+        if !more.is_empty() {
+            let done = install(false, &[], &more);
+            check::now_and_keep();
+            done?;
+            new.extend(more);
+        }
+    }
     if !herdr {
-        return Ok(
-            "Plugins à jour : leurs panes et commandes prennent la nouvelle \
-                   version dès leur prochain lancement."
-                .into(),
-        );
+        return Ok(plugins_done(!plugins.is_empty(), &new));
     }
     if !restart_needed(&check::status()?) {
         return Ok(
@@ -140,9 +150,77 @@ fn update(lock: Option<herdr_api::Lock>) -> Result<String, String> {
     Ok(window::start_from_clipboard(&start))
 }
 
-/// Updates Herdr when `herdr`, then `plugins`: Herdr first, since a
-/// plugin's new version may need Herdr's.
-fn install(herdr: bool, plugins: &[String]) -> Result<(), String> {
+/// Shows `offered` under `title`, the updates ticked, the new plugins not;
+/// returns what stays ticked once confirmed, nothing when cancelled. The
+/// new plugins left unticked are declined: no longer offered.
+fn choose(title: &str, confirm: &str, offered: Vec<(Offer, String)>) -> Result<Vec<Offer>, String> {
+    let labels: Vec<String> = offered.iter().map(|(_, label)| label.clone()).collect();
+    let first = offered
+        .iter()
+        .map(|(offer, _)| !matches!(offer, Offer::Install(_)))
+        .collect();
+    let Some(ticked) = crate::ui::pick(title, &labels, confirm, first)
+        .map_err(|e| format!("liste impossible : {e}"))?
+    else {
+        return Ok(Vec::new());
+    };
+    let (chosen, left): (Vec<_>, Vec<_>) = offered
+        .into_iter()
+        .zip(ticked)
+        .partition(|(_, ticked)| *ticked);
+    let declined: Vec<String> = left
+        .into_iter()
+        .filter_map(|((offer, _), _)| match offer {
+            Offer::Install(plugin) => Some(plugin.id),
+            _ => None,
+        })
+        .collect();
+    if !declined.is_empty() {
+        // Not offered again either way: a failure to keep it only means
+        // it is offered at the next update.
+        if let Err(e) = discover::decline(&declined) {
+            println!("Refus non retenu : {e}");
+        }
+        check::drop_new(&declined);
+    }
+    Ok(chosen.into_iter().map(|((offer, _), _)| offer).collect())
+}
+
+/// The new plugins among `chosen`.
+fn new_plugins(chosen: &[Offer]) -> Vec<NewPlugin> {
+    chosen
+        .iter()
+        .filter_map(|offer| match offer {
+            Offer::Install(plugin) => Some(plugin.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// What to tell once plugins were updated (`updated`) or `installed`.
+fn plugins_done(updated: bool, installed: &[NewPlugin]) -> String {
+    let mut told = Vec::new();
+    if updated {
+        told.push("Plugins à jour.".to_string());
+    }
+    if !installed.is_empty() {
+        let names: Vec<&str> = installed.iter().map(|p| p.name.as_str()).collect();
+        let installed = if names.len() > 1 {
+            "Installés"
+        } else {
+            "Installé"
+        };
+        told.push(format!("{installed} : {}.", names.join(", ")));
+    }
+    told.push(
+        "Leurs panes et commandes prennent la nouvelle version dès leur prochain lancement.".into(),
+    );
+    told.join(" ")
+}
+
+/// Updates Herdr when `herdr`, then `plugins`, then installs `new`: Herdr
+/// first, since a plugin's new version may need Herdr's.
+fn install(herdr: bool, plugins: &[String], new: &[NewPlugin]) -> Result<(), String> {
     if herdr {
         // Where the server can hand its sessions over, nothing stops.
         let handoff = check::status()?["server"]["capabilities"]["live_handoff"] == true;
@@ -159,15 +237,28 @@ fn install(herdr: bool, plugins: &[String]) -> Result<(), String> {
         args.extend(plugins.iter().map(String::as_str));
         herdr_shown(&args)?;
     }
+    for plugin in new {
+        // Without `--yes`: Herdr shows what the plugin may do, and asks.
+        println!("\nInstallation de {}…\n", plugin.name);
+        herdr_shown(&plugin.install_args())?;
+    }
     Ok(())
 }
 
-/// Something the window offers to update.
+/// Something the window offers to update, or to install.
 #[derive(Debug, PartialEq, Eq)]
 enum Offer {
     Herdr,
     /// A plugin installed from GitHub, by its id.
     Plugin(String),
+    /// A plugin of a repository, not installed.
+    Install(NewPlugin),
+}
+
+/// How the window offers a new plugin.
+fn new_offer(plugin: NewPlugin) -> (Offer, String) {
+    let label = format!("Nouveau plugin {} ({})", plugin.name, plugin.id);
+    (Offer::Install(plugin), label)
 }
 
 /// What the window offers, and how it names each: Herdr also when its new
@@ -188,6 +279,7 @@ fn offers(found: &check::Found) -> Vec<(Offer, String)> {
                 format!("Plugin {} ({})", p.name, p.id),
             )
         }))
+        .chain(found.new.iter().cloned().map(new_offer))
         .collect()
 }
 
@@ -205,6 +297,7 @@ mod tests {
         let found = |herdr| check::Found {
             herdr,
             plugins: vec![plugin.clone()],
+            new: Vec::new(),
         };
         let newer = check::Herdr::Newer {
             installed: "0.9.5".into(),
@@ -223,6 +316,27 @@ mod tests {
         let unknown = offers(&found(check::Herdr::Unknown("canal preview".into())));
         assert_eq!(unknown[0].0, Offer::Herdr);
         assert_eq!(offers(&found(check::Herdr::UpToDate)).len(), 1);
+        let links = NewPlugin {
+            id: "imsike.links".into(),
+            name: "Links".into(),
+            source: "IMSike/Herdr-Plugins/links".into(),
+            git_ref: None,
+        };
+        let with_new = check::Found {
+            new: vec![links.clone()],
+            ..found(check::Herdr::UpToDate)
+        };
+        assert_eq!(
+            offers(&with_new)[1],
+            (
+                Offer::Install(links.clone()),
+                "Nouveau plugin Links (imsike.links)".to_string()
+            )
+        );
+        assert_eq!(
+            plugins_done(true, &[links]),
+            "Plugins à jour. Installé : Links. Leurs panes et commandes prennent la nouvelle version dès leur prochain lancement."
+        );
     }
 
     #[test]

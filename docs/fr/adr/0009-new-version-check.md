@@ -33,6 +33,8 @@ L'option b, choisie par le mainteneur :
 
 *Révisé le 2026-11-14 : la mise à jour a quitté les entrées du menu pour l'écran des réglages (sa ligne **Mettre à jour…**, section **Mises à jour**) ; l'icône et la ligne Settings passent en vert à sa place, et la ligne des réglages est verte, suivie de ce qui a une nouvelle version. Une entrée `update` de `menu.toml` marche toujours et passe en vert.*
 
+*Révisé le 2026-11-28 : la vérification trouve aussi les plugins d'un dépôt qui ne sont pas installés, à côté d'un plugin installé depuis lui ; la fenêtre les propose, décochés ([ADR 0013](0013-new-plugins-of-a-repository.md)).*
+
 ## Conséquences
 
 - Le plugin ne fait que comparer des versions : aucun code ne s'installe sans un clic, et le redémarrage du serveur reste demandé, avec ce qu'il arrête.

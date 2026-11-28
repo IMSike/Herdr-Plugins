@@ -6,6 +6,7 @@
 //! every pane, and checked again at Herdr's start, then every `CHECK_EVERY`
 //! while a `Tools` pane is open.
 
+use super::discover::{self, NewPlugin};
 use crate::herdr;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -49,16 +50,20 @@ pub struct Plugin {
     pub name: String,
 }
 
-/// What can be updated.
+/// What can be updated, or installed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Found {
     pub herdr: Herdr,
     pub plugins: Vec<Plugin>,
+    /// The plugins of a repository that are not installed (see
+    /// `discover`); missing from the files of earlier versions.
+    #[serde(default)]
+    pub new: Vec<NewPlugin>,
 }
 
 impl Found {
-    /// `Herdr 0.9.6 · Explorer`: what has a new version; `None` when
-    /// nothing has one.
+    /// `Herdr 0.9.6 · Explorer · Links (nouveau)`: what has a new version,
+    /// and the new plugins; `None` when there is nothing.
     pub fn news(&self) -> Option<String> {
         let herdr = match &self.herdr {
             Herdr::Newer { latest, .. } => Some(format!("Herdr {latest}")),
@@ -67,6 +72,7 @@ impl Found {
         let names: Vec<String> = herdr
             .into_iter()
             .chain(self.plugins.iter().map(|p| p.name.clone()))
+            .chain(self.new.iter().map(|p| format!("{} (nouveau)", p.name)))
             .collect();
         (!names.is_empty()).then(|| names.join(" · "))
     }
@@ -155,13 +161,35 @@ pub fn now_and_keep() -> Found {
     check_and_keep()
 }
 
+/// Takes `ids` out of the new plugins of the last check: the plugins just
+/// declined no longer show.
+pub fn drop_new(ids: &[String]) {
+    if let Some(checked) = last() {
+        let mut new = checked.found.new;
+        new.retain(|p| !ids.contains(&p.id));
+        keep_new(new);
+    }
+}
+
+/// Sets the new plugins of the last check to `new`, when they differ; the
+/// check keeps its date, so that the next one comes as due.
+fn keep_new(new: Vec<NewPlugin>) {
+    let (Some(file), Some(mut checked)) = (last_file(), last()) else {
+        return;
+    };
+    if checked.found.new != new {
+        checked.found.new = new;
+        let _ = herdr_api::write_json(&file, &checked);
+    }
+}
+
 /// Checks Herdr and the plugins installed from GitHub, and keeps the
 /// result when something answered. What did not answer keeps what the
 /// last check found: offline, a new version known stays shown.
 fn check_and_keep() -> Found {
     let last = last().map(|c| c.found);
     // Herdr and the plugins at the same time.
-    let (herdr, plugins) = std::thread::scope(|scope| {
+    let (herdr, listed) = std::thread::scope(|scope| {
         let herdr = scope.spawn(herdr_version);
         let plugins = plugins();
         let herdr = herdr.join().unwrap_or_else(|_| HerdrCheck {
@@ -172,30 +200,39 @@ fn check_and_keep() -> Found {
         });
         (herdr, plugins)
     });
-    let (found, answered) = merged(last, herdr, plugins);
-    if answered && let Some(file) = last_file() {
-        let checked = Checked {
-            at: crate::stats::unix_now(),
-            found: found.clone(),
-        };
-        let _ = herdr_api::write_json(&file, &checked);
+    let listed_ok = listed.is_ok();
+    let (found, answered) = merged(last, herdr, listed);
+    if answered {
+        if let Some(file) = last_file() {
+            let checked = Checked {
+                at: crate::stats::unix_now(),
+                found: found.clone(),
+            };
+            let _ = herdr_api::write_json(&file, &checked);
+        }
+    } else if listed_ok {
+        // Read on disk, they hold offline too: a plugin just installed no
+        // longer shows as new.
+        keep_new(found.new.clone());
     }
     found
 }
 
-/// What a check found, `herdr` and `plugins` merged with the `last` one
-/// where they did not answer; and whether anything answered.
-fn merged(
-    last: Option<Found>,
-    herdr: HerdrCheck,
-    plugins: Result<Vec<(Plugin, Ref)>, String>,
-) -> (Found, bool) {
+/// What a check found, `herdr` and the `listed` plugins merged with the
+/// `last` one where they did not answer (the new plugins, read on disk,
+/// only when Herdr did not list its plugins); and whether anything
+/// answered.
+fn merged(last: Option<Found>, herdr: HerdrCheck, listed: Result<Listed, String>) -> (Found, bool) {
+    let plugins = listed.as_ref().map(|(plugins, _)| plugins);
     // Settled too when nothing was to be asked: the preview channel, and
     // no repository left silent.
     let answered = herdr.answered
-        || (plugins.iter().flatten()).any(|(_, r)| matches!(r, Ref::Moved | Ref::Same))
+        || plugins
+            .into_iter()
+            .flatten()
+            .any(|(_, r)| matches!(r, Ref::Moved | Ref::Same))
         || (herdr.nothing_to_ask
-            && (plugins.as_ref()).is_ok_and(|p| p.iter().all(|(_, r)| *r != Ref::Silent)));
+            && plugins.is_ok_and(|p| p.iter().all(|(_, r)| *r != Ref::Silent)));
     let herdr = match last.as_ref().map(|l| &l.herdr) {
         // Unless that version was installed since.
         Some(known @ Herdr::Newer { latest, .. })
@@ -211,19 +248,27 @@ fn merged(
         last.as_ref()
             .is_some_and(|l| l.plugins.iter().any(|p| p.id == plugin.id))
     };
-    let plugins = match plugins {
-        Ok(plugins) => plugins
-            .into_iter()
-            .filter(|(plugin, r)| match r {
-                Ref::Moved => true,
-                Ref::Same | Ref::NotAsked => false,
-                Ref::Silent => was_new(plugin),
-            })
-            .map(|(plugin, _)| plugin)
-            .collect(),
-        Err(_) => last.map(|l| l.plugins).unwrap_or_default(),
+    let (plugins, new) = match listed {
+        Ok((plugins, new)) => (
+            plugins
+                .into_iter()
+                .filter(|(plugin, r)| match r {
+                    Ref::Moved => true,
+                    Ref::Same | Ref::NotAsked => false,
+                    Ref::Silent => was_new(plugin),
+                })
+                .map(|(plugin, _)| plugin)
+                .collect(),
+            new,
+        ),
+        Err(_) => last.map(|l| (l.plugins, l.new)).unwrap_or_default(),
     };
-    (Found { herdr, plugins }, answered)
+    let found = Found {
+        herdr,
+        plugins,
+        new,
+    };
+    (found, answered)
 }
 
 /// What a check found of Herdr.
@@ -327,6 +372,10 @@ struct Source {
     /// Missing for the default branch.
     requested_ref: Option<String>,
     resolved_commit: Option<String>,
+    /// The repository's clone.
+    managed_path: Option<PathBuf>,
+    /// The plugin's folder in its repository; missing at its root.
+    subdir: Option<String>,
 }
 
 /// A plugin as `plugin.list` gives it.
@@ -337,14 +386,24 @@ struct Installed {
     source: Option<Source>,
 }
 
+/// What `plugins` found: each plugin installed from GitHub with what its
+/// repository said, and the new plugins.
+type Listed = (Vec<(Plugin, Ref)>, Vec<NewPlugin>);
+
 /// The plugins installed from GitHub, each with what its repository said
-/// of its branch or tag. The repositories are asked all at once.
-fn plugins() -> Result<Vec<(Plugin, Ref)>, String> {
+/// of its branch or tag; and the plugins beside them in their
+/// repositories, not installed nor declined. The repositories are asked
+/// all at once.
+fn plugins() -> Result<Listed, String> {
     let listed: Vec<Value> = herdr_api::request_field("plugin.list", json!({}), "plugins")?;
     // An entry Herdr describes otherwise (its manifest gone…) is left out.
-    let from_github: Vec<(Plugin, Source)> = listed
+    let listed: Vec<Installed> = listed
         .into_iter()
         .filter_map(|p| serde_json::from_value::<Installed>(p).ok())
+        .collect();
+    let new = beside(&listed);
+    let from_github: Vec<(Plugin, Source)> = listed
+        .into_iter()
         .filter_map(|p| {
             let source = p.source.filter(|s| s.kind == "github")?;
             let plugin = Plugin {
@@ -354,7 +413,7 @@ fn plugins() -> Result<Vec<(Plugin, Ref)>, String> {
             Some((plugin, source))
         })
         .collect();
-    Ok(std::thread::scope(|scope| {
+    let plugins = std::thread::scope(|scope| {
         let asked: Vec<_> = from_github
             .iter()
             .map(|(_, source)| scope.spawn(|| has_moved(source)))
@@ -364,7 +423,29 @@ fn plugins() -> Result<Vec<(Plugin, Ref)>, String> {
             .zip(asked)
             .map(|((plugin, _), moved)| (plugin.clone(), moved.join().unwrap_or(Ref::Silent)))
             .collect()
-    }))
+    });
+    Ok((plugins, new))
+}
+
+/// The plugins beside those of `listed` installed from a folder of a
+/// GitHub repository, that are neither installed (linked ones included)
+/// nor declined.
+fn beside(listed: &[Installed]) -> Vec<NewPlugin> {
+    let installed: Vec<String> = listed.iter().map(|p| p.plugin_id.clone()).collect();
+    let origins: Vec<discover::Origin> = listed
+        .iter()
+        .filter_map(|p| {
+            let source = p.source.as_ref().filter(|s| s.kind == "github")?;
+            Some(discover::Origin {
+                owner: source.owner.as_deref()?,
+                repo: source.repo.as_deref()?,
+                clone: source.managed_path.as_deref()?,
+                subdir: source.subdir.as_deref()?,
+                git_ref: source.requested_ref.as_deref(),
+            })
+        })
+        .collect();
+    discover::beside(&origins, &installed, &discover::declined())
 }
 
 /// What a plugin's repository says of the branch or tag it was installed
@@ -569,6 +650,7 @@ mod tests {
             found: Found {
                 herdr: Herdr::UpToDate,
                 plugins: Vec::new(),
+                new: Vec::new(),
             },
         };
         let hours = |h: u64| h * 3600;
@@ -583,7 +665,11 @@ mod tests {
             id: "gcaudan.explorer".into(),
             name: "Explorer".into(),
         };
-        let found = |herdr, plugins| Found { herdr, plugins };
+        let found = |herdr, plugins| Found {
+            herdr,
+            plugins,
+            new: Vec::new(),
+        };
         let newer = Herdr::Newer {
             installed: "0.9.5".into(),
             latest: "0.9.6".into(),
@@ -600,6 +686,17 @@ mod tests {
             found(Herdr::Unknown("canal preview".into()), Vec::new()).news(),
             None
         );
+        let links = NewPlugin {
+            id: "imsike.links".into(),
+            name: "Links".into(),
+            source: "IMSike/Herdr-Plugins/links".into(),
+            git_ref: None,
+        };
+        let with_new = Found {
+            new: vec![links],
+            ..found(Herdr::UpToDate, Vec::new())
+        };
+        assert_eq!(with_new.news().as_deref(), Some("Links (nouveau)"));
     }
 
     #[test]
@@ -615,6 +712,12 @@ mod tests {
         let last = Found {
             herdr: newer.clone(),
             plugins: vec![plugin("a"), plugin("b")],
+            new: vec![NewPlugin {
+                id: "n".into(),
+                name: "n".into(),
+                source: "o/r/n".into(),
+                git_ref: None,
+            }],
         };
         let herdr = |herdr, installed: Option<&str>, answered| HerdrCheck {
             herdr,
@@ -622,12 +725,13 @@ mod tests {
             answered,
             nothing_to_ask: false,
         };
+        let listed = |plugins| -> Result<Listed, String> { Ok((plugins, Vec::new())) };
         let offline = |installed| herdr(Herdr::Unknown("pas de réponse".into()), installed, false);
         // Nothing answered: all is kept, and nothing is saved.
         let (found, answered) = merged(
             Some(last.clone()),
             offline(None),
-            Ok(vec![(plugin("a"), Ref::Silent), (plugin("c"), Ref::Silent)]),
+            listed(vec![(plugin("a"), Ref::Silent), (plugin("c"), Ref::Silent)]),
         );
         assert_eq!(found.herdr, newer);
         assert_eq!(found.plugins, [plugin("a")]);
@@ -636,37 +740,51 @@ mod tests {
         let (found, answered) = merged(
             Some(last.clone()),
             herdr(Herdr::UpToDate, Some("0.9.6"), true),
-            Ok(vec![(plugin("a"), Ref::Same), (plugin("b"), Ref::Silent)]),
+            listed(vec![(plugin("a"), Ref::Same), (plugin("b"), Ref::Silent)]),
         );
         assert_eq!(found.herdr, Herdr::UpToDate);
         assert_eq!(found.plugins, [plugin("b")]);
+        // The new plugins, read on disk, are those read.
+        assert!(found.new.is_empty());
         assert!(answered);
         // The plugins unknown (`plugin.list` failed): those found are kept.
         let (found, _) = merged(Some(last.clone()), offline(None), Err("".into()));
         assert_eq!(found, last);
         // The new version known was installed since: no longer new.
-        let (found, _) = merged(Some(last.clone()), offline(Some("0.9.6")), Ok(Vec::new()));
+        let (found, _) = merged(
+            Some(last.clone()),
+            offline(Some("0.9.6")),
+            listed(Vec::new()),
+        );
         assert_eq!(found.herdr, offline(None).herdr);
-        let (found, _) = merged(Some(last.clone()), offline(Some("0.9.5")), Ok(Vec::new()));
+        let (found, _) = merged(
+            Some(last.clone()),
+            offline(Some("0.9.5")),
+            listed(Vec::new()),
+        );
         assert_eq!(found.herdr, newer);
         // A plugin not asked is no answer: offline, nothing is saved.
-        let (found, answered) = merged(None, offline(None), Ok(vec![(plugin("a"), Ref::NotAsked)]));
+        let (found, answered) = merged(
+            None,
+            offline(None),
+            listed(vec![(plugin("a"), Ref::NotAsked)]),
+        );
         assert!(found.plugins.is_empty() && !answered);
         // The preview channel: settled unless a repository was silent.
         let preview = || HerdrCheck {
             nothing_to_ask: true,
             ..offline(None)
         };
-        let (_, answered) = merged(None, preview(), Ok(vec![(plugin("a"), Ref::NotAsked)]));
+        let (_, answered) = merged(None, preview(), listed(vec![(plugin("a"), Ref::NotAsked)]));
         assert!(answered);
-        let (_, answered) = merged(None, preview(), Ok(Vec::new()));
+        let (_, answered) = merged(None, preview(), listed(Vec::new()));
         assert!(answered);
-        let (_, answered) = merged(None, preview(), Ok(vec![(plugin("a"), Ref::Silent)]));
+        let (_, answered) = merged(None, preview(), listed(vec![(plugin("a"), Ref::Silent)]));
         assert!(!answered);
         let (_, answered) = merged(None, preview(), Err("".into()));
         assert!(!answered);
         // A stable version known as new means nothing there.
-        let (found, _) = merged(Some(last), preview(), Ok(Vec::new()));
+        let (found, _) = merged(Some(last), preview(), listed(Vec::new()));
         assert_ne!(found.herdr, newer);
     }
 }

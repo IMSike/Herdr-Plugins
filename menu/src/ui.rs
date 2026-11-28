@@ -188,12 +188,17 @@ pub fn choose(
     }
 }
 
-/// Shows `items`, each with a box ticked at first, and lets them be
-/// unticked; returns the ticks once confirmed, `None` when cancelled.
+/// Shows `items`, each with a box, ticked at first as `ticked` says (one
+/// per item), and lets them be ticked or unticked; returns the ticks once
+/// confirmed, `None` when cancelled.
 /// `confirm`: what Enter does, in the help line.
-pub fn pick(title: &str, items: &[String], confirm: &str) -> io::Result<Option<Vec<bool>>> {
+pub fn pick(
+    title: &str,
+    items: &[String],
+    confirm: &str,
+    mut ticked: Vec<bool>,
+) -> io::Result<Option<Vec<bool>>> {
     let _screen = Screen::enter()?;
-    let mut ticked = vec![true; items.len()];
     let mut selected = 0usize;
     let mut top = 0usize;
     let mut shown = Vec::new();

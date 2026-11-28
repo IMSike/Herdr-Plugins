@@ -121,6 +121,7 @@ enum Item {
     Totals,
     CheckUpdates,
     Update,
+    Declined,
     Ttl,
     Shells,
     TabBar,
@@ -151,6 +152,8 @@ impl Item {
             Self::CheckUpdates => "Signaler les mises à jour",
             // nf-md-update, the icon the `Update` entry had
             Self::Update => "\u{F06B0} Mettre à jour…",
+            // nf-md-puzzle, a plugin
+            Self::Declined => "\u{F0431} Reproposer les plugins refusés",
             Self::Ttl => "Durée de vie des valeurs",
             Self::Shells => "Shells",
             Self::TabBar => "Totaux dans la barre d'onglets",
@@ -180,7 +183,12 @@ impl Item {
     fn is_action(self) -> bool {
         matches!(
             self,
-            Self::Update | Self::ResetTypes | Self::OpenFiles | Self::Reload | Self::Recover
+            Self::Update
+                | Self::Declined
+                | Self::ResetTypes
+                | Self::OpenFiles
+                | Self::Reload
+                | Self::Recover
         )
     }
 }
@@ -258,6 +266,9 @@ struct State {
     /// What has a new version (`Herdr 0.9.6 · Explorer`), from the last
     /// check, when `check_updates` is on.
     news: Option<String>,
+    /// The plugins of a repository left unticked by the update, not
+    /// offered again: by id.
+    declined: Vec<String>,
 }
 
 impl State {
@@ -279,6 +290,7 @@ impl State {
             typing: None,
             recover: false,
             news: None,
+            declined: Vec::new(),
         }
     }
 
@@ -298,6 +310,9 @@ impl State {
             Row::Item(Item::CheckUpdates),
             Row::Item(Item::Update),
         ];
+        if !self.declined.is_empty() {
+            rows.push(Row::Item(Item::Declined));
+        }
         if self.sidebar.is_some() {
             rows.extend([
                 Row::Blank,
@@ -483,9 +498,12 @@ impl State {
             Item::ConfirmPrograms => {
                 yes_no(self.links.as_ref().is_some_and(|l| l.confirm_programs))
             }
-            Item::Update | Item::ResetTypes | Item::OpenFiles | Item::Reload | Item::Recover => {
-                Shown::Action
-            }
+            Item::Update
+            | Item::Declined
+            | Item::ResetTypes
+            | Item::OpenFiles
+            | Item::Reload
+            | Item::Recover => Shown::Action,
         }
     }
 
@@ -532,6 +550,11 @@ impl State {
             ),
             Item::Update => (
                 "Met à jour Herdr et les plugins installés depuis GitHub, dans une fenêtre à part, et ferme cet écran.",
+                "",
+                String::new(),
+            ),
+            Item::Declined => (
+                "Les plugins d'un dépôt laissés décochés à la mise à jour : proposés de nouveau à la prochaine vérification.",
                 "",
                 String::new(),
             ),
@@ -871,7 +894,20 @@ impl State {
             // See `change`: they close the screen.
             Item::Update | Item::OpenFiles | Item::Recover => return None,
             Item::Reload => files::reload(),
+            Item::Declined => self.forget_declined(),
         })
+    }
+
+    /// Forgets the plugins declined: the update offers them again. The
+    /// line goes, the selection stays on the update's.
+    fn forget_declined(&mut self) -> Result<String, String> {
+        let ids = crate::update::discover::forget_declined()?;
+        self.declined.clear();
+        self.selected = self.selected.saturating_sub(1);
+        Ok(format!(
+            "proposés de nouveau à la prochaine vérification : {}",
+            ids.join(", ")
+        ))
     }
 
     /// Saves what was typed for `item`.
@@ -958,6 +994,7 @@ pub fn run() -> Result<(), String> {
     // selects.
     let links_error = links_file.and_then(|path| state.reread_links(&path));
     state.news = news;
+    state.declined = crate::update::discover::declined();
     state.status = menu_error
         .or(sidebar_error)
         .or(links_error)
@@ -1308,7 +1345,9 @@ mod tests {
         // `written` says so.
         for item in state.items() {
             let said = match item {
-                Item::Update | Item::OpenFiles | Item::Reload | Item::Recover => continue,
+                Item::Update | Item::Declined | Item::OpenFiles | Item::Reload | Item::Recover => {
+                    continue;
+                }
                 Item::Shells => state.save_shells("pwsh, bash"),
                 Item::Levels(which) => state.save_levels(which, "1 2 3"),
                 Item::OpenTypes => state.save_open_types(".MD, txt, rs"),

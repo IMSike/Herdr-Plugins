@@ -33,6 +33,8 @@ Option b, chosen by the maintainer:
 
 *Revised on 2026-11-14: the update left the menu's entries for the settings screen (its **Mettre à jour…** line, section **Mises à jour**); the Settings icon and line turn green in its place, and the settings' line is green followed by what has a new version. An `update` entry of `menu.toml` still works and turns green.*
 
+*Revised on 2026-11-28: the check also finds the plugins of a repository that are not installed, beside a plugin installed from it; the window offers them, unticked ([ADR 0013](0013-new-plugins-of-a-repository.md)).*
+
 ## Consequences
 
 - The plugin only compares versions: no code is installed without a click, and the server's restart is still asked, with what it stops.
